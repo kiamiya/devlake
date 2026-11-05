@@ -4,6 +4,7 @@ import { GitHubError } from './errors.js';
 import type { GitHubPort } from './port.js';
 import { decryptSecret, generateSecretKeyPair, type SecretKeyPair } from './secrets.js';
 import type {
+  ActionsPermissions,
   AuthenticatedUser,
   BranchProtection,
   BranchProtectionInput,
@@ -62,6 +63,7 @@ export interface FakeRepoState {
   dispatches: DispatchWorkflowInput[];
   secrets: Map<string, string>;
   issueDependencies: boolean;
+  actions: ActionsPermissions;
 }
 
 export interface FakeGitHubOptions {
@@ -140,6 +142,12 @@ export class FakeGitHub implements GitHubPort {
       dispatches: [],
       secrets: new Map(),
       issueDependencies: this.defaultIssueDependencies,
+      // Valeurs par défaut de GitHub pour un dépôt personnel.
+      actions: {
+        defaultWorkflowPermissions: 'write',
+        canApprovePullRequestReviews: false,
+        forkPrApproval: 'first_time_contributors',
+      },
     };
     this.repos.set(`${ref.owner}/${ref.repo}`, state);
     return state;
@@ -261,6 +269,20 @@ export class FakeGitHub implements GitHubPort {
       return {
         autoMerge: state.repository.allowAutoMerge,
         issueDependencies: state.issueDependencies,
+      };
+    });
+  }
+
+  getActionsPermissions(ref: RepoRef): Promise<ActionsPermissions> {
+    return this.run(() => clone(this.state(ref).actions));
+  }
+
+  configureActionsPermissions(ref: RepoRef): Promise<void> {
+    return this.run(() => {
+      this.state(ref).actions = {
+        defaultWorkflowPermissions: 'read',
+        canApprovePullRequestReviews: false,
+        forkPrApproval: 'all_external_contributors',
       };
     });
   }

@@ -10,6 +10,8 @@ import {
 import { IPC_CONTRACT } from '../shared/ipc-contract.js';
 import { NoTokenError, type CockpitService } from './cockpit-service.js';
 import { NotAProjectError, UnknownProjectError, type ProjectsService } from './projects-service.js';
+import { BootstrapStepError, ClaudeTokenMissingError } from './services/projects/bootstrap.js';
+import type { ProjectCreationService } from './services/projects/creation-service.js';
 import { VaultUnavailableError } from './vault.js';
 
 type Handler = (input: unknown) => Promise<unknown>;
@@ -18,8 +20,9 @@ type Handler = (input: unknown) => Promise<unknown>;
 export function serviceHandlers(services: {
   cockpit: CockpitService;
   projects: ProjectsService;
+  creation: ProjectCreationService;
 }): Record<IpcChannel, Handler> {
-  const { cockpit: service, projects } = services;
+  const { cockpit: service, projects, creation } = services;
   const input = <C extends IpcChannel>(_channel: C, value: unknown) =>
     value as z.output<(typeof IPC_CONTRACT)[C]['input']>;
   return {
@@ -39,6 +42,12 @@ export function serviceHandlers(services: {
     'tabs:get': () => Promise.resolve(projects.getTabs()),
     'tabs:save': (value) => Promise.resolve(projects.saveTabs(input('tabs:save', value))),
     'activity:get': () => Promise.resolve(projects.activity()),
+    'claude-token:get-masked': () => service.getMaskedClaudeToken(),
+    'claude-token:set': (value) => service.setClaudeToken(input('claude-token:set', value).token),
+    'claude-token:clear': () => service.clearClaudeToken(),
+    'projects:create': (value) => creation.create(input('projects:create', value)),
+    'projects:bootstrap': (value) =>
+      creation.rebootstrap(input('projects:bootstrap', value).projectId),
   };
 }
 
@@ -52,6 +61,10 @@ export function toIpcError(error: unknown): IpcErrorPayload {
   }
   if (error instanceof NoTokenError) return { code: 'NO_TOKEN', message: error.message };
   if (error instanceof NotAProjectError) return { code: 'NOT_A_PROJECT', message: error.message };
+  if (error instanceof ClaudeTokenMissingError)
+    return { code: 'CLAUDE_TOKEN_MISSING', message: error.message };
+  if (error instanceof BootstrapStepError)
+    return { code: 'BOOTSTRAP_STEP_FAILED', message: error.message };
   if (error instanceof UnknownProjectError)
     return { code: 'UNKNOWN_PROJECT', message: error.message };
   if (error instanceof VaultUnavailableError)

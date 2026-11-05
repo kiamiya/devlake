@@ -9,6 +9,7 @@ import {
   useTestToken,
   useUpdateSettings,
 } from '../hooks/queries.js';
+import { ClaudeTokenSection } from './ClaudeTokenSection.js';
 import { Button } from './ui/button.js';
 import { Card, CardDescription, CardTitle, Input, Label, Textarea } from './ui/primitives.js';
 
@@ -63,7 +64,7 @@ function TokenSection() {
       </p>
       <form onSubmit={save} className="flex flex-wrap items-end gap-2">
         <div className="flex min-w-72 flex-1 flex-col gap-2">
-          <Label htmlFor="token">Nouveau jeton</Label>
+          <Label htmlFor="token">Nouveau jeton GitHub</Label>
           <Input
             id="token"
             type="password"
@@ -75,7 +76,7 @@ function TokenSection() {
           />
         </div>
         <Button type="submit" disabled={value.trim() === '' || setToken.isPending}>
-          Enregistrer le jeton
+          Enregistrer le jeton GitHub
         </Button>
         <Button
           type="button"
@@ -179,6 +180,16 @@ function SettingsForm({ initial }: { initial: Settings }) {
               }}
             />
           </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="workflowsVersion">Version des workflows devlake</Label>
+            <Input
+              id="workflowsVersion"
+              value={form.workflowsVersion}
+              onChange={(e) => {
+                set('workflowsVersion', e.target.value);
+              }}
+            />
+          </div>
         </div>
       </Card>
 
@@ -255,6 +266,7 @@ export function SettingsPage() {
     <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
       <h1 className="text-xl font-semibold">Réglages</h1>
       <TokenSection />
+      <ClaudeTokenSection />
       {data ? <SettingsForm initial={data} /> : <Feedback error={error} />}
     </div>
   );

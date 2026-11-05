@@ -35,6 +35,10 @@ export const SettingsSchema = z.object({
   modelsByProfile: z.partialRecord(ProfileIdSchema, z.string().trim().min(1, 'Modèle vide.')),
   /** Dossier des clones dédiés à l'éditeur Unity/Unreal. */
   editorClonesDir: z.string().trim().min(1, 'Dossier vide.').nullable(),
+  /** Version épinglée (tag) des workflows réutilisables de devlake, posée au bootstrap. */
+  workflowsVersion: z
+    .string()
+    .regex(/^[A-Za-z0-9._-]+$/, 'Version invalide : lettres, chiffres, « . », « _ » ou « - ».'),
   /** Configurations MCP d'Aura, collées telles quelles. */
   auraMcp: z.object({ unity: AuraMcpBlockSchema, unreal: AuraMcpBlockSchema }),
 });
@@ -46,6 +50,7 @@ export const DEFAULT_SETTINGS: Settings = {
   maxAttempts: 3,
   modelsByProfile: {},
   editorClonesDir: null,
+  workflowsVersion: 'v1',
   auraMcp: { unity: null, unreal: null },
 };
 

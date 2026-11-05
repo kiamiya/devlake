@@ -56,3 +56,27 @@ export function useStatus() {
     refetchInterval: 30_000,
   });
 }
+
+const claudeKey = ['claude-token'] as const;
+
+export function useMaskedClaudeToken() {
+  return useQuery({ queryKey: claudeKey, queryFn: () => invoke('claude-token:get-masked') });
+}
+
+function useClaudeMutation<T>(mutationFn: (value: T) => Promise<unknown>) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSettled: async () => {
+      await client.invalidateQueries({ queryKey: claudeKey });
+    },
+  });
+}
+
+export function useSetClaudeToken() {
+  return useClaudeMutation((token: string) => invoke('claude-token:set', { token }));
+}
+
+export function useClearClaudeToken() {
+  return useClaudeMutation(() => invoke('claude-token:clear'));
+}

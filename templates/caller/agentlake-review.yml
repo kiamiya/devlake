@@ -1,0 +1,22 @@
+# Généré par AgentLake : relancer le bootstrap plutôt que modifier ce fichier.
+name: AgentLake — relecture
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: agentlake-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Jamais sur une PR venant d'un fork : pas d'accès aux secrets.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: __DEVLAKE_REPOSITORY__/.github/workflows/review.yml@__DEVLAKE_REF__
+    secrets: inherit

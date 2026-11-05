@@ -77,6 +77,16 @@ export function describeGitHubContract(
         });
       });
 
+      it('met le GITHUB_TOKEN en lecture seule et exige l’approbation des forks', async () => {
+        expect((await port.getActionsPermissions(ref)).defaultWorkflowPermissions).toBe('write');
+        await port.configureActionsPermissions(ref);
+        expect(await port.getActionsPermissions(ref)).toEqual({
+          defaultWorkflowPermissions: 'read',
+          canApprovePullRequestReviews: false,
+          forkPrApproval: 'all_external_contributors',
+        });
+      });
+
       it('signale un dépôt introuvable par une erreur typée', async () => {
         await expect(port.getRepository({ owner: 'kiamiya', repo: 'absent' })).rejects.toSatisfy(
           (e: unknown) => isGitHubError(e, 'not-found'),

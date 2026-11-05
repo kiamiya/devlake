@@ -167,6 +167,15 @@ export interface DispatchWorkflowInput {
   inputs?: Record<string, string>;
 }
 
+/** Réglages Actions d'un dépôt. */
+export interface ActionsPermissions {
+  /** Permissions par défaut du GITHUB_TOKEN. */
+  defaultWorkflowPermissions: 'read' | 'write';
+  canApprovePullRequestReviews: boolean;
+  /** Qui doit être approuvé avant que ses workflows de PR (forks) ne tournent. */
+  forkPrApproval: string;
+}
+
 /** Capacités du compte ou du dépôt. */
 export interface Capabilities {
   /** Relations de dépendance natives entre issues. */

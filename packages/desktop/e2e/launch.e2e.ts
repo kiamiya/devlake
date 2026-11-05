@@ -15,6 +15,11 @@ const appDir = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
 /** Faux jeton de test, sans valeur réelle. */
 const FAKE_TOKEN = 'ghp_e2eJetonDeTest1234'; // gitleaks:allow
+/** Faux jeton Claude Code de test. */
+const CLAUDE_TOKEN = 'sk-ant-oat01-faux-jeton-e2e-0042'; // gitleaks:allow
+
+/** Applications lancées par le test en cours, fermées même en cas d'échec. */
+const launched: ElectronApplication[] = [];
 
 async function launch(userData: string): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
@@ -27,6 +32,7 @@ async function launch(userData: string): Promise<{ app: ElectronApplication; pag
       AGENTLAKE_USER_DATA: userData,
     },
   });
+  launched.push(app);
   const page = await app.firstWindow();
   await page.waitForLoadState('domcontentloaded');
   return { app, page };
@@ -39,8 +45,8 @@ async function openSettings(page: Page): Promise<void> {
 
 async function saveToken(page: Page): Promise<void> {
   await openSettings(page);
-  await page.getByLabel('Nouveau jeton').fill(FAKE_TOKEN);
-  await page.getByRole('button', { name: 'Enregistrer le jeton' }).click();
+  await page.getByLabel('Nouveau jeton GitHub').fill(FAKE_TOKEN);
+  await page.getByRole('button', { name: 'Enregistrer le jeton GitHub' }).click();
   await expect(page.getByTestId('status-github')).toContainText('OK');
 }
 
@@ -59,8 +65,9 @@ test.describe('cockpit', () => {
     userData = mkdtempSync(join(tmpdir(), 'agentlake-e2e-'));
   });
 
-  test.afterEach(() => {
-    rmSync(userData, { recursive: true, force: true });
+  test.afterEach(async () => {
+    for (const app of launched.splice(0)) await app.close().catch(() => undefined);
+    rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   });
 
   test('démarre, enregistre le jeton masqué et le statut GitHub passe à OK', async () => {
@@ -165,6 +172,35 @@ test.describe('cockpit', () => {
     ({ app, page } = await launch(userData));
     await expect(page.getByRole('tab', { name: /site/ })).toBeVisible();
     expect(await tabsOf(page)).toEqual(before);
+    await app.close();
+  });
+
+  test('assistant : crée un projet web public, l’ouvre, puis le bootstrap relancé ne change rien', async () => {
+    const { app, page } = await launch(userData);
+    await saveToken(page);
+    await page.getByLabel('Nouveau jeton Claude Code').fill(CLAUDE_TOKEN);
+    await page.getByRole('button', { name: 'Enregistrer le jeton Claude' }).click();
+    await expect(page.getByTestId('masked-claude-token')).toHaveText('sk-ant-oat01-••••••••0042');
+
+    await page.keyboard.press('Control+1');
+    await page.getByRole('button', { name: 'Nouveau projet' }).click();
+    await expect(page.getByRole('note')).toContainText('Dépôt public');
+    await page.getByLabel('Privé').check();
+    await expect(page.getByRole('note')).toContainText('2 000 minutes');
+    await page.getByLabel('Public (minutes Actions gratuites et illimitées)').check();
+    await page.getByLabel('Type').selectOption('script');
+    await expect(page.getByLabel('Profil qualité')).toHaveValue('tool');
+    await page.getByLabel('Type').selectOption('web');
+    await expect(page.getByLabel('Profil qualité')).toHaveValue('web');
+
+    await page.getByLabel('Nom du dépôt').fill('nouveau-site');
+    await page.getByRole('button', { name: 'Créer le projet' }).click();
+    await expect(page.getByRole('tab', { name: /nouveau-site/, selected: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Relancer le bootstrap' }).click();
+    const steps = page.getByRole('list', { name: 'Étapes du bootstrap' }).getByRole('listitem');
+    await expect(steps).toHaveCount(7);
+    for (const step of await steps.allTextContents()) expect(step).toContain('déjà en place');
     await app.close();
   });
 });

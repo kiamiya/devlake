@@ -1,3 +1,4 @@
 # Faux positifs connus : faux jeton de test dans un commit antérieur (remplacé par FAKE_TOKEN marqué gitleaks:allow).
 961dcc71f0a8fc4d7e82a8237ff937b635dfb6c1:packages/desktop/src/main/ipc.test.ts:generic-api-key:85
 961dcc71f0a8fc4d7e82a8237ff937b635dfb6c1:packages/desktop/src/main/ipc.test.ts:generic-api-key:151
+36f9200ffbbf97ea44bfae5bfae60626e0cb5ee2:packages/desktop/src/main/vault.test.ts:generic-api-key:44

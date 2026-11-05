@@ -6,6 +6,7 @@ import { CockpitService, NoTokenError } from './cockpit-service.js';
 import { openDatabase } from './db/database.js';
 import { createRepositories } from './db/repositories.js';
 import { ProjectsService } from './projects-service.js';
+import { ProjectCreationService } from './services/projects/creation-service.js';
 import { dispatchIpc, registerIpc, serviceHandlers, toIpcError, type IpcMainLike } from './ipc.js';
 import { MemoryVault, VaultUnavailableError } from './vault.js';
 
@@ -27,7 +28,17 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
   const projects = new ProjectsService(repos, () => service.githubPort());
   return {
     service,
-    handlers: serviceHandlers({ cockpit: service, projects }),
+    handlers: serviceHandlers({
+      cockpit: service,
+      projects,
+      creation: new ProjectCreationService({
+        repos,
+        vault,
+        github: () => service.githubPort(),
+        projects,
+        callerTemplates: { 'agentlake-x.yml': 'uses: __DEVLAKE_REPOSITORY__@__DEVLAKE_REF__' },
+      }),
+    }),
     vault,
     repos,
     github,
@@ -96,7 +107,7 @@ describe('IPC — jeton et statut', () => {
     const result = await dispatchIpc(handlers, 'token:set', { token: FAKE_TOKEN });
     expect(result).toEqual({ ok: true, data: { masked: 'ghp_••••••••1234' } });
     expect(JSON.stringify(result)).not.toContain('abcdefghijklmnop');
-    expect(await vault.getToken()).toBe(FAKE_TOKEN);
+    expect(await vault.get('github-token')).toBe(FAKE_TOKEN);
     expect(await githubStatus(handlers)).toMatchObject({
       state: 'ok',
       detail: 'Connecté en tant que kiamiya.',
@@ -191,6 +202,91 @@ describe('IPC — enregistrement auprès d’Electron', () => {
       await listener({ senderFrame: { url: 'file:///app/renderer/index.html' } }, undefined),
     ).toMatchObject({
       ok: true,
+    });
+  });
+});
+
+describe('IPC — création de projet', () => {
+  /** Faux jeton Claude Code, sans valeur réelle. */
+  const CLAUDE = 'sk-ant-oat01-faux-jeton-de-test-0042'; // gitleaks:allow
+  const input = { name: 'site', type: 'web', private: false, qualityProfile: 'web' } as const;
+
+  it('garde le jeton Claude Code masqué', async () => {
+    const { handlers, vault } = setup();
+    expect(await dispatchIpc(handlers, 'claude-token:set', { token: CLAUDE })).toEqual({
+      ok: true,
+      data: { masked: 'sk-ant-oat01-••••••••0042' },
+    });
+    expect(await vault.get('claude-oauth-token')).toBe(CLAUDE);
+    expect(await dispatchIpc(handlers, 'claude-token:get-masked', undefined)).toMatchObject({
+      data: { masked: 'sk-ant-oat01-••••••••0042' },
+    });
+    expect(await dispatchIpc(handlers, 'claude-token:clear', undefined)).toEqual({
+      ok: true,
+      data: { masked: null },
+    });
+  });
+
+  it('refuse de créer sans jeton Claude Code', async () => {
+    const { handlers } = setup();
+    await dispatchIpc(handlers, 'token:set', { token: FAKE_TOKEN });
+    expect(await dispatchIpc(handlers, 'projects:create', input)).toMatchObject({
+      ok: false,
+      error: { code: 'CLAUDE_TOKEN_MISSING' },
+    });
+  });
+
+  it('valide le nom du dépôt', async () => {
+    const { handlers } = setup();
+    expect(
+      await dispatchIpc(handlers, 'projects:create', { ...input, name: 'mon projet' }),
+    ).toMatchObject({
+      ok: false,
+      error: {
+        code: 'INVALID_INPUT',
+        message: expect.stringContaining('Nom de dépôt invalide') as string,
+      },
+    });
+  });
+
+  it('crée le projet, l’ajoute au cockpit, puis la relance ne change rien', async () => {
+    const { handlers, github } = setup();
+    await dispatchIpc(handlers, 'token:set', { token: FAKE_TOKEN });
+    await dispatchIpc(handlers, 'claude-token:set', { token: CLAUDE });
+
+    const created = await dispatchIpc(handlers, 'projects:create', input);
+    expect(created).toMatchObject({ ok: true, data: { project: { id: 'kiamiya/site' } } });
+    expect(github.secretValue({ owner: 'kiamiya', repo: 'site' }, 'CLAUDE_CODE_OAUTH_TOKEN')).toBe(
+      CLAUDE,
+    );
+    expect(await dispatchIpc(handlers, 'projects:list', undefined)).toMatchObject({
+      data: [{ id: 'kiamiya/site' }],
+    });
+
+    const again = await dispatchIpc(handlers, 'projects:bootstrap', { projectId: 'kiamiya/site' });
+    expect(again.ok).toBe(true);
+    const steps = again.ok ? (again.data as { steps: { status: string }[] }).steps : [];
+    expect(steps.every((s) => s.status === 'unchanged')).toBe(true);
+    expect(
+      await dispatchIpc(handlers, 'projects:bootstrap', { projectId: 'kiamiya/absent' }),
+    ).toMatchObject({
+      error: { code: 'UNKNOWN_PROJECT' },
+    });
+  });
+
+  it('signale l’étape du bootstrap qui a échoué', async () => {
+    const { handlers, github } = setup();
+    await dispatchIpc(handlers, 'token:set', { token: FAKE_TOKEN });
+    await dispatchIpc(handlers, 'claude-token:set', { token: CLAUDE });
+    vi.spyOn(github, 'listLabels').mockRejectedValueOnce(
+      new GitHubError('server', 'Erreur serveur', 502),
+    );
+    expect(await dispatchIpc(handlers, 'projects:create', input)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'BOOTSTRAP_STEP_FAILED',
+        message: expect.stringContaining('« labels »') as string,
+      },
     });
   });
 });

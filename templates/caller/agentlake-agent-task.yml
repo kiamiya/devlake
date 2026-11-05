@@ -1,0 +1,29 @@
+# Généré par AgentLake : relancer le bootstrap plutôt que modifier ce fichier.
+name: AgentLake — agent
+
+on:
+  # Déclenché par le dispatcher ; workflow_dispatch exige le droit d'écriture.
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Numéro de l'issue de la tâche
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: agentlake-task-${{ inputs.issue }}
+  cancel-in-progress: false
+
+jobs:
+  agent:
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      actions: read
+    uses: __DEVLAKE_REPOSITORY__/.github/workflows/agent-task.yml@__DEVLAKE_REF__
+    with:
+      issue: ${{ inputs.issue }}
+    secrets: inherit

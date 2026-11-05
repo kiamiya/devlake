@@ -5,6 +5,7 @@ import { Card, CardDescription, CardTitle } from '../components/ui/primitives.js
 import { useTabs } from '../features/tabs/store.js';
 import { ActivityIndicator, QuestionsBadge } from '../features/tabs/TabBar.js';
 import { useDiscoverProjects, useOpenProject } from '../hooks/projects.js';
+import { NewProjectWizard } from './NewProjectWizard.js';
 
 function ExistingRepositories() {
   const [shown, setShown] = useState(false);
@@ -70,6 +71,7 @@ function ExistingRepositories() {
 
 export function HomeView({ projects }: { projects: readonly ProjectSummary[] }) {
   const openTab = useTabs((s) => s.open);
+  const [creating, setCreating] = useState(false);
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6">
       <h1 className="text-xl font-semibold">Accueil</h1>
@@ -101,14 +103,23 @@ export function HomeView({ projects }: { projects: readonly ProjectSummary[] }) 
           </ul>
         )}
         <div className="mt-4 flex flex-col gap-4">
-          <div className="flex items-center gap-3">
-            <Button disabled title="Arrive avec la tâche T05">
-              Nouveau projet
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              Création de projet : arrive avec T05.
-            </span>
-          </div>
+          {creating ? (
+            <NewProjectWizard
+              onClose={() => {
+                setCreating(false);
+              }}
+            />
+          ) : (
+            <div>
+              <Button
+                onClick={() => {
+                  setCreating(true);
+                }}
+              >
+                Nouveau projet
+              </Button>
+            </div>
+          )}
           <ExistingRepositories />
         </div>
       </Card>

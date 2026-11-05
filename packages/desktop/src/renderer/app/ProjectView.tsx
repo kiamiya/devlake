@@ -1,4 +1,7 @@
+import { Button } from '../components/ui/button.js';
+import { useRebootstrap } from '../hooks/projects.js';
 import { cn } from '../lib/utils.js';
+import { BootstrapSteps } from './NewProjectWizard.js';
 import { PROJECT_SECTIONS, useTabs, type ProjectSection } from '../features/tabs/store.js';
 
 const SECTION_LABELS: Record<ProjectSection, string> = {
@@ -13,9 +16,10 @@ const SECTION_LABELS: Record<ProjectSection, string> = {
 export function ProjectView({ projectId }: { projectId: string }) {
   const section = useTabs((s) => s.sections[projectId] ?? 'context');
   const setSection = useTabs((s) => s.setSection);
+  const rebootstrap = useRebootstrap();
   return (
     <div className="flex h-full">
-      <aside aria-label="Sections du projet" className="w-48 border-r border-border p-2">
+      <aside aria-label="Sections du projet" className="w-56 border-r border-border p-2">
         <p className="mb-2 truncate px-2 font-mono text-xs text-muted-foreground" title={projectId}>
           {projectId}
         </p>
@@ -38,6 +42,24 @@ export function ProjectView({ projectId }: { projectId: string }) {
             </li>
           ))}
         </ul>
+        <div className="mt-6 flex flex-col gap-2 border-t border-border pt-4">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={rebootstrap.isPending}
+            onClick={() => {
+              rebootstrap.mutate(projectId);
+            }}
+          >
+            Relancer le bootstrap
+          </Button>
+          {rebootstrap.error instanceof Error && (
+            <p role="alert" className="text-xs text-destructive">
+              {rebootstrap.error.message}
+            </p>
+          )}
+          {rebootstrap.data && <BootstrapSteps report={rebootstrap.data} />}
+        </div>
       </aside>
       <section className="flex-1 p-6">
         <h1 className="mb-2 text-xl font-semibold">{SECTION_LABELS[section]}</h1>

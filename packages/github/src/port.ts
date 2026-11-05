@@ -1,4 +1,5 @@
 import type {
+  ActionsPermissions,
   AuthenticatedUser,
   BranchProtection,
   BranchProtectionInput,
@@ -43,6 +44,9 @@ export interface GitHubPort {
   protectBranch(ref: RepoRef, branch: string, input: BranchProtectionInput): Promise<void>;
   getBranchProtection(ref: RepoRef, branch: string): Promise<BranchProtection | null>;
   getCapabilities(ref: RepoRef): Promise<Capabilities>;
+  getActionsPermissions(ref: RepoRef): Promise<ActionsPermissions>;
+  /** GITHUB_TOKEN en lecture seule, approbation obligatoire des workflows de tous les contributeurs externes. */
+  configureActionsPermissions(ref: RepoRef): Promise<void>;
 
   // Fichiers
   getFile(ref: RepoRef, path: string, branch?: string): Promise<FileContent | null>;
