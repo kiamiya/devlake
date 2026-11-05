@@ -6,6 +6,7 @@ import { useTabShortcuts } from '../features/tabs/shortcuts.js';
 import { tabsStore, useTabs } from '../features/tabs/store.js';
 import { TabBar } from '../features/tabs/TabBar.js';
 import { useProjects, useTabsSync } from '../hooks/projects.js';
+import { useQuestionsSync } from '../hooks/questions.js';
 import { HomeView } from './HomeView.js';
 import { ProjectView } from './ProjectView.js';
 
@@ -17,6 +18,8 @@ export function App() {
   const settingsOpen = useTabs((s) => s.settingsOpen);
   const projects = useProjects().data ?? [];
   useTabsSync(tabs);
+  // Questions de tous les projets, onglet ouvert ou non : notifications et badges.
+  useQuestionsSync();
 
   return (
     <div className="flex h-full flex-col">

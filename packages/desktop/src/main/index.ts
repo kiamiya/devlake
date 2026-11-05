@@ -1,10 +1,19 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Notification,
+  safeStorage,
+  session,
+  shell,
+} from 'electron';
 import { FakeGitHub, OctokitGitHub, type GitHubPort } from 'github';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CockpitService } from './cockpit-service.js';
 import { openDatabase } from './db/database.js';
-import { seedFakeProjects } from './e2e-fixtures.js';
+import { seedFakeProjects, simulateDispatcher } from './e2e-fixtures.js';
 import { createRepositories } from './db/repositories.js';
 import { registerDroppedFiles, registerIpc, serviceHandlers } from './ipc.js';
 import { ProjectsService } from './projects-service.js';
@@ -13,6 +22,10 @@ import { ProjectCreationService } from './services/projects/creation-service.js'
 import { ContextService } from './services/ingestion/context-service.js';
 import { PlannerLaunchService } from './services/planner/planner-launch.js';
 import { PlanService } from './services/plan/plan-service.js';
+import {
+  QuestionsService,
+  type QuestionNotification,
+} from './services/questions/questions-service.js';
 import { defaultRegistry } from './services/ingestion/registry.js';
 import { readFile, stat } from 'node:fs/promises';
 import { SafeStorageVault } from './vault.js';
@@ -41,6 +54,8 @@ async function githubFactory(): Promise<(token: string) => GitHubPort> {
     const fake = new FakeGitHub({ actor: 'kiamiya' });
     const names = (process.env.AGENTLAKE_FAKE_PROJECTS ?? '').split(',').filter(Boolean);
     await seedFakeProjects(fake, names);
+    // Pas de GitHub Actions en E2E : une réponse valide relance la tâche comme le dispatcher.
+    simulateDispatcher(fake);
     return () => fake;
   }
   return (token) => new OctokitGitHub({ token });
@@ -75,6 +90,25 @@ function createWindow(): BrowserWindow {
   if (devServerUrl) void window.loadURL(devServerUrl);
   else void window.loadFile(join(here, '../renderer/index.html'));
   return window;
+}
+
+/** Notifications émises, lisibles par les tests E2E (processus principal). */
+const notifications: QuestionNotification[] = [];
+(globalThis as { __agentlakeNotifications?: QuestionNotification[] }).__agentlakeNotifications =
+  notifications;
+
+function showQuestionNotification(notification: QuestionNotification): void {
+  notifications.push(notification);
+  if (testMode || !Notification.isSupported()) return;
+  const shown = new Notification({ title: notification.title, body: notification.body });
+  shown.on('click', () => {
+    const window = BrowserWindow.getAllWindows()[0];
+    if (window) {
+      if (window.isMinimized()) window.restore();
+      window.focus();
+    }
+  });
+  shown.show();
 }
 
 async function start(): Promise<void> {
@@ -124,6 +158,12 @@ async function start(): Promise<void> {
       context,
       planner: new PlannerLaunchService(repos, () => service.githubPort()),
       plan: new PlanService(repos, () => service.githubPort()),
+      questions: new QuestionsService({
+        repos,
+        github: () => service.githubPort(),
+        notify: showQuestionNotification,
+        badge: (count) => app.setBadgeCount(count),
+      }),
     }),
     isTrustedUrl,
   );

@@ -64,6 +64,7 @@ describe('base du cockpit', () => {
       '__agentlake_migrations',
       'issues',
       'projects',
+      'questions',
       'runs',
       'settings',
       'tabs',

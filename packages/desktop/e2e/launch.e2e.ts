@@ -373,4 +373,68 @@ test.describe('cockpit', () => {
     );
     await app.close();
   });
+
+  test('questions : question bloquante → notification → réponse → l’agent repart (running)', async () => {
+    const { app, page } = await launch(userData);
+    await saveToken(page);
+    await page.keyboard.press('Control+1');
+    await page.getByRole('button', { name: 'Ouvrir un dépôt existant' }).click();
+    await page.getByRole('button', { name: 'Ouvrir jeu' }).click();
+
+    // Le sondage lit la question bloquante et émet une notification système (une seule).
+    const notifications = () =>
+      app.evaluate(
+        () =>
+          (globalThis as { __agentlakeNotifications?: { title: string; body: string }[] })
+            .__agentlakeNotifications ?? [],
+      );
+    await expect
+      .poll(async () => (await notifications()).map((n) => n.body))
+      .toEqual(['T01 — En attente : Quel fuseau horaire pour jeu ?']);
+    expect((await notifications())[0]?.title).toBe('Question bloquante — jeu');
+    // Badge de l'onglet : une question en attente.
+    await expect(page.getByRole('tab', { name: /jeu/ })).toContainText('1');
+
+    const before = await page.evaluate(() =>
+      (
+        window as unknown as {
+          agentlake: {
+            invoke: (c: string, i: unknown) => Promise<{ data: { activeAgents: number } }>;
+          };
+        }
+      ).agentlake.invoke('projects:sync', { projectId: 'kiamiya/jeu' }),
+    );
+    expect(before.data.activeAgents).toBe(1);
+
+    await page.getByRole('button', { name: 'Questions', exact: true }).click();
+    const card = page.getByRole('article', { name: 'Question fuseau' });
+    await expect(card).toContainText('Quel fuseau horaire pour jeu ?');
+    await expect(card).toContainText('Bloquante');
+    await card.getByRole('button', { name: 'Europe/Paris' }).click();
+    await expect(card.getByLabel('Réponse', { exact: true })).toHaveValue('Europe/Paris');
+    await expect(card.getByRole('checkbox', { name: /Décision du projet/ })).toBeChecked();
+    await card.getByRole('button', { name: 'Répondre' }).click();
+    await expect(page.getByText('Aucune question en attente.')).toBeVisible();
+
+    // Le dispatcher (simulé) a relancé l'agent : la tâche est « running ».
+    const after = await page.evaluate(() =>
+      (
+        window as unknown as {
+          agentlake: {
+            invoke: (
+              c: string,
+              i: unknown,
+            ) => Promise<{ data: { activeAgents: number; pendingQuestions: number } }>;
+          };
+        }
+      ).agentlake.invoke('projects:sync', { projectId: 'kiamiya/jeu' }),
+    );
+    expect(after.data).toMatchObject({ activeAgents: 2, pendingQuestions: 0 });
+
+    await page.getByRole('button', { name: 'Historique' }).click();
+    await expect(page.getByRole('article', { name: 'Question fuseau' })).toContainText(
+      'Europe/Paris',
+    );
+    await app.close();
+  });
 });
