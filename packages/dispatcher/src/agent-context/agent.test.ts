@@ -283,6 +283,38 @@ describe('préparation et finalisation', () => {
     ).rejects.toThrow(ProfileError);
   });
 
+  it('refuse un profil à pont sans variables, sans passer la tâche en running', async () => {
+    const unityYaml = stringify(
+      makeAgentProfile({
+        id: 'unity',
+        mcpServers: { aura: { type: 'http', url: '${AURA_BRIDGE_URL}', headers: {} } },
+      }),
+    );
+    const read = (path: string) =>
+      Promise.resolve(path === '.agentlake/profiles/unity.yml' ? unityYaml : null);
+    await expect(
+      prepareAgent(
+        { ref, issueNumber, profileId: 'unity', attempt: 1, reason: 'none' },
+        { github, git: new FakeGit(), readFile: read, token: 'jeton' },
+      ),
+    ).rejects.toThrow('Le profil « unity » a besoin de AURA_BRIDGE_URL');
+    expect((await github.getIssue(ref, issueNumber)).labels).toEqual([stateLabel('ready')]);
+
+    const prepared = await prepareAgent(
+      {
+        ref,
+        issueNumber,
+        profileId: 'unity',
+        attempt: 1,
+        reason: 'none',
+        profileEnv: { AURA_BRIDGE_URL: 'https://pont' },
+      },
+      { github, git: new FakeGit(), readFile: read, token: 'jeton' },
+    );
+    expect(prepared.mcpConfig?.secrets).toEqual([]);
+    expect(prepared.claudeArgs).toContain("--mcp-config 'agentlake-mcp.json'");
+  });
+
   const finalizeInput = (overrides: Partial<FinalizeInput> = {}): FinalizeInput => ({
     ref,
     issueNumber,

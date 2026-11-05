@@ -8,7 +8,7 @@ import { seedFakeProjects } from './e2e-fixtures.js';
 import { createRepositories } from './db/repositories.js';
 import { registerDroppedFiles, registerIpc, serviceHandlers } from './ipc.js';
 import { ProjectsService } from './projects-service.js';
-import { CALLER_TEMPLATES } from './services/projects/caller-templates.js';
+import { CALLER_TEMPLATES, PROFILE_TEMPLATES } from './services/projects/caller-templates.js';
 import { ProjectCreationService } from './services/projects/creation-service.js';
 import { ContextService } from './services/ingestion/context-service.js';
 import { PlannerLaunchService } from './services/planner/planner-launch.js';
@@ -94,6 +94,7 @@ async function start(): Promise<void> {
     github: () => service.githubPort(),
     projects,
     callerTemplates: CALLER_TEMPLATES,
+    profileTemplates: PROFILE_TEMPLATES,
   });
   const context = new ContextService({
     repos,

@@ -2,7 +2,14 @@ import type { GitHubPort, RepoRef } from 'github';
 import { parseTaskIssueBody, type TaskIssue } from 'shared';
 import { readProjectContext, taskBranch, type ReadFile } from './context.js';
 import { checkoutTaskBranch, type Git } from './git.js';
-import { claudeArgs, parseProfile, profilePath } from './profile.js';
+import {
+  buildMcpConfig,
+  claudeArgs,
+  parseProfile,
+  profilePath,
+  type McpConfig,
+  type ProfileEnv,
+} from './profile.js';
 import { buildPrompt } from './prompt.js';
 import { gatherResume, setTaskState, type ResumeReason } from './resume.js';
 
@@ -12,6 +19,10 @@ export interface PrepareInput {
   profileId: string;
   attempt: number;
   reason: ResumeReason;
+  /** Variables injectées dans la configuration MCP du profil (pont Aura). */
+  profileEnv?: ProfileEnv;
+  /** Fichier, hors du dépôt, où le CLI écrira la configuration MCP. */
+  mcpConfigPath?: string;
 }
 
 export interface PrepareDeps {
@@ -28,6 +39,8 @@ export interface Prepared {
   branchState: 'created' | 'resumed';
   prompt: string;
   claudeArgs: string;
+  /** Configuration MCP à écrire dans `mcpConfigPath`, si le profil déclare des serveurs. */
+  mcpConfig: McpConfig | null;
 }
 
 export class TaskIssueError extends Error {
@@ -47,6 +60,8 @@ export async function prepareAgent(input: PrepareInput, deps: PrepareDeps): Prom
   if (!parsed.ok) throw new TaskIssueError(input.issueNumber, parsed.error);
   const task = parsed.value;
   const profile = parseProfile(await deps.readFile(profilePath(input.profileId)), input.profileId);
+  // Avant tout changement d'état : un pont non configuré ne doit pas laisser la tâche « running ».
+  const mcpConfig = buildMcpConfig(profile, input.profileEnv ?? {});
 
   await setTaskState(deps.github, input.ref, input.issueNumber, 'running');
   const branch = taskBranch(task.id, task.title);
@@ -66,6 +81,10 @@ export async function prepareAgent(input: PrepareInput, deps: PrepareDeps): Prom
     branch,
     branchState,
     prompt: buildPrompt({ task, issueNumber: input.issueNumber, profile, branch, context, resume }),
-    claudeArgs: claudeArgs(profile),
+    claudeArgs: claudeArgs(
+      profile,
+      mcpConfig === null ? null : (input.mcpConfigPath ?? 'agentlake-mcp.json'),
+    ),
+    mcpConfig,
   };
 }

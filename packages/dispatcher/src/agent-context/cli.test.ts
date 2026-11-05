@@ -1,4 +1,5 @@
 import { FakeGitHub } from 'github';
+import { join } from 'node:path';
 import { renderTaskIssueBody } from 'shared';
 import { makeAgentProfile, makeTask } from 'shared/test-utils';
 import { describe, expect, it } from 'vitest';
@@ -14,10 +15,13 @@ import {
 } from './cli.js';
 
 const ref = { owner: 'kiamiya', repo: 'site' };
+const BACKSLASH = String.fromCharCode(92);
 
 function deps(github: FakeGitHub, files: Record<string, string>) {
   const tokens: string[] = [];
   const outputs: string[] = [];
+  const written = new Map<string, string>();
+  const logs: string[] = [];
   const cli: CliDeps = {
     github: (token) => {
       tokens.push(token);
@@ -29,8 +33,13 @@ function deps(github: FakeGitHub, files: Record<string, string>) {
       outputs.push(text);
       return Promise.resolve();
     },
+    writeText: (path, text) => {
+      written.set(path.replaceAll(BACKSLASH, '/'), text);
+      return Promise.resolve();
+    },
+    log: (line) => logs.push(line),
   };
-  return { cli, tokens, outputs };
+  return { cli, tokens, outputs, written, logs };
 }
 
 describe('variables d’environnement', () => {
@@ -39,6 +48,7 @@ describe('variables d’environnement', () => {
       GITHUB_REPOSITORY: 'kiamiya/site',
       GITHUB_WORKSPACE: '/w',
       GITHUB_OUTPUT: '/o',
+      RUNNER_TEMP: '/tmp',
       GH_TOKEN: 't',
       ISSUE_NUMBER: '12',
       PROFILE: 'frontend',
@@ -83,6 +93,7 @@ describe('commandes', () => {
         GITHUB_REPOSITORY: 'kiamiya/site',
         GITHUB_WORKSPACE: '/w',
         GITHUB_OUTPUT: '/o',
+        RUNNER_TEMP: '/tmp',
         GH_TOKEN: 'jeton-job',
         ISSUE_NUMBER: String(issue.number),
         PROFILE: 'frontend',
@@ -94,6 +105,56 @@ describe('commandes', () => {
     for (const key of ['branch', 'task_id', 'task_title', 'prompt', 'claude_args'])
       expect(written).toContain(`${key}<<`);
     expect(written).toContain('task/T04-somme');
+    expect(written).not.toContain('--mcp-config');
+  });
+
+  it('prepare écrit la configuration MCP hors du dépôt et masque le jeton du pont', async () => {
+    const github = new FakeGitHub({ actor: 'kiamiya' });
+    github.seedRepository(ref);
+    const issue = await github.createIssue(ref, {
+      title: 'T04',
+      body: renderTaskIssueBody(makeTask({ id: 'T04', title: 'Saut', profile: 'unity' })),
+    });
+    const profile = makeAgentProfile({
+      id: 'unity',
+      mcpServers: {
+        aura: {
+          type: 'http',
+          url: '${AURA_BRIDGE_URL}',
+          headers: { Authorization: 'Bearer ${AURA_BRIDGE_TOKEN}' },
+        },
+      },
+    });
+    const { cli, outputs, written, logs } = deps(github, {
+      '/w/.agentlake/profiles/unity.yml': stringify(profile),
+    });
+    await runPrepare(
+      {
+        GITHUB_REPOSITORY: 'kiamiya/site',
+        GITHUB_WORKSPACE: '/w',
+        GITHUB_OUTPUT: '/o',
+        RUNNER_TEMP: '/tmp',
+        GH_TOKEN: 'jeton-job',
+        ISSUE_NUMBER: String(issue.number),
+        PROFILE: 'unity',
+        AURA_BRIDGE_URL: 'https://pont.example.ts.net/mcp',
+        AURA_BRIDGE_TOKEN: 'jeton-pont',
+      },
+      cli,
+    );
+    expect(logs).toEqual(['::add-mask::jeton-pont']);
+    expect(JSON.parse(written.get('/tmp/agentlake-mcp.json') ?? '')).toEqual({
+      mcpServers: {
+        aura: {
+          type: 'http',
+          url: 'https://pont.example.ts.net/mcp',
+          headers: { Authorization: 'Bearer jeton-pont' },
+        },
+      },
+    });
+    const output = outputs.join('');
+    expect(output).toContain(`--mcp-config '${join('/tmp', 'agentlake-mcp.json')}'`);
+    expect(output).not.toContain('jeton-pont');
   });
 
   it('finalize ouvre la PR avec le jeton de l’app, ou celui du job à défaut', async () => {

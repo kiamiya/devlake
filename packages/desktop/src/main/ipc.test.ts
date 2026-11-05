@@ -62,6 +62,7 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
         github: () => service.githubPort(),
         projects,
         callerTemplates: { 'agentlake-x.yml': 'uses: __DEVLAKE_REPOSITORY__@__DEVLAKE_REF__' },
+        profileTemplates: {},
       }),
       context,
       planner: new PlannerLaunchService(repos, () => service.githubPort()),

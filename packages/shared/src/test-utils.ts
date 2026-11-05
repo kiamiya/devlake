@@ -95,6 +95,7 @@ export function makeAgentProfile(overrides: Partial<AgentProfile> = {}): AgentPr
     model: 'claude-sonnet-5-5',
     exclusiveResources: [],
     estimatedMinutes: 20,
+    mcpServers: {},
     ...overrides,
   };
 }

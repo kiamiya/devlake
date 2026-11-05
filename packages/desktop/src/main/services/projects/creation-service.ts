@@ -18,6 +18,7 @@ export interface CreationDeps {
   github: () => Promise<GitHubPort>;
   projects: ProjectsService;
   callerTemplates: Readonly<Record<string, string>>;
+  profileTemplates: Readonly<Record<string, string>>;
 }
 
 /** Création d'un projet par l'assistant, et relance du bootstrap d'un projet existant. */
@@ -32,6 +33,7 @@ export class ProjectCreationService {
       workflowsRef: settings.workflowsVersion,
       maxAttempts: settings.maxAttempts,
       callerTemplates: this.deps.callerTemplates,
+      profileTemplates: this.deps.profileTemplates,
     });
   }
 

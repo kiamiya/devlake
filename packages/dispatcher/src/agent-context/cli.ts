@@ -5,7 +5,7 @@
  *   node cli.js finalize  → pousse, ouvre ou met à jour la PR, auto-merge ; ou fixing + diagnostic
  */
 import { OctokitGitHub, type GitHubPort } from 'github';
-import { appendFile, readFile } from 'node:fs/promises';
+import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { formatZodError } from 'shared';
@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { finalizeAgent, type FinalizeResult } from './finalize.js';
 import { systemGit, type Git } from './git.js';
 import { prepareAgent, type Prepared } from './prepare.js';
+import { profileEnvFrom } from './profile.js';
 import { RESUME_REASONS } from './resume.js';
 
 const repository = z
@@ -34,6 +35,7 @@ export const PrepareEnvSchema = z.object({
   GITHUB_REPOSITORY: repository,
   GITHUB_WORKSPACE: z.string().min(1),
   GITHUB_OUTPUT: z.string().min(1),
+  RUNNER_TEMP: z.string().min(1, 'RUNNER_TEMP manquant.'),
   GH_TOKEN: z.string().min(1, 'GH_TOKEN manquant.'),
   ISSUE_NUMBER: positive('ISSUE_NUMBER'),
   PROFILE: z.string().min(1, 'PROFILE manquant.'),
@@ -78,10 +80,15 @@ export interface CliDeps {
   git: (cwd: string) => Git;
   readText: (path: string) => Promise<string | null>;
   appendText: (path: string, text: string) => Promise<void>;
+  writeText: (path: string, text: string) => Promise<void>;
+  /** Journal du job (commandes `::add-mask::`). */
+  log: (line: string) => void;
 }
 
 export async function runPrepare(env: NodeJS.ProcessEnv, deps: CliDeps): Promise<Prepared> {
   const e = parseEnv(PrepareEnvSchema, env);
+  // Hors du dépôt : le jeton du pont ne doit jamais être commité.
+  const mcpConfigPath = join(e.RUNNER_TEMP, 'agentlake-mcp.json');
   const prepared = await prepareAgent(
     {
       ref: e.GITHUB_REPOSITORY,
@@ -89,6 +96,8 @@ export async function runPrepare(env: NodeJS.ProcessEnv, deps: CliDeps): Promise
       profileId: e.PROFILE,
       attempt: e.ATTEMPT,
       reason: e.RESUME_REASON,
+      profileEnv: profileEnvFrom(env),
+      mcpConfigPath,
     },
     {
       github: deps.github(e.GH_TOKEN),
@@ -97,6 +106,10 @@ export async function runPrepare(env: NodeJS.ProcessEnv, deps: CliDeps): Promise
       token: e.GH_TOKEN,
     },
   );
+  if (prepared.mcpConfig !== null) {
+    for (const secret of prepared.mcpConfig.secrets) deps.log(`::add-mask::${secret}`);
+    await deps.writeText(mcpConfigPath, prepared.mcpConfig.json);
+  }
   await deps.appendText(
     e.GITHUB_OUTPUT,
     formatOutputs({
@@ -148,6 +161,10 @@ const systemDeps: CliDeps = {
     }
   },
   appendText: (path, text) => appendFile(path, text, 'utf8'),
+  writeText: (path, text) => writeFile(path, text, { encoding: 'utf8', mode: 0o600 }),
+  log: (line) => {
+    console.log(line);
+  },
 };
 
 async function main(command: string | undefined): Promise<void> {
