@@ -5,3 +5,7 @@
 *.gif binary
 *.webp binary
 *.ico binary
+*.docx binary
+*.pdf binary
+# Fixtures d’ingestion : octets conservés tels quels (fins de ligne comprises).
+packages/desktop/src/main/services/ingestion/__fixtures__/** -text

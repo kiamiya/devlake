@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { readBlockedBy, writeBlockedBy } from './dependencies-block.js';
+import { lfsPointerOf, type LfsPointer } from './lfs.js';
 import { GitHubError } from './errors.js';
 import type { GitHubPort } from './port.js';
 import { decryptSecret, generateSecretKeyPair, type SecretKeyPair } from './secrets.js';
@@ -64,6 +65,10 @@ export interface FakeRepoState {
   secrets: Map<string, string>;
   issueDependencies: boolean;
   actions: ActionsPermissions;
+  /** Stockage Git LFS : oid → contenu. */
+  lfs: Map<string, Uint8Array>;
+  /** Nombre d'objets réellement envoyés (pour vérifier la déduplication). */
+  lfsUploads: number;
 }
 
 export interface FakeGitHubOptions {
@@ -148,6 +153,8 @@ export class FakeGitHub implements GitHubPort {
         canApprovePullRequestReviews: false,
         forkPrApproval: 'first_time_contributors',
       },
+      lfs: new Map(),
+      lfsUploads: 0,
     };
     this.repos.set(`${ref.owner}/${ref.repo}`, state);
     return state;
@@ -326,6 +333,20 @@ export class FakeGitHub implements GitHubPort {
       state.commits.set(sha, files);
       state.branches.set(input.branch, { sha, files: new Map(files) });
       return sha;
+    });
+  }
+
+  uploadLfsObjects(ref: RepoRef, files: readonly Uint8Array[]): Promise<LfsPointer[]> {
+    return this.run(() => {
+      const state = this.state(ref);
+      return files.map((data) => {
+        const pointer = lfsPointerOf(data);
+        if (!state.lfs.has(pointer.oid)) {
+          state.lfs.set(pointer.oid, new Uint8Array(data));
+          state.lfsUploads += 1;
+        }
+        return pointer;
+      });
     });
   }
 

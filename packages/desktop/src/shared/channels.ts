@@ -23,6 +23,9 @@ export const IPC_CHANNELS = [
   'claude-token:clear',
   'projects:create',
   'projects:bootstrap',
+  'context:choose-files',
+  'context:import',
+  'context:list',
 ] as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[number];

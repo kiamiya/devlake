@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, safeStorage, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, shell } from 'electron';
 import { FakeGitHub, OctokitGitHub, type GitHubPort } from 'github';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +10,9 @@ import { registerIpc, serviceHandlers } from './ipc.js';
 import { ProjectsService } from './projects-service.js';
 import { CALLER_TEMPLATES } from './services/projects/caller-templates.js';
 import { ProjectCreationService } from './services/projects/creation-service.js';
+import { ContextService } from './services/ingestion/context-service.js';
+import { defaultRegistry } from './services/ingestion/registry.js';
+import { readFile, stat } from 'node:fs/promises';
 import { SafeStorageVault } from './vault.js';
 
 /**
@@ -90,7 +93,30 @@ async function start(): Promise<void> {
     projects,
     callerTemplates: CALLER_TEMPLATES,
   });
-  registerIpc(ipcMain, serviceHandlers({ cockpit: service, projects, creation }), isTrustedUrl);
+  const context = new ContextService({
+    repos,
+    github: () => service.githubPort(),
+    registry: defaultRegistry(),
+    pickFiles: async (extensions) => {
+      const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+      const options = {
+        title: 'Importer des documents',
+        properties: ['openFile', 'multiSelections'] as ('openFile' | 'multiSelections')[],
+        filters: [{ name: 'Documents et images', extensions }],
+      };
+      const result = window
+        ? await dialog.showOpenDialog(window, options)
+        : await dialog.showOpenDialog(options);
+      return result.canceled ? [] : result.filePaths;
+    },
+    readFile: async (path) => new Uint8Array(await readFile(path)),
+    fileSize: async (path) => (await stat(path)).size,
+  });
+  registerIpc(
+    ipcMain,
+    serviceHandlers({ cockpit: service, projects, creation, context }),
+    isTrustedUrl,
+  );
 
   createWindow();
   await service.refreshGitHubStatus();

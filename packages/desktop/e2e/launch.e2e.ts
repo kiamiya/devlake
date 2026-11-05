@@ -12,6 +12,9 @@ import { fileURLToPath } from 'node:url';
 
 // Sans séparateur final : sous Windows, « …\" » échapperait le guillemet de l'argument.
 const appDir = resolve(fileURLToPath(new URL('..', import.meta.url)));
+const BRIEF_DOCX = fileURLToPath(
+  new URL('../src/main/services/ingestion/__fixtures__/brief.docx', import.meta.url),
+);
 
 /** Faux jeton de test, sans valeur réelle. */
 const FAKE_TOKEN = 'ghp_e2eJetonDeTest1234'; // gitleaks:allow
@@ -201,6 +204,40 @@ test.describe('cockpit', () => {
     const steps = page.getByRole('list', { name: 'Étapes du bootstrap' }).getByRole('listitem');
     await expect(steps).toHaveCount(7);
     for (const step of await steps.allTextContents()) expect(step).toContain('déjà en place');
+    await app.close();
+  });
+
+  test('contexte : verse un brief docx dans un dépôt public, puis le réimport ne change rien', async () => {
+    const { app, page } = await launch(userData);
+    await saveToken(page);
+    await page.keyboard.press('Control+1');
+    await page.getByRole('button', { name: 'Ouvrir un dépôt existant' }).click();
+    await page.getByRole('button', { name: 'Ouvrir jeu' }).click();
+    await expect(page.getByRole('heading', { name: 'Contexte', exact: true })).toBeVisible();
+
+    // Sélecteur de fichiers natif simulé.
+    await app.evaluate(({ dialog }, path) => {
+      dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [path] });
+    }, BRIEF_DOCX);
+
+    for (const attempt of [1, 2]) {
+      await page.getByRole('button', { name: 'Choisir des fichiers' }).click();
+      await page.getByLabel('Rôle de brief.docx').selectOption('brief');
+      await expect(page.getByRole('note')).toContainText('public');
+      const send = page.getByRole('button', { name: 'Verser dans le dépôt' });
+      await expect(send).toBeDisabled();
+      await page.getByLabel('Je confirme que ces documents peuvent être publics.').check();
+      await send.click();
+      if (attempt === 1) {
+        await expect(page.getByRole('status')).toContainText('1 document versé en un commit.');
+        await expect(page.getByRole('list', { name: 'Documents versés' })).toContainText(
+          'brief.md',
+        );
+      } else {
+        await expect(page.getByRole('status')).toContainText('Aucun changement');
+        await expect(page.getByRole('status')).toContainText('déjà importé');
+      }
+    }
     await app.close();
   });
 });

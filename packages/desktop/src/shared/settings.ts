@@ -35,6 +35,12 @@ export const SettingsSchema = z.object({
   modelsByProfile: z.partialRecord(ProfileIdSchema, z.string().trim().min(1, 'Modèle vide.')),
   /** Dossier des clones dédiés à l'éditeur Unity/Unreal. */
   editorClonesDir: z.string().trim().min(1, 'Dossier vide.').nullable(),
+  /** Taille maximale d'un fichier importé dans le contexte, en Mo. */
+  maxImportMegabytes: z
+    .number()
+    .int('La taille maximale doit être un entier.')
+    .min(1, 'Au moins 1 Mo.')
+    .max(500, 'Au plus 500 Mo.'),
   /** Version épinglée (tag) des workflows réutilisables de devlake, posée au bootstrap. */
   workflowsVersion: z
     .string()
@@ -51,6 +57,7 @@ export const DEFAULT_SETTINGS: Settings = {
   modelsByProfile: {},
   editorClonesDir: null,
   workflowsVersion: 'v1',
+  maxImportMegabytes: 50,
   auraMcp: { unity: null, unreal: null },
 };
 
