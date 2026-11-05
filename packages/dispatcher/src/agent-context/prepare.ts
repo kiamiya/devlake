@@ -1,5 +1,6 @@
 import type { GitHubPort, RepoRef } from 'github';
-import { parseTaskIssueBody, type TaskIssue } from 'shared';
+import { ciChecksFor, parseTaskIssueBody, ProjectConfigSchema, type TaskIssue } from 'shared';
+import { parse } from 'yaml';
 import { appendDecision } from '../questions/decisions.js';
 import { DECISIONS_PATH, readProjectContext, taskBranch, type ReadFile } from './context.js';
 import { checkoutTaskBranch, type Git } from './git.js';
@@ -11,7 +12,7 @@ import {
   type McpConfig,
   type ProfileEnv,
 } from './profile.js';
-import { buildPrompt } from './prompt.js';
+import { buildPrompt, type QualityGate } from './prompt.js';
 import { gatherResume, setTaskState, type ResumeReason } from './resume.js';
 
 export interface PrepareInput {
@@ -34,6 +35,8 @@ export interface PrepareDeps {
   writeFile?: (path: string, content: string) => Promise<void>;
   /** Jeton du job, pour les opérations git de lecture. */
   token: string;
+  /** Dossier des gabarits qualité dans le runner (copie de devlake). */
+  templatesDir?: string;
   /** Date du jour (AAAA-MM-JJ) inscrite avec une décision. */
   today?: () => string;
 }
@@ -99,15 +102,38 @@ export async function prepareAgent(input: PrepareInput, deps: PrepareDeps): Prom
     }
   }
   const context = await readProjectContext(deps.readFile);
+  const quality =
+    profile.id === 'architect' ? await qualityGate(deps.readFile, deps.templatesDir) : undefined;
   return {
     task,
     branch,
     branchState,
-    prompt: buildPrompt({ task, issueNumber: input.issueNumber, profile, branch, context, resume }),
+    prompt: buildPrompt({
+      task,
+      issueNumber: input.issueNumber,
+      profile,
+      branch,
+      context,
+      resume,
+      ...(quality ? { quality } : {}),
+    }),
     claudeArgs: claudeArgs(
       profile,
       mcpConfig === null ? null : (input.mcpConfigPath ?? 'agentlake-mcp.json'),
     ),
     mcpConfig,
   };
+}
+
+/** Porte qualité du projet, lue dans `.agentlake/project.yml` (null si illisible). */
+async function qualityGate(
+  readFile: ReadFile,
+  templatesRoot = '.agentlake-runtime/templates/quality',
+): Promise<QualityGate | undefined> {
+  const text = await readFile('.agentlake/project.yml');
+  if (text === null) return undefined;
+  const parsed = ProjectConfigSchema.safeParse(parse(text));
+  if (!parsed.success) return undefined;
+  const profile = parsed.data.qualityProfile;
+  return { profile, checks: ciChecksFor(profile), templatesDir: `${templatesRoot}/${profile}/` };
 }

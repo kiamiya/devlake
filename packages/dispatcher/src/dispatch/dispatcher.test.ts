@@ -24,6 +24,7 @@ import {
   runDispatch,
   type DispatcherDeps,
 } from './dispatcher.js';
+import { seedGreenMain } from '../testing/checks.js';
 
 const ref = { owner: 'kiamiya', repo: 'jeu' };
 const NOW = new Date('2026-11-05T12:00:00Z');
@@ -31,6 +32,7 @@ const NOW = new Date('2026-11-05T12:00:00Z');
 async function project(options: { private?: boolean; config?: string | null } = {}) {
   const github = new FakeGitHub({ actor: 'kiamiya' });
   github.seedRepository(ref, { private: options.private ?? false });
+  seedGreenMain(github, ref);
   if (options.config !== null)
     await github.commitFiles(ref, {
       branch: 'main',
@@ -73,7 +75,7 @@ describe('passe sur GitHub', () => {
     const after = await github.getIssue(ref, issue.number);
     expect(after.labels).toEqual([TASK_LABEL, stateLabel('running')]);
     expect(after.body).toContain(
-      `<!-- agentlake:dispatch {"attempts":1,"launchedAt":"${NOW.toISOString()}","resumes":0} -->`,
+      `<!-- agentlake:dispatch {"attempts":1,"launchedAt":"${NOW.toISOString()}","resumes":0,"firstLaunchedAt":"${NOW.toISOString()}","failedSha":null,"summarized":false} -->`,
     );
     expect(github.state(ref).dispatches).toEqual([
       {
@@ -129,7 +131,9 @@ describe('passe sur GitHub', () => {
     const { d } = deps(github);
     await runDispatch(ref, d);
     expect((await github.getIssue(ref, issue.number)).labels).toContain(stateLabel('escalated'));
-    expect((await github.listComments(ref, issue.number))[0]?.body).toContain('3 tentatives');
+    expect((await github.listComments(ref, issue.number))[0]?.body).toContain(
+      'La tâche T01 a échoué 3 fois. Comment continuer ?',
+    );
   });
 
   it('minutes comptées avec le coût estimé du profil du projet', async () => {

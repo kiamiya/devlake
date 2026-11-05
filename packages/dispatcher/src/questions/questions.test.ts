@@ -15,6 +15,7 @@ import { planPass } from '../dispatch/plan-pass.js';
 import { answerEventFrom, traceIgnoredAnswer } from './answers.js';
 import { appendDecision } from './decisions.js';
 import { ignoredAnswerReason, readThread, reminderComment, reminderDue } from './thread.js';
+import { seedGreenMain } from '../testing/checks.js';
 
 const OWNER = 'kiamiya';
 const q = (id: string, blocking = true): Question => ({
@@ -137,6 +138,7 @@ describe('dispatcher et questions', () => {
   async function setup(project = makeProjectConfig()) {
     const github = new FakeGitHub({ actor: OWNER });
     github.seedRepository(ref);
+    seedGreenMain(github, ref);
     await github.commitFiles(ref, {
       branch: 'main',
       message: 'p',

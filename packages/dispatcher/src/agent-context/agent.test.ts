@@ -6,7 +6,7 @@ import {
   renderTaskIssueBody,
   stateLabel,
 } from 'shared';
-import { makeAgentProfile, makeTask } from 'shared/test-utils';
+import { makeAgentProfile, makeProjectConfig, makeTask } from 'shared/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { stringify } from 'yaml';
 import { readProjectContext, taskBranch } from './context.js';
@@ -198,13 +198,21 @@ describe('contexte et reprise', () => {
         logs: 'FAIL agenda',
       },
     ]);
-    github.seedWorkflowRun(ref, run(3, 'success', '2026-11-05T12:00:00Z'));
+    // La relecture (autre workflow) a réussi : seul le dernier run de la CI compte.
+    github.seedWorkflowRun(ref, {
+      ...run(3, 'success', '2026-11-05T12:00:00Z'),
+      name: 'Relecture',
+      workflow: 'agentlake-review.yml',
+    });
     expect(await gatherResume(github, ref, input)).toEqual({
       kind: 'ci-failure',
       attempt: 2,
-      logs: '=== tests ===\nFAIL agenda',
+      logs: '=== CI / tests ===\nFAIL agenda',
       runUrl: 'https://github.com/kiamiya/site/actions/runs/2',
     });
+    // Un nouveau run de la CI réussi : plus rien en échec.
+    github.seedWorkflowRun(ref, run(4, 'success', '2026-11-05T13:00:00Z'));
+    expect(await gatherResume(github, ref, input)).toMatchObject({ runUrl: null });
   });
 
   it('pose un état en retirant les autres', async () => {
@@ -327,6 +335,47 @@ describe('préparation et finalisation', () => {
       deps(again),
     );
     expect(again.commands()).not.toContain('docs(decisions)');
+  });
+
+  it('architecte : la porte qualité du profil du projet est dans le prompt', async () => {
+    const files: Record<string, string> = {
+      '.agentlake/profiles/architect.yml': stringify(makeAgentProfile({ id: 'architect' })),
+      '.agentlake/profiles/frontend.yml': profileYaml,
+      '.agentlake/project.yml': stringify(makeProjectConfig({ qualityProfile: 'web' })),
+    };
+    const read = (path: string) => Promise.resolve(files[path] ?? null);
+    const deps = { github, git: new FakeGit(), readFile: read, token: 'jeton' };
+    const architect = await prepareAgent(
+      { ref, issueNumber, profileId: 'architect', attempt: 1, reason: 'none' },
+      deps,
+    );
+    expect(architect.prompt).toContain('## Porte qualité (profil `web`)');
+    expect(architect.prompt).toContain('`.agentlake-runtime/templates/quality/web/`');
+    expect(architect.prompt).toContain('`e2e`');
+    const frontend = await prepareAgent(
+      { ref, issueNumber, profileId: 'frontend', attempt: 1, reason: 'none' },
+      deps,
+    );
+    expect(frontend.prompt).not.toContain('Porte qualité');
+    // project.yml absent ou invalide : pas de section.
+    delete files['.agentlake/project.yml'];
+    expect(
+      (
+        await prepareAgent(
+          { ref, issueNumber, profileId: 'architect', attempt: 1, reason: 'none' },
+          deps,
+        )
+      ).prompt,
+    ).not.toContain('Porte qualité');
+    files['.agentlake/project.yml'] = 'type: inconnu\n';
+    expect(
+      (
+        await prepareAgent(
+          { ref, issueNumber, profileId: 'architect', attempt: 1, reason: 'none' },
+          deps,
+        )
+      ).prompt,
+    ).not.toContain('Porte qualité');
   });
 
   it('refuse un profil à pont sans variables, sans passer la tâche en running', async () => {

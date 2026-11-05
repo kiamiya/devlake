@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   BranchProtectionApi,
   CheckRunsApi,
+  PullRequestFileApi,
   CommentApi,
   CommitApi,
   ContentApi,
@@ -53,6 +54,7 @@ import type {
   ListPullRequestsInput,
   ListWorkflowRunsInput,
   PullRequest,
+  PullRequestFile,
   RepoRef,
   Repository,
   UpdateIssueInput,
@@ -622,6 +624,14 @@ export class OctokitGitHub implements GitHubPort {
     );
   }
 
+  async listPullRequestFiles(ref: RepoRef, prNumber: number): Promise<PullRequestFile[]> {
+    return this.paginate(
+      'GET /repos/{owner}/{repo}/pulls/{pull_number}/files',
+      { ...repoParams(ref), pull_number: prNumber },
+      PullRequestFileApi,
+    );
+  }
+
   // Actions
 
   async dispatchWorkflow(ref: RepoRef, input: DispatchWorkflowInput): Promise<void> {
@@ -674,6 +684,13 @@ export class OctokitGitHub implements GitHubPort {
       { ...repoParams(ref), job_id: jobId },
       z.string(),
     );
+  }
+
+  async rerunFailedJobs(ref: RepoRef, runId: number): Promise<void> {
+    await this.http.raw('POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs', {
+      ...repoParams(ref),
+      run_id: runId,
+    });
   }
 
   // Secrets

@@ -7,16 +7,23 @@ on:
 
 permissions: {}
 
+# La relecture d'un commit dépassé est annulée (le groupe n'existe qu'à ce niveau).
 concurrency:
   group: agentlake-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  review:
-    # Jamais sur une PR venant d'un fork : pas d'accès aux secrets.
+  # Le nom du job fait partie du nom des checks obligatoires :
+  # « agentlake / tests-guard » et « agentlake / review ».
+  agentlake:
+    # Jamais sur une PR venant d'un fork : pas d'accès aux secrets (la PR reste non mergeable).
     if: github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
       pull-requests: write
+      issues: write
     uses: __DEVLAKE_REPOSITORY__/.github/workflows/review.yml@__DEVLAKE_REF__
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+      devlake_ref: __DEVLAKE_REF__
     secrets: inherit

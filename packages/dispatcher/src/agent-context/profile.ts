@@ -132,7 +132,11 @@ function quote(value: string): string {
  * viennent du profil, jamais d'une valeur codée en dur. `mcpConfigPath` désigne le fichier
  * écrit hors du dépôt quand le profil déclare des serveurs MCP.
  */
-export function claudeArgs(profile: AgentProfile, mcpConfigPath: string | null = null): string {
+export function claudeArgs(
+  profile: AgentProfile,
+  mcpConfigPath: string | null = null,
+  outputSchema: object = OUTCOME_SCHEMA,
+): string {
   const args = [
     '--model',
     quote(profile.model),
@@ -141,7 +145,7 @@ export function claudeArgs(profile: AgentProfile, mcpConfigPath: string | null =
     '--append-system-prompt',
     quote(profile.systemPrompt),
     '--json-schema',
-    quote(JSON.stringify(OUTCOME_SCHEMA)),
+    quote(JSON.stringify(outputSchema)),
   ];
   if (profile.allowedTools.length > 0)
     args.push('--allowedTools', quote(profile.allowedTools.join(',')));

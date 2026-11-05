@@ -17,7 +17,7 @@ export const DEFAULT_QUALITY_PROFILE: Readonly<Record<ProjectType, QualityProfil
  * statique et relecture Claude. Ce sont des noms de checks GitHub : la CI des
  * projets (T14) doit produire exactement ces noms.
  */
-export const COMMON_REQUIRED_CHECKS = [
+export const CI_CHECKS = [
   'lint',
   'typecheck',
   'unit-tests',
@@ -26,12 +26,34 @@ export const COMMON_REQUIRED_CHECKS = [
   'dependency-audit',
   'gitleaks',
   'codeql',
-  'review',
 ] as const;
 
-/** Checks obligatoires d'un profil ; les ajouts propres à chaque profil arrivent avec T14. */
-export function requiredChecksFor(_profile: QualityProfile): string[] {
-  return [...COMMON_REQUIRED_CHECKS];
+/**
+ * Checks de la porte qualité d'AgentLake (workflow d'appel `agentlake-review.yml`, job
+ * `agentlake`) : ils ne tournent que sur les PR.
+ */
+export const PULL_REQUEST_CHECKS = ['agentlake / tests-guard', 'agentlake / review'] as const;
+
+export const COMMON_REQUIRED_CHECKS = [...CI_CHECKS, ...PULL_REQUEST_CHECKS] as const;
+
+/** Checks propres à chaque profil qualité, produits par `templates/quality/<profil>/ci.yml`. */
+export const PROFILE_CHECKS: Readonly<Record<QualityProfile, readonly string[]>> = {
+  web: ['e2e'],
+  backend: ['contract-tests'],
+  mobile: ['e2e'],
+  tool: ['cli-e2e'],
+  unity: ['playmode-tests'],
+  unreal: [],
+};
+
+/** Checks de la CI du projet (`ci.yml`) pour un profil : ils tournent sur les PR et sur `main`. */
+export function ciChecksFor(profile: QualityProfile): string[] {
+  return [...CI_CHECKS, ...PROFILE_CHECKS[profile]];
+}
+
+/** Checks obligatoires sur `main` (protection de branche) pour un profil. */
+export function requiredChecksFor(profile: QualityProfile): string[] {
+  return [...ciChecksFor(profile), ...PULL_REQUEST_CHECKS];
 }
 
 /** Types de projet qui passent par le pont Aura. */

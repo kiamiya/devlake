@@ -8,6 +8,7 @@ import type { Git } from '../agent-context/git.js';
 import { prepareAgent } from '../agent-context/prepare.js';
 import { runDispatchCli } from '../dispatch/cli.js';
 import { PROJECT_CONFIG } from '../dispatch/dispatcher.js';
+import { seedGreenMain } from '../testing/checks.js';
 
 const OWNER = 'kiamiya';
 const ref = { owner: OWNER, repo: 'site' };
@@ -62,6 +63,7 @@ describe('protocole de questions, de bout en bout', () => {
   it('question bloquante → attente → réponse → reprise sur la même branche, avec la réponse ; une ancienne réponse ne relance rien', async () => {
     const github = new FakeGitHub({ actor: OWNER });
     github.seedRepository(ref);
+    seedGreenMain(github, ref);
     await github.configureMergeSettings(ref);
     await github.commitFiles(ref, {
       branch: 'main',
