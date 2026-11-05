@@ -21,6 +21,11 @@ import {
   type IpcMainLike,
 } from './ipc.js';
 import { MemoryVault, VaultUnavailableError } from './vault.js';
+import {
+  QuestionsService,
+  type QuestionNotification,
+} from './services/questions/questions-service.js';
+import { renderQuestionComment, stateLabel, TASK_LABEL } from 'shared';
 
 /** Faux jeton de test, sans valeur réelle. */
 const FAKE_TOKEN = 'ghp_abcdefghijklmnop1234'; // gitleaks:allow
@@ -30,6 +35,10 @@ async function githubStatus(handlers: ReturnType<typeof serviceHandlers>) {
   if (!result.ok) throw new Error(result.error.message);
   return (result.data as { id: string }[]).find((s) => s.id === 'github');
 }
+
+/** Notifications et badges émis par la boîte de questions. */
+const notified: QuestionNotification[] = [];
+const badges: number[] = [];
 
 /** Chemins renvoyés par le faux sélecteur de fichiers. */
 let picked: string[] = [];
@@ -67,6 +76,13 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
       context,
       planner: new PlannerLaunchService(repos, () => service.githubPort()),
       plan: new PlanService(repos, () => service.githubPort()),
+      questions: new QuestionsService({
+        repos,
+        github: () => service.githubPort(),
+        notify: (n) => notified.push(n),
+        badge: (count) => badges.push(count),
+        now: () => '2026-11-06T12:00:00.000Z',
+      }),
     }),
     vault,
     repos,
@@ -153,6 +169,56 @@ describe('IPC — validation des canaux et des entrées', () => {
 
   it('expose un gestionnaire pour chaque canal déclaré', () => {
     expect(Object.keys(setup().handlers).sort()).toEqual([...IPC_CHANNELS].sort());
+  });
+});
+
+describe('IPC — boîte de questions', () => {
+  it('sonde, liste, répond ; question inconnue signalée', async () => {
+    const env = setup();
+    const ref = { owner: 'kiamiya', repo: 'site' };
+    env.github.seedRepository(ref);
+    env.repos.projects.upsert('kiamiya', 'site', '2026-11-06T08:00:00.000Z');
+    await env.vault.set('github-token', FAKE_TOKEN);
+    const issue = await env.github.createIssue(ref, {
+      title: 'T01',
+      body: '',
+      labels: [TASK_LABEL, stateLabel('awaiting-answer')],
+    });
+    await env.github.createComment(
+      ref,
+      issue.number,
+      renderQuestionComment({ id: 'fuseau', blocking: true, text: 'Quel fuseau ?', options: [] }),
+    );
+    notified.length = 0;
+    badges.length = 0;
+    expect(await dispatchIpc(env.handlers, 'questions:sync', undefined)).toEqual({
+      ok: true,
+      data: { pending: 1, blocking: 1, newBlocking: 1 },
+    });
+    expect(notified).toHaveLength(1);
+    expect(badges).toEqual([1]);
+    expect(await dispatchIpc(env.handlers, 'questions:list', {})).toMatchObject({
+      ok: true,
+      data: [{ questionId: 'fuseau', answer: null }],
+    });
+    expect(
+      await dispatchIpc(env.handlers, 'questions:answer', {
+        projectId: 'kiamiya/site',
+        issueNumber: issue.number,
+        questionId: 'fuseau',
+        text: 'Paris',
+        decision: true,
+      }),
+    ).toMatchObject({ ok: true, data: { answer: { text: 'Paris', decision: true } } });
+    expect(
+      await dispatchIpc(env.handlers, 'questions:answer', {
+        projectId: 'kiamiya/site',
+        issueNumber: issue.number,
+        questionId: 'fuseau',
+        text: 'encore',
+        decision: true,
+      }),
+    ).toMatchObject({ ok: false, error: { code: 'QUESTION_NOT_FOUND' } });
   });
 });
 

@@ -62,3 +62,32 @@ export const runs = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.projectId, t.id] })],
 );
+
+/**
+ * Questions des agents et du planificateur, lues dans les commentaires des issues.
+ * Gardées après la réponse et la fermeture de l'issue : c'est l'historique.
+ */
+export const questions = sqliteTable(
+  'questions',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    issueNumber: integer('issue_number').notNull(),
+    questionId: text('question_id').notNull(),
+    /** Issue de tâche, ou issue « Cadrage » du planificateur. */
+    source: text('source', { enum: ['task', 'cadrage'] }).notNull(),
+    issueTitle: text('issue_title').notNull(),
+    blocking: integer('blocking', { mode: 'boolean' }).notNull(),
+    text: text('text').notNull(),
+    context: text('context'),
+    options: text('options', { mode: 'json' }).$type<string[]>().notNull(),
+    askedAt: text('asked_at').notNull(),
+    answerText: text('answer_text'),
+    answerDecision: integer('answer_decision', { mode: 'boolean' }),
+    answeredAt: text('answered_at'),
+    /** Notification système déjà émise pour cette question. */
+    notified: integer('notified', { mode: 'boolean' }).notNull().default(false),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.issueNumber, t.questionId] })],
+);

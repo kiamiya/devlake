@@ -118,6 +118,39 @@ export const DroppedFilesSchema = z.object({
 });
 
 /** Contrat de chaque canal : entrée et sortie validées des deux côtés. */
+/** Une question d'agent ou du planificateur, avec sa réponse si elle en a une. */
+export const QuestionViewSchema = z.object({
+  projectId: z.string(),
+  issueNumber: z.number().int(),
+  issueTitle: z.string(),
+  /** Lien vers l'issue sur GitHub. */
+  issueUrl: z.string(),
+  questionId: z.string(),
+  source: z.enum(['task', 'cadrage']),
+  blocking: z.boolean(),
+  text: z.string(),
+  context: z.string().nullable(),
+  options: z.array(z.string()),
+  askedAt: z.string(),
+  answer: z
+    .object({ text: z.string().nullable(), decision: z.boolean().nullable(), at: z.string() })
+    .nullable(),
+});
+export type QuestionView = z.infer<typeof QuestionViewSchema>;
+
+export const AnswerInputSchema = z.object({
+  projectId: z.string(),
+  issueNumber: z.number().int().min(1),
+  questionId: z.string().min(1),
+  text: z.string().trim().max(20_000, 'Réponse trop longue (20 000 caractères au plus).'),
+  /** Promue dans `.agentlake/decisions.md` (case cochée par défaut). */
+  decision: z.boolean(),
+  /** Question du planificateur écartée (issue Cadrage seulement). */
+  ignore: z.boolean().default(false),
+  /** Chemins des pièces jointes déjà versées dans `.agentlake/context/`. */
+  attachments: z.array(z.string()).default([]),
+});
+
 export const IPC_CONTRACT = {
   'settings:get': { input: NoInput, output: SettingsSchema },
   'settings:update': { input: SettingsPatchSchema, output: SettingsSchema },
@@ -240,6 +273,23 @@ export const IPC_CONTRACT = {
     input: z.object({ projectId: z.string() }),
     output: BootstrapReportSchema,
   },
+  'questions:list': {
+    input: z.object({
+      projectId: z.string().optional(),
+      status: z.enum(['pending', 'answered', 'all']).default('pending'),
+      search: z.string().trim().max(200).optional(),
+    }),
+    output: z.array(QuestionViewSchema),
+  },
+  'questions:sync': {
+    input: NoInput,
+    output: z.object({
+      pending: z.number().int(),
+      blocking: z.number().int(),
+      newBlocking: z.number().int(),
+    }),
+  },
+  'questions:answer': { input: AnswerInputSchema, output: QuestionViewSchema },
 } as const satisfies Record<IpcChannel, { input: z.ZodType; output: z.ZodType }>;
 
 export type IpcInput<C extends IpcChannel> = z.input<(typeof IPC_CONTRACT)[C]['input']>;

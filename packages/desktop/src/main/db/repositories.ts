@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq } from 'drizzle-orm';
 import type { Issue, WorkflowRun } from 'github';
 import {
   DEFAULT_SETTINGS,
@@ -7,7 +7,7 @@ import {
   type SettingsPatch,
 } from '../../shared/settings.js';
 import type { CockpitDb } from './database.js';
-import { issues, projects, runs, settings, tabs } from './schema.js';
+import { issues, projects, questions, runs, settings, tabs } from './schema.js';
 
 export interface ProjectRow {
   id: string;
@@ -169,11 +169,66 @@ export class MirrorRepository {
   }
 }
 
+export type QuestionRow = typeof questions.$inferSelect;
+export type NewQuestionRow = typeof questions.$inferInsert;
+
+/** Questions lues sur GitHub ; jamais supprimées (historique), seulement complétées. */
+export class QuestionsRepository {
+  constructor(private readonly db: CockpitDb) {}
+
+  list(projectId?: string): QuestionRow[] {
+    const query = this.db.select().from(questions);
+    return (projectId === undefined ? query : query.where(eq(questions.projectId, projectId)))
+      .orderBy(desc(questions.askedAt))
+      .all();
+  }
+
+  get(projectId: string, issueNumber: number, questionId: string): QuestionRow | undefined {
+    return this.db
+      .select()
+      .from(questions)
+      .where(
+        and(
+          eq(questions.projectId, projectId),
+          eq(questions.issueNumber, issueNumber),
+          eq(questions.questionId, questionId),
+        ),
+      )
+      .get();
+  }
+
+  /** Ajoute une question nouvelle ; une question connue garde ses champs (notification comprise). */
+  insertIfMissing(row: NewQuestionRow): boolean {
+    const result = this.db.insert(questions).values(row).onConflictDoNothing().run();
+    return result.changes > 0;
+  }
+
+  update(
+    key: { projectId: string; issueNumber: number; questionId: string },
+    patch: Partial<
+      Pick<QuestionRow, 'answerText' | 'answerDecision' | 'answeredAt' | 'notified' | 'issueTitle'>
+    >,
+  ): void {
+    this.db
+      .update(questions)
+      .set(patch)
+      .where(
+        and(
+          eq(questions.projectId, key.projectId),
+          eq(questions.issueNumber, key.issueNumber),
+          eq(questions.questionId, key.questionId),
+        ),
+      )
+      .run();
+  }
+}
+
 export interface Repositories {
   projects: ProjectsRepository;
   tabs: TabsRepository;
   settings: SettingsRepository;
   mirror: MirrorRepository;
+  questions: QuestionsRepository;
 }
 
 export function createRepositories(db: CockpitDb): Repositories {
@@ -182,5 +237,6 @@ export function createRepositories(db: CockpitDb): Repositories {
     tabs: new TabsRepository(db),
     settings: new SettingsRepository(db),
     mirror: new MirrorRepository(db),
+    questions: new QuestionsRepository(db),
   };
 }

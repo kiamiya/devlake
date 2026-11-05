@@ -5,6 +5,7 @@ import { Card, CardDescription, CardTitle } from '../components/ui/primitives.js
 import { useTabs } from '../features/tabs/store.js';
 import { ActivityIndicator, QuestionsBadge } from '../features/tabs/TabBar.js';
 import { useDiscoverProjects, useOpenProject } from '../hooks/projects.js';
+import { QuestionsInbox } from '../features/questions/QuestionsInbox.js';
 import { NewProjectWizard } from './NewProjectWizard.js';
 
 function ExistingRepositories() {
@@ -122,6 +123,13 @@ export function HomeView({ projects }: { projects: readonly ProjectSummary[] }) 
           )}
           <ExistingRepositories />
         </div>
+      </Card>
+      <Card>
+        <CardTitle>Questions</CardTitle>
+        <CardDescription>
+          Toutes les questions des agents et du planificateur, tous projets confondus.
+        </CardDescription>
+        <QuestionsInbox />
       </Card>
     </div>
   );

@@ -20,6 +20,11 @@ import {
 } from './services/planner/planner-launch.js';
 import { PlanError, type PlanService } from './services/plan/plan-service.js';
 import {
+  EmptyAnswerError,
+  QuestionNotFoundError,
+  type QuestionsService,
+} from './services/questions/questions-service.js';
+import {
   PublicRepoNotAcknowledgedError,
   UnknownFileError,
   type ContextService,
@@ -39,8 +44,9 @@ export function serviceHandlers(services: {
   context: ContextService;
   planner: PlannerLaunchService;
   plan: PlanService;
+  questions: QuestionsService;
 }): Record<IpcChannel, Handler> {
-  const { cockpit: service, projects, creation, context, planner, plan } = services;
+  const { cockpit: service, projects, creation, context, planner, plan, questions } = services;
   const input = <C extends IpcChannel>(_channel: C, value: unknown) =>
     value as z.output<(typeof IPC_CONTRACT)[C]['input']>;
   return {
@@ -106,6 +112,9 @@ export function serviceHandlers(services: {
     },
     'projects:bootstrap': (value) =>
       creation.rebootstrap(input('projects:bootstrap', value).projectId),
+    'questions:list': (value) => Promise.resolve(questions.list(input('questions:list', value))),
+    'questions:sync': () => questions.syncAll(),
+    'questions:answer': (value) => questions.answer(input('questions:answer', value)),
   };
 }
 
@@ -131,6 +140,8 @@ export function toIpcError(error: unknown): IpcErrorPayload {
     [PlannerModelMissingError, 'PLANNER_MODEL_MISSING'],
     [PlanError, 'PLAN_ERROR'],
     [GlobalConfigSyncError, 'GLOBAL_CONFIG_SYNC_FAILED'],
+    [QuestionNotFoundError, 'QUESTION_NOT_FOUND'],
+    [EmptyAnswerError, 'EMPTY_ANSWER'],
   ];
   for (const [type, code] of known)
     if (error instanceof type) return { code, message: error.message };

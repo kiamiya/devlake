@@ -27,6 +27,8 @@ export function useOpenProject() {
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: keys.projects });
       await client.invalidateQueries({ queryKey: keys.activity });
+      // Nouveau projet : ses questions sont lues sans attendre le prochain sondage.
+      await client.invalidateQueries({ queryKey: ['questions'] });
     },
   });
 }
