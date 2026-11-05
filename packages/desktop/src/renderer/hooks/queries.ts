@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { SettingsPatch } from '../../../shared/settings.js';
+import type { SettingsPatch } from '../../shared/settings.js';
 import { invoke } from '../lib/ipc.js';
 
 const keys = {

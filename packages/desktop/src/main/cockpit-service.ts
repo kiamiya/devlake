@@ -110,7 +110,8 @@ export class CockpitService {
     return rebuildAll(await this.githubPort(), this.deps.repos);
   }
 
-  private async githubPort(): Promise<GitHubPort> {
+  /** Port GitHub du jeton enregistré ; lève NoTokenError sans jeton. */
+  async githubPort(): Promise<GitHubPort> {
     const token = await this.deps.vault.getToken();
     if (token === null) throw new NoTokenError();
     return this.deps.github(token);

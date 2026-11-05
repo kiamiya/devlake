@@ -1,6 +1,6 @@
 import { PROFILE_IDS, type ProfileId } from 'shared';
 import { useEffect, useState, type FormEvent } from 'react';
-import type { Settings } from '../../../shared/settings.js';
+import type { Settings } from '../../shared/settings.js';
 import {
   useClearToken,
   useMaskedToken,

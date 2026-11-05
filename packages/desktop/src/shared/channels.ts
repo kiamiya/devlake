@@ -11,6 +11,13 @@ export const IPC_CHANNELS = [
   'token:test',
   'status:get',
   'cache:rebuild',
+  'projects:list',
+  'projects:discover',
+  'projects:open',
+  'projects:sync',
+  'tabs:get',
+  'tabs:save',
+  'activity:get',
 ] as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[number];

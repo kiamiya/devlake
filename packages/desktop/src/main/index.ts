@@ -4,8 +4,10 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CockpitService } from './cockpit-service.js';
 import { openDatabase } from './db/database.js';
+import { seedFakeProjects } from './e2e-fixtures.js';
 import { createRepositories } from './db/repositories.js';
 import { registerIpc, serviceHandlers } from './ipc.js';
+import { ProjectsService } from './projects-service.js';
 import { SafeStorageVault } from './vault.js';
 
 /**
@@ -27,9 +29,11 @@ function isTrustedUrl(url: string): boolean {
   return url.startsWith('file://') && url.includes('/renderer/');
 }
 
-function githubFactory(): (token: string) => GitHubPort {
+async function githubFactory(): Promise<(token: string) => GitHubPort> {
   if (testMode && process.env.AGENTLAKE_GITHUB === 'fake') {
     const fake = new FakeGitHub({ actor: 'kiamiya' });
+    const names = (process.env.AGENTLAKE_FAKE_PROJECTS ?? '').split(',').filter(Boolean);
+    await seedFakeProjects(fake, names);
     return () => fake;
   }
   return (token) => new OctokitGitHub({ token });
@@ -78,8 +82,9 @@ async function start(): Promise<void> {
     join(app.getPath('userData'), 'github-token.bin'),
     safeStorage,
   );
-  const service = new CockpitService({ repos, vault, github: githubFactory() });
-  registerIpc(ipcMain, serviceHandlers(service), isTrustedUrl);
+  const service = new CockpitService({ repos, vault, github: await githubFactory() });
+  const projects = new ProjectsService(repos, () => service.githubPort());
+  registerIpc(ipcMain, serviceHandlers({ cockpit: service, projects }), isTrustedUrl);
 
   createWindow();
   await service.refreshGitHubStatus();

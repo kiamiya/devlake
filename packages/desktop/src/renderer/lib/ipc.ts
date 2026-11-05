@@ -1,5 +1,5 @@
-import type { AgentLakeBridge, IpcChannel, IpcErrorPayload } from '../../../shared/channels.js';
-import type { IpcInput, IpcOutput } from '../../../shared/ipc-contract.js';
+import type { AgentLakeBridge, IpcChannel, IpcErrorPayload } from '../../shared/channels.js';
+import type { IpcInput, IpcOutput } from '../../shared/ipc-contract.js';
 
 declare global {
   interface Window {

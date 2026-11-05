@@ -9,12 +9,17 @@ import {
 } from '../shared/channels.js';
 import { IPC_CONTRACT } from '../shared/ipc-contract.js';
 import { NoTokenError, type CockpitService } from './cockpit-service.js';
+import { NotAProjectError, UnknownProjectError, type ProjectsService } from './projects-service.js';
 import { VaultUnavailableError } from './vault.js';
 
 type Handler = (input: unknown) => Promise<unknown>;
 
 /** Associe chaque canal du contrat à une méthode du service. */
-export function serviceHandlers(service: CockpitService): Record<IpcChannel, Handler> {
+export function serviceHandlers(services: {
+  cockpit: CockpitService;
+  projects: ProjectsService;
+}): Record<IpcChannel, Handler> {
+  const { cockpit: service, projects } = services;
   const input = <C extends IpcChannel>(_channel: C, value: unknown) =>
     value as z.output<(typeof IPC_CONTRACT)[C]['input']>;
   return {
@@ -27,6 +32,13 @@ export function serviceHandlers(service: CockpitService): Record<IpcChannel, Han
     'token:test': () => service.testToken(),
     'status:get': () => service.getStatus(),
     'cache:rebuild': () => service.rebuildCache(),
+    'projects:list': () => Promise.resolve(projects.list()),
+    'projects:discover': () => projects.discover(),
+    'projects:open': (value) => projects.open(input('projects:open', value)),
+    'projects:sync': (value) => projects.sync(input('projects:sync', value).projectId),
+    'tabs:get': () => Promise.resolve(projects.getTabs()),
+    'tabs:save': (value) => Promise.resolve(projects.saveTabs(input('tabs:save', value))),
+    'activity:get': () => Promise.resolve(projects.activity()),
   };
 }
 
@@ -39,6 +51,9 @@ export function toIpcError(error: unknown): IpcErrorPayload {
     };
   }
   if (error instanceof NoTokenError) return { code: 'NO_TOKEN', message: error.message };
+  if (error instanceof NotAProjectError) return { code: 'NOT_A_PROJECT', message: error.message };
+  if (error instanceof UnknownProjectError)
+    return { code: 'UNKNOWN_PROJECT', message: error.message };
   if (error instanceof VaultUnavailableError)
     return { code: 'VAULT_UNAVAILABLE', message: error.message };
   return { code: 'INTERNAL', message: 'Erreur interne du cockpit.' };
