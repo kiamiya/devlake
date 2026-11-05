@@ -5,16 +5,28 @@ on:
   # Déclenché par le dispatcher ; workflow_dispatch exige le droit d'écriture.
   workflow_dispatch:
     inputs:
-      issue:
+      issue_number:
         description: Numéro de l'issue de la tâche
+        type: number
         required: true
+      profile:
+        description: Profil d'agent (.agentlake/profiles/<profil>.yml)
         type: string
+        required: true
+      attempt:
+        description: Numéro de tentative
+        type: number
+        default: 1
+      resume_reason:
+        description: Raison du lancement
+        type: choice
+        options: [none, answer, ci-failure]
+        default: none
 
 permissions: {}
 
-concurrency:
-  group: agentlake-task-${{ inputs.issue }}
-  cancel-in-progress: false
+# Pas de groupe de concurrence ici : le job appelé a déjà `agentlake-task-<issue>`
+# (le même groupe à deux niveaux bloquerait le job indéfiniment).
 
 jobs:
   agent:
@@ -23,7 +35,13 @@ jobs:
       issues: write
       pull-requests: write
       actions: read
+      # Jeton de l'app GitHub Claude : la PR de l'agent déclenche la CI.
+      id-token: write
     uses: __DEVLAKE_REPOSITORY__/.github/workflows/agent-task.yml@__DEVLAKE_REF__
     with:
-      issue: ${{ inputs.issue }}
+      issue_number: ${{ inputs.issue_number }}
+      profile: ${{ inputs.profile }}
+      attempt: ${{ inputs.attempt }}
+      resume_reason: ${{ inputs.resume_reason }}
+      devlake_ref: __DEVLAKE_REF__
     secrets: inherit

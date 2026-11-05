@@ -27,6 +27,7 @@ import type {
   RepoRef,
   Repository,
   UpdateIssueInput,
+  UpdatePullRequestInput,
   WorkflowJob,
   WorkflowRun,
 } from './types.js';
@@ -555,6 +556,19 @@ export class FakeGitHub implements GitHubPort {
         .filter((p) => input.head === undefined || p.head === input.head)
         .sort((a, b) => b.number - a.number)
         .map(clone);
+    });
+  }
+
+  updatePullRequest(
+    ref: RepoRef,
+    prNumber: number,
+    input: UpdatePullRequestInput,
+  ): Promise<PullRequest> {
+    return this.run(() => {
+      const pr = this.pull(ref, prNumber);
+      if (input.title !== undefined) pr.title = input.title;
+      if (input.body !== undefined) pr.body = input.body;
+      return clone(pr);
     });
   }
 

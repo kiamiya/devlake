@@ -590,6 +590,20 @@ export function githubEmulator(fake: FakeGitHub): HttpHandler[] {
         );
       }),
     ),
+    http.patch(
+      `${R}/pulls/:number`,
+      handle(async ({ params, body }) =>
+        json(
+          pullJson(
+            await fake.updatePullRequest(refOf(params), Number(param(params, 'number')), {
+              ...(body.title !== undefined ? { title: str(body.title) } : {}),
+              ...(body.body !== undefined ? { body: str(body.body) } : {}),
+            }),
+            refOf(params),
+          ),
+        ),
+      ),
+    ),
     http.get(
       `${R}/pulls/:number`,
       handle(async ({ params }) =>

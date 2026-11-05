@@ -309,6 +309,12 @@ export function describeGitHubContract(
         expect(await port.getPullRequest(ref, pr.number)).toEqual(pr);
         expect(await port.listPullRequests(ref, { head: 'task/T01' })).toEqual([pr]);
         expect(await port.listPullRequests(ref, { head: 'autre' })).toEqual([]);
+        const updated = await port.updatePullRequest(ref, pr.number, {
+          title: 'T01 — v2',
+          body: 'Corps v2',
+        });
+        expect(updated).toMatchObject({ title: 'T01 — v2', body: 'Corps v2', head: 'task/T01' });
+        expect(await port.getPullRequest(ref, pr.number)).toEqual(updated);
 
         fake.mergePullRequest(ref, pr.number);
         expect((await port.getPullRequest(ref, pr.number)).state).toBe('merged');

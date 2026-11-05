@@ -1,0 +1,160 @@
+name: AgentLake — agent
+
+# Exécute un agent Claude Code sur une tâche (issue) d'un projet AgentLake.
+# Appelé par le workflow d'appel `agentlake-agent-task.yml` posé dans chaque projet (bootstrap),
+# lui-même lancé par le dispatcher. Lançable à la main pour un essai.
+
+on:
+  workflow_call:
+    inputs:
+      issue_number:
+        description: Numéro de l'issue de la tâche
+        type: number
+        required: true
+      profile:
+        description: Profil d'agent (.agentlake/profiles/<profil>.yml)
+        type: string
+        required: true
+      attempt:
+        description: Numéro de tentative
+        type: number
+        default: 1
+      resume_reason:
+        description: 'Raison du lancement : none, answer ou ci-failure'
+        type: string
+        default: none
+      devlake_ref:
+        description: Version de devlake qui fournit les scripts (même version que ce workflow)
+        type: string
+        default: v1
+      timeout_minutes:
+        description: Délai maximal du job, en minutes
+        type: number
+        default: 60
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Numéro de l'issue de la tâche
+        type: number
+        required: true
+      profile:
+        description: Profil d'agent
+        type: string
+        required: true
+      attempt:
+        description: Numéro de tentative
+        type: number
+        default: 1
+      resume_reason:
+        description: Raison du lancement
+        type: choice
+        options: [none, answer, ci-failure]
+        default: none
+      devlake_ref:
+        description: Version de devlake qui fournit les scripts
+        type: string
+        default: main
+      timeout_minutes:
+        description: Délai maximal du job, en minutes
+        type: number
+        default: 60
+
+permissions: {}
+
+jobs:
+  agent:
+    name: Agent ${{ inputs.profile }} — issue ${{ inputs.issue_number }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    concurrency:
+      group: agentlake-task-${{ inputs.issue_number }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      actions: read
+      # Jeton de l'app GitHub Claude (OIDC) : la PR ouverte avec lui déclenche la CI.
+      id-token: write
+    env:
+      ISSUE_NUMBER: ${{ inputs.issue_number }}
+      PROFILE: ${{ inputs.profile }}
+      ATTEMPT: ${{ inputs.attempt }}
+      RESUME_REASON: ${{ inputs.resume_reason }}
+      RUNTIME: .agentlake-runtime
+    steps:
+      - name: Dépôt du projet
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+          # Pas d'identifiants persistés : chaque opération git s'authentifie explicitement.
+          persist-credentials: false
+
+      - name: Scripts AgentLake (devlake ${{ inputs.devlake_ref }})
+        uses: actions/checkout@v4
+        with:
+          repository: kiamiya/devlake
+          ref: ${{ inputs.devlake_ref }}
+          path: ${{ env.RUNTIME }}
+          persist-credentials: false
+
+      - name: Ignorer les scripts dans le dépôt du projet
+        run: echo "/$RUNTIME/" >> .git/info/exclude
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Installer et compiler les scripts
+        working-directory: ${{ env.RUNTIME }}
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc -b tsconfig.build.json
+
+      - name: Identité git de l'agent
+        run: |
+          git config user.name "claude[bot]"
+          git config user.email "claude[bot]@users.noreply.github.com"
+
+      - name: Préparer la tâche
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node "$RUNTIME/packages/dispatcher/dist/agent-context/cli.js" prepare
+
+      - name: Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: ${{ steps.prepare.outputs.prompt }}
+          claude_args: ${{ steps.prepare.outputs.claude_args }}
+
+      - name: Livrer (push, PR, auto-merge) ou diagnostiquer
+        if: always() && steps.prepare.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APP_TOKEN: ${{ steps.claude.outputs.github_token }}
+          TASK_ID: ${{ steps.prepare.outputs.task_id }}
+          TASK_TITLE: ${{ steps.prepare.outputs.task_title }}
+          BRANCH: ${{ steps.prepare.outputs.branch }}
+          CONCLUSION: ${{ steps.claude.outputs.conclusion || 'failure' }}
+          STRUCTURED_OUTPUT: ${{ steps.claude.outputs.structured_output }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node "$RUNTIME/packages/dispatcher/dist/agent-context/cli.js" finalize
+
+      - name: Transcription et journaux
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-issue-${{ inputs.issue_number }}-tentative-${{ inputs.attempt }}
+          path: |
+            ${{ steps.claude.outputs.execution_file }}
+          if-no-files-found: ignore
+          retention-days: 30

@@ -22,6 +22,7 @@ import type {
   RepoRef,
   Repository,
   UpdateIssueInput,
+  UpdatePullRequestInput,
   WorkflowJob,
   WorkflowRun,
 } from './types.js';
@@ -84,6 +85,11 @@ export interface GitHubPort {
   createPullRequest(ref: RepoRef, input: CreatePullRequestInput): Promise<PullRequest>;
   getPullRequest(ref: RepoRef, prNumber: number): Promise<PullRequest>;
   listPullRequests(ref: RepoRef, input?: ListPullRequestsInput): Promise<PullRequest[]>;
+  updatePullRequest(
+    ref: RepoRef,
+    prNumber: number,
+    input: UpdatePullRequestInput,
+  ): Promise<PullRequest>;
   /** Auto-merge en squash dès que les checks obligatoires sont verts. */
   enableAutoMerge(ref: RepoRef, prNumber: number): Promise<void>;
   listCheckRuns(ref: RepoRef, sha: string): Promise<CheckRun[]>;

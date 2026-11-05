@@ -122,6 +122,11 @@ export interface CreatePullRequestInput {
   base: string;
 }
 
+export interface UpdatePullRequestInput {
+  title?: string;
+  body?: string;
+}
+
 export interface ListPullRequestsInput {
   state?: 'open' | 'closed' | 'all';
   head?: string;
