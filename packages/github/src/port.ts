@@ -1,3 +1,4 @@
+import type { LfsPointer } from './lfs.js';
 import type {
   ActionsPermissions,
   AuthenticatedUser,
@@ -52,6 +53,12 @@ export interface GitHubPort {
   getFile(ref: RepoRef, path: string, branch?: string): Promise<FileContent | null>;
   /** Plusieurs fichiers en un seul commit ; renvoie le SHA du commit. */
   commitFiles(ref: RepoRef, input: CommitFilesInput): Promise<string>;
+
+  /**
+   * Envoie des binaires dans le stockage Git LFS du dépôt ; renvoie un pointeur par fichier,
+   * à commiter (`lfsPointerText`) à la place du binaire.
+   */
+  uploadLfsObjects(ref: RepoRef, files: readonly Uint8Array[]): Promise<LfsPointer[]>;
 
   // Issues, labels, commentaires
   createIssue(ref: RepoRef, input: CreateIssueInput): Promise<Issue>;

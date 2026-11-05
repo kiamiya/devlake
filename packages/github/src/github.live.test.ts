@@ -65,6 +65,11 @@ describe.skipIf(!enabled)('@live GitHub — dépôt bac à sable', () => {
         { path: 'live/b.txt', content: 'B' },
       ],
     });
+    const [pointer] = await port.uploadLfsObjects(ref, [
+      new TextEncoder().encode(`image @live ${stamp}`),
+    ]);
+    expect(pointer?.size).toBeGreaterThan(0);
+
     expect((await port.getFile(ref, 'live/a.md', branch))?.content).toBe(`# @live ${stamp}\n`);
 
     const pr = await port.createPullRequest(ref, {

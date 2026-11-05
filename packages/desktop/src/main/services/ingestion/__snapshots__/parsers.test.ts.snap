@@ -1,0 +1,52 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`docx > rend titres, emphase, listes, tableau et image (régression) 1`] = `
+"# Brief — Application de réservation
+
+Une application **fictive** pour réserver un créneau de *coiffure*.
+
+## Objectifs
+
+- Réserver en moins d’une minute
+- Rappel par e-mail la veille
+
+## Parcours
+
+1. Choisir un salon
+2. Choisir un créneau
+3. Confirmer
+
+## Tarifs
+
+| Prestation | Durée | Prix |
+| --- | --- | --- |
+| Coupe | 30 min | 25 € |
+| Couleur | 90 min | 60 € |
+
+## Maquette
+
+![](assets/872830a3f8cb491a.png)
+"
+`;
+
+exports[`html > neutralise scripts, gestionnaires, liens javascript et iframes (sécurité) 1`] = `
+"# Page d’accueil
+
+Texte **important** et lien piégé et [lien sûr](https://example.com/doc).
+
+- Premier
+- Second
+
+| Col A | Col B |
+| --- | --- |
+| 1 | 2 |
+
+![logo intégré](assets/872830a3f8cb491a.png)
+"
+`;
+
+exports[`md, txt, pdf et images > extrait le texte d’un PDF (régression) 1`] = `
+"Annexe technique
+Base de donnees : Supabase. Hebergement : Vercel.
+"
+`;

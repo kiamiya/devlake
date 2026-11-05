@@ -141,6 +141,21 @@ export function describeGitHubContract(
       });
     });
 
+    describe('Git LFS', () => {
+      it('envoie les binaires une seule fois et renvoie leurs pointeurs', async () => {
+        const image = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
+        const other = new Uint8Array([9, 9, 9]);
+        const pointers = await port.uploadLfsObjects(ref, [image, other, image]);
+        expect(pointers.map((p) => p.size)).toEqual([7, 3, 7]);
+        expect(pointers[0]).toEqual(pointers[2]);
+        expect(fake.state(ref).lfsUploads).toBe(2);
+        await port.uploadLfsObjects(ref, [image]);
+        expect(fake.state(ref).lfsUploads).toBe(2);
+        expect(await port.uploadLfsObjects(ref, [])).toEqual([]);
+        expect(fake.state(ref).lfs.get(pointers[0]?.oid ?? '')).toEqual(image);
+      });
+    });
+
     describe('issues, labels et commentaires', () => {
       it('crée, relit, modifie et liste les issues', async () => {
         const issue = await port.createIssue(ref, {

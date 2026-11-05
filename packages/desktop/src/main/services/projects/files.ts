@@ -60,6 +60,8 @@ export function gitattributes(type: ProjectType): string {
   const lines = [
     '# Généré par AgentLake : binaires dans Git LFS.',
     '* text=auto',
+    '# Images du contexte (versées par le cockpit via l’API LFS).',
+    '.agentlake/context/assets/** filter=lfs diff=lfs merge=lfs -text',
     ...extensions.map((ext) => `*.${ext} filter=lfs diff=lfs merge=lfs -text`),
   ];
   if (type === 'unity') {

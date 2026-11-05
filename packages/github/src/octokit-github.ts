@@ -31,6 +31,7 @@ import {
   type RetryOptions,
 } from './http.js';
 import type { GitHubPort } from './port.js';
+import { LfsClient, type LfsPointer } from './lfs.js';
 import { encryptSecret } from './secrets.js';
 import type {
   ActionsPermissions,
@@ -78,6 +79,7 @@ function repoParams(ref: RepoRef) {
 /** Adaptateur réel du port GitHub, au-dessus d'Octokit. */
 export class OctokitGitHub implements GitHubPort {
   private readonly http: GitHubHttp;
+  private readonly lfs: LfsClient;
   private readonly capabilities = new Map<string, Capabilities>();
 
   constructor(options: OctokitGitHubOptions) {
@@ -89,11 +91,14 @@ export class OctokitGitHub implements GitHubPort {
         fetch: options.fetch ?? ((...args: Parameters<typeof fetch>) => globalThis.fetch(...args)),
       },
     });
-    this.http = new GitHubHttp(
-      octokit,
-      { ...DEFAULT_RETRY_OPTIONS, ...options.retry },
-      options.clock ?? systemClock,
-      options.random,
+    const retry = { ...DEFAULT_RETRY_OPTIONS, ...options.retry };
+    const clock = options.clock ?? systemClock;
+    this.http = new GitHubHttp(octokit, retry, clock, options.random);
+    this.lfs = new LfsClient(
+      options.token,
+      options.fetch ?? ((...args: Parameters<typeof fetch>) => globalThis.fetch(...args)),
+      retry,
+      clock,
     );
   }
 
@@ -350,6 +355,10 @@ export class OctokitGitHub implements GitHubPort {
       });
     }
     return commit.sha;
+  }
+
+  async uploadLfsObjects(ref: RepoRef, files: readonly Uint8Array[]): Promise<LfsPointer[]> {
+    return this.lfs.upload(ref, files);
   }
 
   // Issues, labels, commentaires

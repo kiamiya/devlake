@@ -1,4 +1,4 @@
-import { ProjectTypeSchema, QualityProfileSchema } from 'shared';
+import { ContextEntrySchema, ProjectTypeSchema, QualityProfileSchema } from 'shared';
 import { z } from 'zod';
 import type { IpcChannel } from './channels.js';
 import { SettingsPatchSchema, SettingsSchema } from './settings.js';
@@ -75,6 +75,17 @@ export const BootstrapReportSchema = z.object({
 });
 export type BootstrapReportView = z.infer<typeof BootstrapReportSchema>;
 
+export const DepositResultSchema = z.object({
+  committed: z.boolean(),
+  commitSha: z.string().nullable(),
+  imported: z.array(
+    z.object({ source: z.string(), path: z.string(), role: z.enum(['brief', 'gdd', 'annex']) }),
+  ),
+  skipped: z.array(z.object({ source: z.string(), reason: z.string() })),
+  warnings: z.array(z.string()),
+});
+export type DepositResultView = z.infer<typeof DepositResultSchema>;
+
 /** Contrat de chaque canal : entrée et sortie validées des deux côtés. */
 export const IPC_CONTRACT = {
   'settings:get': { input: NoInput, output: SettingsSchema },
@@ -107,6 +118,29 @@ export const IPC_CONTRACT = {
   'projects:create': {
     input: CreateProjectSchema,
     output: z.object({ project: ProjectSummarySchema, report: BootstrapReportSchema }),
+  },
+  'context:choose-files': {
+    input: z.object({ projectId: z.string() }),
+    output: z.object({
+      files: z.array(z.object({ token: z.string(), name: z.string(), size: z.number() })),
+      repositoryPrivate: z.boolean(),
+    }),
+  },
+  'context:import': {
+    input: z.object({
+      projectId: z.string(),
+      files: z
+        .array(z.object({ token: z.string(), role: z.enum(['brief', 'gdd', 'annex']) }))
+        .min(1, 'Aucun fichier à verser.')
+        .refine((f) => f.filter((x) => x.role === 'brief').length <= 1, 'Un seul brief à la fois.')
+        .refine((f) => f.filter((x) => x.role === 'gdd').length <= 1, 'Un seul GDD à la fois.'),
+      acknowledgePublic: z.boolean(),
+    }),
+    output: DepositResultSchema,
+  },
+  'context:list': {
+    input: z.object({ projectId: z.string() }),
+    output: z.array(ContextEntrySchema),
   },
   'projects:bootstrap': {
     input: z.object({ projectId: z.string() }),

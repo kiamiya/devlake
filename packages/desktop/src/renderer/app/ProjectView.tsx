@@ -1,4 +1,5 @@
 import { Button } from '../components/ui/button.js';
+import { ContextSection } from '../features/context/ContextSection.js';
 import { useRebootstrap } from '../hooks/projects.js';
 import { cn } from '../lib/utils.js';
 import { BootstrapSteps } from './NewProjectWizard.js';
@@ -61,9 +62,13 @@ export function ProjectView({ projectId }: { projectId: string }) {
           {rebootstrap.data && <BootstrapSteps report={rebootstrap.data} />}
         </div>
       </aside>
-      <section className="flex-1 p-6">
+      <section className="flex-1 overflow-auto p-6">
         <h1 className="mb-2 text-xl font-semibold">{SECTION_LABELS[section]}</h1>
-        <p className="text-sm text-muted-foreground">Vue à venir.</p>
+        {section === 'context' ? (
+          <ContextSection projectId={projectId} />
+        ) : (
+          <p className="text-sm text-muted-foreground">Vue à venir.</p>
+        )}
       </section>
     </div>
   );

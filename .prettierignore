@@ -12,3 +12,4 @@ packages/desktop/out/
 playwright-report/
 test-results/
 .generated/
+packages/desktop/src/main/services/ingestion/__fixtures__/

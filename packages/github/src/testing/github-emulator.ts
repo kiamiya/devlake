@@ -18,6 +18,8 @@ import type {
  */
 
 export const API = 'https://api.github.com';
+export const WEB = 'https://github.com';
+export const LFS_STORAGE = 'https://lfs.emulator.test';
 
 type Params = Record<string, string | readonly string[] | undefined>;
 type Body = Record<string, unknown>;
@@ -695,6 +697,53 @@ export function githubEmulator(fake: FakeGitHub): HttpHandler[] {
         return json({ total_count: names.length, secrets: names.map((name) => ({ name })) });
       }),
     ),
+
+    // Git LFS (API batch sur github.com, stockage simulé)
+    http.post(`${WEB}/*`, async ({ request }) => {
+      const match = /^\/([^/]+)\/([^/]+)\.git\/info\/lfs\/objects\/batch$/.exec(
+        new URL(request.url).pathname,
+      );
+      if (!match) return json({ message: 'Not Found' }, 404);
+      if (!request.headers.get('authorization')?.startsWith('Basic ')) {
+        return json({ message: 'Authentification LFS requise' }, 401);
+      }
+      const [, owner = '', repo = ''] = match;
+      const body = (await request.json()) as { objects: { oid: string; size: number }[] };
+      const state = fake.state({ owner, repo });
+      return json({
+        transfer: 'basic',
+        objects: body.objects.map((o) =>
+          state.lfs.has(o.oid)
+            ? { oid: o.oid, size: o.size }
+            : {
+                oid: o.oid,
+                size: o.size,
+                actions: {
+                  upload: {
+                    href: `${LFS_STORAGE}/${owner}/${repo}/${o.oid}`,
+                    header: { authorization: 'RemoteAuth jeton' },
+                  },
+                  verify: {
+                    href: `${LFS_STORAGE}/verify/${owner}/${repo}`,
+                    header: { authorization: 'RemoteAuth jeton' },
+                  },
+                },
+              },
+        ),
+      });
+    }),
+    http.put(`${LFS_STORAGE}/:owner/:repo/:oid`, async ({ params, request }) => {
+      const data = new Uint8Array(await request.arrayBuffer());
+      const [pointer] = await fake.uploadLfsObjects(refOf(params), [data]);
+      if (pointer?.oid !== param(params, 'oid')) return json({ message: 'oid incohérent' }, 422);
+      return empty(200);
+    }),
+    http.post(`${LFS_STORAGE}/verify/:owner/:repo`, async ({ params, request }) => {
+      const body = (await request.json()) as { oid: string };
+      return fake.state(refOf(params)).lfs.has(body.oid)
+        ? empty(200)
+        : json({ message: 'absent' }, 404);
+    }),
 
     // GraphQL : auto-merge
     http.post(

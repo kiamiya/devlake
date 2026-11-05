@@ -12,6 +12,13 @@ import { NoTokenError, type CockpitService } from './cockpit-service.js';
 import { NotAProjectError, UnknownProjectError, type ProjectsService } from './projects-service.js';
 import { BootstrapStepError, ClaudeTokenMissingError } from './services/projects/bootstrap.js';
 import type { ProjectCreationService } from './services/projects/creation-service.js';
+import {
+  PublicRepoNotAcknowledgedError,
+  UnknownFileError,
+  type ContextService,
+} from './services/ingestion/context-service.js';
+import { FileTooLargeError, InvalidContextIndexError } from './services/ingestion/deposit.js';
+import { UnsupportedFormatError } from './services/ingestion/types.js';
 import { VaultUnavailableError } from './vault.js';
 
 type Handler = (input: unknown) => Promise<unknown>;
@@ -21,8 +28,9 @@ export function serviceHandlers(services: {
   cockpit: CockpitService;
   projects: ProjectsService;
   creation: ProjectCreationService;
+  context: ContextService;
 }): Record<IpcChannel, Handler> {
-  const { cockpit: service, projects, creation } = services;
+  const { cockpit: service, projects, creation, context } = services;
   const input = <C extends IpcChannel>(_channel: C, value: unknown) =>
     value as z.output<(typeof IPC_CONTRACT)[C]['input']>;
   return {
@@ -46,6 +54,10 @@ export function serviceHandlers(services: {
     'claude-token:set': (value) => service.setClaudeToken(input('claude-token:set', value).token),
     'claude-token:clear': () => service.clearClaudeToken(),
     'projects:create': (value) => creation.create(input('projects:create', value)),
+    'context:choose-files': (value) =>
+      context.chooseFiles(input('context:choose-files', value).projectId),
+    'context:import': (value) => context.import(input('context:import', value)),
+    'context:list': (value) => context.list(input('context:list', value).projectId),
     'projects:bootstrap': (value) =>
       creation.rebootstrap(input('projects:bootstrap', value).projectId),
   };
@@ -63,6 +75,15 @@ export function toIpcError(error: unknown): IpcErrorPayload {
   if (error instanceof NotAProjectError) return { code: 'NOT_A_PROJECT', message: error.message };
   if (error instanceof ClaudeTokenMissingError)
     return { code: 'CLAUDE_TOKEN_MISSING', message: error.message };
+  const known: [new (...args: never[]) => Error, string][] = [
+    [PublicRepoNotAcknowledgedError, 'PUBLIC_REPO_NOT_ACKNOWLEDGED'],
+    [UnknownFileError, 'UNKNOWN_FILE'],
+    [FileTooLargeError, 'FILE_TOO_LARGE'],
+    [UnsupportedFormatError, 'UNSUPPORTED_FORMAT'],
+    [InvalidContextIndexError, 'INVALID_CONTEXT_INDEX'],
+  ];
+  for (const [type, code] of known)
+    if (error instanceof type) return { code, message: error.message };
   if (error instanceof BootstrapStepError)
     return { code: 'BOOTSTRAP_STEP_FAILED', message: error.message };
   if (error instanceof UnknownProjectError)

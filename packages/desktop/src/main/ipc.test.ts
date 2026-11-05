@@ -7,6 +7,8 @@ import { openDatabase } from './db/database.js';
 import { createRepositories } from './db/repositories.js';
 import { ProjectsService } from './projects-service.js';
 import { ProjectCreationService } from './services/projects/creation-service.js';
+import { ContextService } from './services/ingestion/context-service.js';
+import { defaultRegistry } from './services/ingestion/registry.js';
 import { dispatchIpc, registerIpc, serviceHandlers, toIpcError, type IpcMainLike } from './ipc.js';
 import { MemoryVault, VaultUnavailableError } from './vault.js';
 
@@ -18,6 +20,9 @@ async function githubStatus(handlers: ReturnType<typeof serviceHandlers>) {
   if (!result.ok) throw new Error(result.error.message);
   return (result.data as { id: string }[]).find((s) => s.id === 'github');
 }
+
+/** Chemins renvoyés par le faux sélecteur de fichiers. */
+let picked: string[] = [];
 
 function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) {
   const { db } = openDatabase(':memory:');
@@ -37,6 +42,18 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
         github: () => service.githubPort(),
         projects,
         callerTemplates: { 'agentlake-x.yml': 'uses: __DEVLAKE_REPOSITORY__@__DEVLAKE_REF__' },
+      }),
+      context: new ContextService({
+        repos,
+        github: () => service.githubPort(),
+        registry: defaultRegistry(),
+        pickFiles: () => Promise.resolve(picked),
+        readFile: (path) =>
+          Promise.resolve(
+            new TextEncoder().encode(`# ${path}
+`),
+          ),
+        fileSize: () => Promise.resolve(10),
       }),
     }),
     vault,
@@ -287,6 +304,109 @@ describe('IPC — création de projet', () => {
         code: 'BOOTSTRAP_STEP_FAILED',
         message: expect.stringContaining('« labels »') as string,
       },
+    });
+  });
+});
+
+describe('IPC — contexte du projet', () => {
+  async function withProject() {
+    const env = setup();
+    env.github.seedRepository({ owner: 'kiamiya', repo: 'site' });
+    await env.github.commitFiles(
+      { owner: 'kiamiya', repo: 'site' },
+      {
+        branch: 'main',
+        message: 'p',
+        changes: [{ path: '.agentlake/project.yml', content: 'type: web\n' }],
+      },
+    );
+    await dispatchIpc(env.handlers, 'token:set', { token: FAKE_TOKEN });
+    await dispatchIpc(env.handlers, 'projects:open', { owner: 'kiamiya', repo: 'site' });
+    return env;
+  }
+
+  async function choose(handlers: ReturnType<typeof serviceHandlers>, paths: string[]) {
+    picked = paths;
+    const result = await dispatchIpc(handlers, 'context:choose-files', {
+      projectId: 'kiamiya/site',
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    return result.data as { files: { token: string; name: string }[]; repositoryPrivate: boolean };
+  }
+
+  it('n’expose que des identifiants opaques et exige la confirmation d’un dépôt public', async () => {
+    const { handlers } = await withProject();
+    const chosen = await choose(handlers, ['C:/docs/brief.md', 'C:/docs/annexe.txt']);
+    expect(chosen.repositoryPrivate).toBe(false);
+    expect(chosen.files.map((f) => f.name)).toEqual(['brief.md', 'annexe.txt']);
+    expect(JSON.stringify(chosen)).not.toContain('C:/docs');
+
+    const files = [
+      { token: chosen.files[0]?.token ?? '', role: 'brief' },
+      { token: chosen.files[1]?.token ?? '', role: 'annex' },
+    ];
+    expect(
+      await dispatchIpc(handlers, 'context:import', {
+        projectId: 'kiamiya/site',
+        files,
+        acknowledgePublic: false,
+      }),
+    ).toMatchObject({ ok: false, error: { code: 'PUBLIC_REPO_NOT_ACKNOWLEDGED' } });
+
+    const result = await dispatchIpc(handlers, 'context:import', {
+      projectId: 'kiamiya/site',
+      files,
+      acknowledgePublic: true,
+    });
+    expect(result).toMatchObject({ ok: true, data: { committed: true } });
+    expect(
+      await dispatchIpc(handlers, 'context:list', { projectId: 'kiamiya/site' }),
+    ).toMatchObject({
+      ok: true,
+      data: [
+        { path: '.agentlake/context/annexes/annexe.md', role: 'annex' },
+        { path: '.agentlake/context/brief.md', role: 'brief' },
+      ],
+    });
+    // Un identifiant ne sert qu'une fois.
+    expect(
+      await dispatchIpc(handlers, 'context:import', {
+        projectId: 'kiamiya/site',
+        files,
+        acknowledgePublic: true,
+      }),
+    ).toMatchObject({ ok: false, error: { code: 'UNKNOWN_FILE' } });
+  });
+
+  it('refuse un format inconnu, deux briefs et un projet inconnu', async () => {
+    const { handlers } = await withProject();
+    const chosen = await choose(handlers, ['C:/docs/tableau.xlsx']);
+    const token = chosen.files[0]?.token ?? '';
+    expect(
+      await dispatchIpc(handlers, 'context:import', {
+        projectId: 'kiamiya/site',
+        files: [{ token, role: 'annex' }],
+        acknowledgePublic: true,
+      }),
+    ).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_FORMAT' } });
+    expect(
+      await dispatchIpc(handlers, 'context:import', {
+        projectId: 'kiamiya/site',
+        files: [
+          { token, role: 'brief' },
+          { token, role: 'brief' },
+        ],
+        acknowledgePublic: true,
+      }),
+    ).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_INPUT', message: 'files : Un seul brief à la fois.' },
+    });
+    expect(
+      await dispatchIpc(handlers, 'context:list', { projectId: 'kiamiya/absent' }),
+    ).toMatchObject({
+      ok: false,
+      error: { code: 'UNKNOWN_PROJECT' },
     });
   });
 });
