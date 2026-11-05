@@ -1,0 +1,80 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`TaskIssue > rendu Markdown d’une tâche complète (régression) 1`] = `
+"<!-- agentlake:task {"id":"T01","title":"Écran de connexion","description":"Créer l’écran de connexion avec e-mail et mot de passe.","kind":"code","profile":"frontend","complexity":"M","acceptanceCriteria":["Un utilisateur valide se connecte","Un mauvais mot de passe affiche une erreur"],"requiredTests":{"unit":["Validation du formulaire"],"e2e":["Parcours de connexion complet"]},"codeZones":["src/auth/"],"exclusiveResources":["migrations"],"dependencies":["T00"],"epic":"E1","milestone":"J1"} -->
+
+## Objectif
+
+Créer l’écran de connexion avec e-mail et mot de passe.
+
+## Critères d'acceptation
+
+- [ ] Un utilisateur valide se connecte
+- [ ] Un mauvais mot de passe affiche une erreur
+
+## Tests exigés
+
+**Unitaires**
+
+- Validation du formulaire
+
+**E2E**
+
+- Parcours de connexion complet
+
+## Profil
+
+- Profil : \`frontend\`
+- Type : code
+- Complexité : M
+- Épopée : E1
+- Jalon : J1
+
+## Dépend de
+
+- T00
+
+## Zones de code
+
+- src/auth/
+
+## Ressources exclusives
+
+- migrations
+"
+`;
+
+exports[`TaskIssue > rendu Markdown d’une tâche minimale (régression) 1`] = `
+"<!-- agentlake:task {"id":"T00","title":"Bootstrap du dépôt","description":"Structure, conventions et CI complète.","kind":"docs","profile":"architect","complexity":"L","acceptanceCriteria":["La CI tourne sur main"],"requiredTests":{},"codeZones":[],"exclusiveResources":[],"dependencies":[]} -->
+
+## Objectif
+
+Structure, conventions et CI complète.
+
+## Critères d'acceptation
+
+- [ ] La CI tourne sur main
+
+## Tests exigés
+
+_Aucun test exigé._
+
+## Profil
+
+- Profil : \`architect\`
+- Type : documentation
+- Complexité : L
+
+## Dépend de
+
+_Aucune dépendance._
+
+## Zones de code
+
+_Non précisées._
+
+## Ressources exclusives
+
+_Aucune._
+"
+`;
