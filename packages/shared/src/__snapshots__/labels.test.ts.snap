@@ -1,0 +1,30 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`labels > suit la table des transitions du cycle de vie 1`] = `
+{
+  "awaiting-answer": [
+    "running",
+  ],
+  "escalated": [
+    "running",
+  ],
+  "fixing": [
+    "running",
+    "escalated",
+  ],
+  "queued": [
+    "ready",
+  ],
+  "ready": [
+    "running",
+    "waiting-editor",
+  ],
+  "running": [
+    "awaiting-answer",
+    "fixing",
+  ],
+  "waiting-editor": [
+    "ready",
+  ],
+}
+`;

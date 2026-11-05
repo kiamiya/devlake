@@ -1,0 +1,36 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`protocole de questions > rendu d’une question complète (régression) 1`] = `
+"<!-- agentlake:question id=Q-T04-1 blocking=true -->
+<!-- agentlake:text -->
+**Question bloquante \`Q-T04-1\`**
+
+Faut-il gérer la connexion par lien magique ?
+
+<!-- agentlake:context -->
+**Contexte**
+
+Le brief ne mentionne que l’e-mail et le mot de passe.
+
+<!-- agentlake:options -->
+**Options proposées**
+
+1. Oui, dès cette tâche
+2. Non, plus tard
+"
+`;
+
+exports[`protocole de questions > rendu d’une question non bloquante sans contexte ni options (régression) 1`] = `
+"<!-- agentlake:question id=Q2 blocking=false -->
+<!-- agentlake:text -->
+**Question non bloquante \`Q2\`**
+
+Couleur du bouton ?
+"
+`;
+
+exports[`protocole de questions > rendu d’une réponse (régression) 1`] = `
+"<!-- agentlake:answer id=Q-T04-1 decision=true -->
+Non, plus tard.
+"
+`;
