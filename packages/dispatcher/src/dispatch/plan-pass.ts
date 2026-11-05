@@ -13,9 +13,18 @@ export interface TaskView {
   open: boolean;
   /** Label d'état ; null si aucun (issue fermée, ou label retiré à la main). */
   state: TaskState | null;
-  meta: Omit<DispatchMeta, 'resumes'> & { resumes?: number };
-  /** En attente de réponse et une réponse valide est arrivée (fil de questions). */
+  meta: Pick<DispatchMeta, 'attempts' | 'launchedAt'> & Partial<DispatchMeta>;
+  /** En attente de réponse (ou escaladée) et une réponse valide est arrivée. */
   answered?: boolean;
+  /** PR d'agent ouverte pour la tâche, avec les checks en échec de son dernier commit. */
+  pr?: OpenPullRequest;
+}
+
+export interface OpenPullRequest {
+  number: number;
+  head: string;
+  headSha: string;
+  failedChecks: readonly string[];
 }
 
 /** Un run du workflow d'agent, relié à son issue par son titre. */
@@ -39,6 +48,8 @@ export interface PassInput {
   tasks: readonly TaskView[];
   /** Tâches dont une PR d'agent a été mergée. */
   mergedTaskIds: ReadonlySet<string>;
+  /** Numéro de la PR mergée de chaque tâche (résumé après merge). */
+  mergedPrs?: ReadonlyMap<string, number>;
   runs: readonly AgentRun[];
   now: Date;
   limits: PassLimits;
@@ -48,6 +59,11 @@ export interface PassInput {
   minutesRemaining: number | null;
   /** Coût estimé d'une tâche, en minutes (profil). */
   estimateMinutes: (task: TaskIssue) => number;
+  /**
+   * Checks obligatoires de la CI vus verts sur `main` : tant que ce n'est pas le cas, seule
+   * la tâche bootstrap peut partir. Absent = non vérifié (aucun blocage).
+   */
+  mainChecks?: { ready: boolean; missing: readonly string[] };
 }
 
 export type ResumeKind = 'none' | 'ci-failure' | 'answer';
@@ -58,6 +74,14 @@ export type PassAction =
   | { kind: 'dead'; issue: number; taskId: string; attempt: number; reason: string }
   | { kind: 'escalate'; issue: number; taskId: string; attempts: number }
   | {
+      kind: 'ci-failed';
+      issue: number;
+      taskId: string;
+      prNumber: number;
+      sha: string;
+      checks: readonly string[];
+    }
+  | {
       kind: 'launch';
       issue: number;
       taskId: string;
@@ -65,7 +89,10 @@ export type PassAction =
       attempt: number;
       resume: ResumeKind;
       from: TaskState;
-    };
+      /** Commit de la PR dont l'échec est corrigé par ce lancement (pas de seconde détection). */
+      failedSha: string | null;
+    }
+  | { kind: 'summarize'; issue: number; taskId: string; prNumber: number };
 
 export interface PassPlan {
   actions: PassAction[];
@@ -76,6 +103,11 @@ export interface PassPlan {
 
 export function isGameTask(task: TaskIssue): boolean {
   return GAME_PROFILES.includes(task.profile);
+}
+
+/** Tâche bootstrap du plan : l'architecte, sans dépendance ; elle pose la CI. */
+export function isBootstrapTask(task: TaskIssue): boolean {
+  return task.profile === 'architect' && task.dependencies.length === 0;
 }
 
 /**
@@ -140,9 +172,30 @@ export function planPass(input: PassInput): PassPlan {
   const byId = new Map(input.tasks.map((t) => [t.task.id, t]));
   const effective = new Map<number, TaskState | null>(input.tasks.map((t) => [t.number, t.state]));
 
-  // 1. Jobs morts : run terminé (ou jamais apparu) alors que l'issue est toujours « running ».
+  // 1. Tâches livrées (PR ouverte) : la CI de la PR décide. Un check en échec sur un
+  //    commit pas encore traité renvoie la tâche en correction.
   for (const view of input.tasks) {
-    if (!view.open || view.state !== 'running') continue;
+    const pr = view.pr;
+    if (!view.open || view.state !== 'running' || pr === undefined) continue;
+    if (pr.failedChecks.length === 0 || pr.headSha === view.meta.failedSha) continue;
+    actions.push({
+      kind: 'ci-failed',
+      issue: view.number,
+      taskId: view.task.id,
+      prNumber: pr.number,
+      sha: pr.headSha,
+      checks: pr.failedChecks,
+    });
+    effective.set(view.number, 'fixing');
+    log.push(
+      `#${String(view.number)} ${view.task.id} : CI de la PR #${String(pr.number)} en échec (${pr.failedChecks.join(', ')}), correction.`,
+    );
+  }
+
+  // 2. Jobs morts : run terminé (ou jamais apparu) alors que l'issue est toujours « running »,
+  //    sans PR livrée.
+  for (const view of input.tasks) {
+    if (!view.open || view.state !== 'running' || view.pr !== undefined) continue;
     if (view.meta.attempts === 0) {
       log.push(
         `#${String(view.number)} ${view.task.id} : running sans lancement du dispatcher, ignorée.`,
@@ -162,10 +215,20 @@ export function planPass(input: PassInput): PassPlan {
     log.push(`#${String(view.number)} ${view.task.id} : job mort (${reason}), remise en file.`);
   }
 
+  // Une tâche livrée garde ses ressources jusqu'au merge, mais n'occupe plus d'agent.
   const running = input.tasks.filter((t) => t.open && effective.get(t.number) === 'running');
   const occupied = new Set(running.flatMap((t) => t.task.exclusiveResources));
+  const agents = running.filter((t) => t.pr === undefined).length;
 
-  // 2. Tâches en file dont les dépendances sont mergées.
+  // 3. Après merge : résumé de la tâche, une fois.
+  for (const view of input.tasks) {
+    if (view.open || view.meta.attempts === 0 || view.meta.summarized === true) continue;
+    const prNumber = input.mergedPrs?.get(view.task.id);
+    if (prNumber === undefined) continue;
+    actions.push({ kind: 'summarize', issue: view.number, taskId: view.task.id, prNumber });
+  }
+
+  // 4. Tâches en file dont les dépendances sont mergées.
   for (const view of input.tasks) {
     if (!view.open || effective.get(view.number) !== 'queued') continue;
     if (!dependenciesMerged(view, byId, input.mergedTaskIds)) continue;
@@ -173,7 +236,7 @@ export function planPass(input: PassInput): PassPlan {
     effective.set(view.number, 'ready');
   }
 
-  // 3. Candidates, par chemin critique puis numéro d'issue.
+  // 5. Candidates, par chemin critique puis numéro d'issue.
   const heights = criticalHeights(input.tasks);
   const candidates = input.tasks
     .filter((t) => {
@@ -183,7 +246,7 @@ export function planPass(input: PassInput): PassPlan {
         (state === 'ready' ||
           state === 'waiting-editor' ||
           state === 'fixing' ||
-          (state === 'awaiting-answer' && t.answered === true))
+          ((state === 'awaiting-answer' || state === 'escalated') && t.answered === true))
       );
     })
     .sort(
@@ -193,10 +256,10 @@ export function planPass(input: PassInput): PassPlan {
 
   const { projectCap, globalCap, runnerCap } = input.limits;
   const cap = Math.min(projectCap ?? Number.POSITIVE_INFINITY, globalCap, runnerCap);
-  let capacity = Math.max(0, cap - running.length);
+  let capacity = Math.max(0, cap - agents);
   let minutes = input.minutesRemaining;
   log.push(
-    `Capacité : min(projet ${projectCap === null ? '—' : String(projectCap)}, global ${String(globalCap)}, runners ${String(runnerCap)}) − ${String(running.length)} en cours = ${String(capacity)}.`,
+    `Capacité : min(projet ${projectCap === null ? '—' : String(projectCap)}, global ${String(globalCap)}, runners ${String(runnerCap)}) − ${String(agents)} en cours = ${String(capacity)}.`,
   );
 
   for (const view of candidates) {
@@ -212,6 +275,12 @@ export function planPass(input: PassInput): PassPlan {
         attempts: view.meta.attempts,
       });
       log.push(`${label} : ${String(view.meta.attempts)} tentatives, escaladée.`);
+      continue;
+    }
+    if (input.mainChecks?.ready === false && !isBootstrapTask(view.task)) {
+      log.push(
+        `${label} : checks obligatoires pas encore verts sur main (${input.mainChecks.missing.join(', ')}).`,
+      );
       continue;
     }
     if (capacity === 0) {
@@ -252,8 +321,9 @@ export function planPass(input: PassInput): PassPlan {
       taskId: view.task.id,
       profile: view.task.profile,
       attempt: view.meta.attempts + 1,
-      resume: state === 'fixing' ? 'ci-failure' : state === 'awaiting-answer' ? 'answer' : 'none',
+      resume: state === 'fixing' ? 'ci-failure' : view.answered === true ? 'answer' : 'none',
       from,
+      failedSha: state === 'fixing' ? (view.pr?.headSha ?? null) : null,
     });
     effective.set(view.number, 'running');
     for (const r of view.task.exclusiveResources) occupied.add(r);

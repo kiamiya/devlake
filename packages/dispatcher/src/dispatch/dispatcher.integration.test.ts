@@ -11,6 +11,7 @@ import {
   runDispatch,
   type DispatcherDeps,
 } from './dispatcher.js';
+import { seedGreenMain } from '../testing/checks.js';
 
 const ref = { owner: 'kiamiya', repo: 'site' };
 
@@ -47,6 +48,7 @@ class Simulation {
 
   async seed(tasks: PlanTask[], cap: number): Promise<void> {
     this.github.seedRepository(ref);
+    seedGreenMain(this.github, ref);
     await this.github.configureMergeSettings(ref);
     await this.github.commitFiles(ref, {
       branch: 'main',

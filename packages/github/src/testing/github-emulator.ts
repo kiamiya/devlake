@@ -131,6 +131,7 @@ function runJson(r: WorkflowRun) {
     head_branch: r.headBranch,
     event: r.event,
     created_at: r.createdAt,
+    updated_at: r.updatedAt ?? null,
     html_url: r.url,
   };
 }
@@ -625,6 +626,27 @@ export function githubEmulator(fake: FakeGitHub): HttpHandler[] {
       ),
     ),
     http.get(
+      `${R}/pulls/:number/files`,
+      handle(async ({ params, url }) => {
+        const files = await fake.listPullRequestFiles(
+          refOf(params),
+          Number(param(params, 'number')),
+        );
+        return json(
+          page(
+            files.map((f) => ({
+              filename: f.filename,
+              status: f.status,
+              additions: f.additions,
+              deletions: f.deletions,
+              ...(f.previousFilename ? { previous_filename: f.previousFilename } : {}),
+            })),
+            url,
+          ),
+        );
+      }),
+    ),
+    http.get(
       `${R}/commits/:sha/check-runs`,
       handle(async ({ params }) => {
         const runs = await fake.listCheckRuns(refOf(params), param(params, 'sha'));
@@ -684,6 +706,13 @@ export function githubEmulator(fake: FakeGitHub): HttpHandler[] {
       handle(async ({ params }) => {
         const jobs = await fake.listRunJobs(refOf(params), Number(param(params, 'runId')));
         return json({ total_count: jobs.length, jobs: jobs.map(jobJson) });
+      }),
+    ),
+    http.post(
+      `${R}/actions/runs/:runId/rerun-failed-jobs`,
+      handle(async ({ params }) => {
+        await fake.rerunFailedJobs(refOf(params), Number(param(params, 'runId')));
+        return HttpResponse.json({}, { status: 201 });
       }),
     ),
     http.get(

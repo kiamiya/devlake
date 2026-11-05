@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { PROJECT_TYPES, QUALITY_PROFILES } from './ids.js';
 import {
+  CI_CHECKS,
+  ciChecksFor,
   COMMON_REQUIRED_CHECKS,
+  PULL_REQUEST_CHECKS,
   DEFAULT_QUALITY_PROFILE,
   isGameProject,
   requiredChecksFor,
@@ -14,10 +17,17 @@ describe('profils qualité', () => {
     expect(DEFAULT_QUALITY_PROFILE.script).toBe('tool');
   });
 
-  it('exige les checks communs du cadrage pour chaque profil', () => {
-    for (const profile of QUALITY_PROFILES)
-      expect(requiredChecksFor(profile)).toEqual([...COMMON_REQUIRED_CHECKS]);
-    expect(COMMON_REQUIRED_CHECKS).toContain('review');
+  it('exige les checks communs du cadrage, plus ceux du profil, pour chaque profil', () => {
+    for (const profile of QUALITY_PROFILES) {
+      const checks = requiredChecksFor(profile);
+      for (const common of COMMON_REQUIRED_CHECKS) expect(checks).toContain(common);
+      expect(checks).toEqual([...ciChecksFor(profile), ...PULL_REQUEST_CHECKS]);
+      expect(new Set(checks).size).toBe(checks.length);
+    }
+    expect(requiredChecksFor('web')).toContain('e2e');
+    expect(COMMON_REQUIRED_CHECKS).toContain('agentlake / review');
+    expect(COMMON_REQUIRED_CHECKS).toContain('agentlake / tests-guard');
+    expect(ciChecksFor('unreal')).toEqual([...CI_CHECKS]);
   });
 
   it('reconnaît les projets de jeu', () => {

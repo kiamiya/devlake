@@ -11,3 +11,7 @@ export * from './dispatch/plan-pass.js';
 export * from './questions/answers.js';
 export * from './questions/decisions.js';
 export * from './questions/thread.js';
+export * from './quality/guard.js';
+export * from './quality/logs.js';
+export * from './quality/review.js';
+export * from './quality/test-files.js';

@@ -354,6 +354,56 @@ export function describeGitHubContract(
         ]);
         expect(await port.listCheckRuns(ref, 'inconnu')).toEqual([]);
       });
+
+      it('liste les fichiers d’une PR avec lignes ajoutées et supprimées', async () => {
+        await fake.commitFiles(ref, {
+          branch: 'main',
+          message: 'base',
+          changes: [
+            { path: 'src/a.ts', content: 'un\ndeux\n' },
+            { path: 'src/a.test.ts', content: 'test 1\n' },
+          ],
+        });
+        await fake.commitFiles(ref, {
+          branch: 'task/T09',
+          baseBranch: 'main',
+          message: 'travail',
+          changes: [
+            { path: 'src/a.ts', content: 'un\ntrois\nquatre\n' },
+            { path: 'src/b.ts', content: 'b\n' },
+            { path: 'src/a.test.ts', delete: true },
+          ],
+        });
+        const pr = await port.createPullRequest(ref, {
+          title: 'T09',
+          body: '',
+          head: 'task/T09',
+          base: 'main',
+        });
+        expect(await port.listPullRequestFiles(ref, pr.number)).toEqual([
+          { filename: 'src/a.test.ts', status: 'removed', additions: 0, deletions: 1 },
+          { filename: 'src/a.ts', status: 'modified', additions: 2, deletions: 1 },
+          { filename: 'src/b.ts', status: 'added', additions: 1, deletions: 0 },
+        ]);
+        fake.seedPullRequestFiles(ref, pr.number, [
+          {
+            filename: 'b.ts',
+            status: 'renamed',
+            additions: 0,
+            deletions: 0,
+            previousFilename: 'a.ts',
+          },
+        ]);
+        expect(await port.listPullRequestFiles(ref, pr.number)).toEqual([
+          {
+            filename: 'b.ts',
+            status: 'renamed',
+            additions: 0,
+            deletions: 0,
+            previousFilename: 'a.ts',
+          },
+        ]);
+      });
     });
 
     describe('Actions', () => {
@@ -379,6 +429,7 @@ export function describeGitHubContract(
           headBranch: 'task/T01',
           event: 'workflow_dispatch',
           createdAt: '2026-11-05T10:00:00Z',
+          updatedAt: '2026-11-05T10:12:00Z',
           url: 'https://github.com/kiamiya/contrat/actions/runs/7',
         };
         fake.seedWorkflowRun(ref, run, [
@@ -397,6 +448,9 @@ export function describeGitHubContract(
           { id: 70, runId: 7, name: 'agent', status: 'completed', conclusion: 'failure' },
         ]);
         expect(await port.getJobLogs(ref, 70)).toBe('Erreur : test cassé\n');
+        await port.rerunFailedJobs(ref, 7);
+        expect(fake.state(ref).reruns).toEqual([7]);
+        await expect(port.rerunFailedJobs(ref, 99)).rejects.toThrow();
       });
     });
 

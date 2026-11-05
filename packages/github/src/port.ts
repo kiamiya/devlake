@@ -19,6 +19,7 @@ import type {
   ListPullRequestsInput,
   ListWorkflowRunsInput,
   PullRequest,
+  PullRequestFile,
   RepoRef,
   Repository,
   UpdateIssueInput,
@@ -93,7 +94,10 @@ export interface GitHubPort {
   ): Promise<PullRequest>;
   /** Auto-merge en squash dès que les checks obligatoires sont verts. */
   enableAutoMerge(ref: RepoRef, prNumber: number): Promise<void>;
+  /** Checks d'un commit ; `sha` peut aussi être un nom de branche. */
   listCheckRuns(ref: RepoRef, sha: string): Promise<CheckRun[]>;
+  /** Fichiers modifiés par une PR, avec lignes ajoutées et supprimées. */
+  listPullRequestFiles(ref: RepoRef, prNumber: number): Promise<PullRequestFile[]>;
 
   // Actions
   dispatchWorkflow(ref: RepoRef, input: DispatchWorkflowInput): Promise<void>;
@@ -101,6 +105,8 @@ export interface GitHubPort {
   getWorkflowRun(ref: RepoRef, runId: number): Promise<WorkflowRun>;
   listRunJobs(ref: RepoRef, runId: number): Promise<WorkflowJob[]>;
   getJobLogs(ref: RepoRef, jobId: number): Promise<string>;
+  /** Relance les jobs en échec d'un run (après une autorisation de Kia, par exemple). */
+  rerunFailedJobs(ref: RepoRef, runId: number): Promise<void>;
 
   // Secrets
   /** Chiffré avec la clé publique du dépôt (libsodium, boîte scellée). */

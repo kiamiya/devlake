@@ -115,6 +115,16 @@ export interface PullRequest {
   author: string;
 }
 
+/** Fichier modifié par une PR. */
+export interface PullRequestFile {
+  filename: string;
+  status: 'added' | 'modified' | 'removed' | 'renamed' | 'copied' | 'changed' | 'unchanged';
+  additions: number;
+  deletions: number;
+  /** Ancien chemin d'un fichier renommé. */
+  previousFilename?: string;
+}
+
 export interface CreatePullRequestInput {
   title: string;
   body: string;
@@ -150,6 +160,8 @@ export interface WorkflowRun {
   headBranch: string;
   event: string;
   createdAt: string;
+  /** Dernière mise à jour (fin du run une fois terminé). */
+  updatedAt?: string;
   url: string;
 }
 

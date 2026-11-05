@@ -1,0 +1,127 @@
+name: AgentLake — porte qualité
+
+# Deux checks obligatoires sur chaque PR d'un projet AgentLake :
+#   - tests-guard : un test existant modifié exige l'accord de Kia ; du code sans test échoue ;
+#   - review : relecture par Claude (profil Relecteur, lu sur main) ; changements demandés → correction.
+# Appelé par le workflow d'appel `agentlake-review.yml` du projet (job `agentlake`) :
+# les checks s'appellent donc « agentlake / tests-guard » et « agentlake / review ».
+
+on:
+  workflow_call:
+    inputs:
+      pr_number:
+        description: Numéro de la PR
+        type: number
+        required: true
+      devlake_ref:
+        description: Version de devlake qui fournit les scripts
+        type: string
+        default: v1
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+
+permissions: {}
+
+jobs:
+  tests-guard:
+    name: tests-guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: write
+    env:
+      RUNTIME: .agentlake-runtime
+    steps:
+      - name: Scripts AgentLake (devlake ${{ inputs.devlake_ref }})
+        uses: actions/checkout@v4
+        with:
+          repository: kiamiya/devlake
+          ref: ${{ inputs.devlake_ref }}
+          path: ${{ env.RUNTIME }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Installer et compiler les scripts
+        working-directory: ${{ env.RUNTIME }}
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc -b tsconfig.build.json
+
+      - name: Tests modifiés et tests ajoutés
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        run: node "$RUNTIME/packages/dispatcher/dist/quality/cli.js" tests-guard
+
+  review:
+    name: review
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    env:
+      RUNTIME: .agentlake-runtime
+    steps:
+      - name: Dépôt du projet (tête de la PR)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scripts AgentLake (devlake ${{ inputs.devlake_ref }})
+        uses: actions/checkout@v4
+        with:
+          repository: kiamiya/devlake
+          ref: ${{ inputs.devlake_ref }}
+          path: ${{ env.RUNTIME }}
+          persist-credentials: false
+
+      - name: Ignorer les scripts dans le dépôt du projet
+        run: echo "/$RUNTIME/" >> .git/info/exclude
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Installer et compiler les scripts
+        working-directory: ${{ env.RUNTIME }}
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc -b tsconfig.build.json
+
+      - name: Préparer la relecture
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        run: node "$RUNTIME/packages/dispatcher/dist/quality/cli.js" review-prepare
+
+      - name: Claude Code (relecteur)
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: ${{ steps.prepare.outputs.prompt }}
+          claude_args: ${{ steps.prepare.outputs.claude_args }}
+
+      - name: Verdict
+        if: always() && steps.prepare.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          CONCLUSION: ${{ steps.claude.outputs.conclusion || 'failure' }}
+          STRUCTURED_OUTPUT: ${{ steps.claude.outputs.structured_output }}
+        run: node "$RUNTIME/packages/dispatcher/dist/quality/cli.js" review-finalize

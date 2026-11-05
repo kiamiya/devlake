@@ -50,10 +50,23 @@ export const DispatchMetaSchema = z.object({
   launchedAt: z.string().nullable(),
   /** Lancements de reprise après une réponse : ils ne comptent pas comme des échecs. */
   resumes: z.number().int().min(0).default(0),
+  /** Premier lancement (durée de la tâche dans le résumé après merge). */
+  firstLaunchedAt: z.string().nullable().default(null),
+  /** Commit de la PR dont l'échec de CI a déjà été traité. */
+  failedSha: z.string().nullable().default(null),
+  /** Résumé posté après le merge. */
+  summarized: z.boolean().default(false),
 });
 export type DispatchMeta = z.infer<typeof DispatchMetaSchema>;
 
-export const EMPTY_DISPATCH_META: DispatchMeta = { attempts: 0, launchedAt: null, resumes: 0 };
+export const EMPTY_DISPATCH_META: DispatchMeta = {
+  attempts: 0,
+  launchedAt: null,
+  resumes: 0,
+  firstLaunchedAt: null,
+  failedSha: null,
+  summarized: false,
+};
 
 const META_BLOCK = /\n*<!-- agentlake:dispatch ([^>]*) -->\s*$/;
 

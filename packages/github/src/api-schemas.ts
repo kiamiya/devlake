@@ -8,6 +8,7 @@ import type {
   Repository,
   WorkflowJob,
   WorkflowRun,
+  PullRequestFile,
 } from './types.js';
 
 // Messages d'erreur zod en français.
@@ -164,6 +165,7 @@ const WorkflowRunObject = z
     head_branch: z.string().nullable(),
     event: z.string(),
     created_at: z.string(),
+    updated_at: z.string().nullish(),
     html_url: z.string(),
   })
   .transform((r): WorkflowRun => ({
@@ -176,7 +178,24 @@ const WorkflowRunObject = z
     headBranch: r.head_branch ?? '',
     event: r.event,
     createdAt: r.created_at,
+    ...(r.updated_at ? { updatedAt: r.updated_at } : {}),
     url: r.html_url,
+  }));
+
+export const PullRequestFileApi = z
+  .object({
+    filename: z.string(),
+    status: z.enum(['added', 'modified', 'removed', 'renamed', 'copied', 'changed', 'unchanged']),
+    additions: z.number(),
+    deletions: z.number(),
+    previous_filename: z.string().nullish(),
+  })
+  .transform((f): PullRequestFile => ({
+    filename: f.filename,
+    status: f.status,
+    additions: f.additions,
+    deletions: f.deletions,
+    ...(f.previous_filename ? { previousFilename: f.previous_filename } : {}),
   }));
 
 export const WorkflowRunApi = WorkflowRunObject;

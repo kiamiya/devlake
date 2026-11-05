@@ -1,4 +1,5 @@
-import type { GitHubPort, RepoRef } from 'github';
+import type { GitHubPort, RepoRef, WorkflowRun } from 'github';
+import { extractRelevantLogs } from '../quality/logs.js';
 import { readThread } from '../questions/thread.js';
 import { parseStateLabel, stateLabel, type TaskState } from 'shared';
 import type { Resume } from './prompt.js';
@@ -14,7 +15,7 @@ export class ResumeError extends Error {
 }
 
 /** Taille maximale lue par journal de job (la fin est la plus utile). */
-const MAX_LOG_PER_JOB = 30_000;
+const MAX_LOG_PER_JOB = 8_000;
 
 /** Données de reprise : la dernière réponse à une question, ou les journaux du dernier échec de CI. */
 export async function gatherResume(
@@ -39,30 +40,38 @@ export async function gatherResume(
     return { kind: 'answer', question: thread.pending.question, answer };
   }
 
-  const runs = (await github.listWorkflowRuns(ref, { branch: input.branch }))
+  // Dernier run de chaque workflow de la branche (CI du projet, relecture, garde des tests) :
+  // ceux en échec expliquent l'échec actuel de la PR.
+  const latest = new Map<string, WorkflowRun>();
+  for (const run of await github.listWorkflowRuns(ref, { branch: input.branch })) {
+    const known = latest.get(run.workflow);
+    if (!known || run.createdAt > known.createdAt) latest.set(run.workflow, run);
+  }
+  const failed = [...latest.values()]
     .filter((r) => r.conclusion === 'failure')
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const run = runs[0];
-  if (!run)
+  if (failed.length === 0)
     return {
       kind: 'ci-failure',
       attempt: input.attempt,
       logs: 'Aucune exécution en échec trouvée sur la branche.',
       runUrl: null,
     };
-  const jobs = (await github.listRunJobs(ref, run.id)).filter((j) => j.conclusion === 'failure');
   const parts: string[] = [];
-  for (const job of jobs) {
-    const logs = await github.getJobLogs(ref, job.id);
-    parts.push(
-      `=== ${job.name} ===\n${logs.length > MAX_LOG_PER_JOB ? logs.slice(-MAX_LOG_PER_JOB) : logs}`,
-    );
+  for (const run of failed) {
+    const jobs = (await github.listRunJobs(ref, run.id)).filter((j) => j.conclusion === 'failure');
+    for (const job of jobs) {
+      const logs = await github.getJobLogs(ref, job.id);
+      parts.push(
+        `=== ${run.name} / ${job.name} ===\n${extractRelevantLogs(logs, MAX_LOG_PER_JOB)}`,
+      );
+    }
   }
   return {
     kind: 'ci-failure',
     attempt: input.attempt,
     logs: parts.join('\n\n') || 'Aucun journal de job en échec.',
-    runUrl: run.url,
+    runUrl: failed[0]?.url ?? null,
   };
 }
 

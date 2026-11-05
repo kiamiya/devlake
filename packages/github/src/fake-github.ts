@@ -24,6 +24,7 @@ import type {
   ListPullRequestsInput,
   ListWorkflowRunsInput,
   PullRequest,
+  PullRequestFile,
   RepoRef,
   Repository,
   UpdateIssueInput,
@@ -63,6 +64,10 @@ export interface FakeRepoState {
   jobs: WorkflowJob[];
   logs: Map<number, string>;
   dispatches: DispatchWorkflowInput[];
+  /** Runs dont les jobs en échec ont été relancés. */
+  reruns: number[];
+  /** Fichiers imposés pour une PR (sinon : différence entre la base et la tête). */
+  pullFiles: Map<number, PullRequestFile[]>;
   secrets: Map<string, string>;
   issueDependencies: boolean;
   actions: ActionsPermissions;
@@ -95,6 +100,43 @@ function notFound(what: string): GitHubError {
 
 function clone<T>(value: T): T {
   return structuredClone(value);
+}
+
+/** Lignes d'un fichier ; le saut de ligne final ne compte pas pour une ligne de plus. */
+const lines = (text: string) => (text === '' ? [] : text.replace(/\n$/, '').split('\n'));
+
+/** Lignes de `a` absentes de `b` (multiensemble) : approximation d'un diff ligne à ligne. */
+function missingLines(a: string[], b: string[]): number {
+  const counts = new Map<string, number>();
+  for (const line of b) counts.set(line, (counts.get(line) ?? 0) + 1);
+  let missing = 0;
+  for (const line of a) {
+    const n = counts.get(line) ?? 0;
+    if (n > 0) counts.set(line, n - 1);
+    else missing += 1;
+  }
+  return missing;
+}
+
+/** Fichiers d'une PR calculés entre l'arbre de base et celui de la tête. */
+function diffTrees(base: FileTree, head: FileTree): PullRequestFile[] {
+  const files: PullRequestFile[] = [];
+  for (const path of [...new Set([...base.keys(), ...head.keys()])].sort()) {
+    const before = base.get(path);
+    const after = head.get(path);
+    if (before === after) continue;
+    const text = (base64: string | undefined) =>
+      Buffer.from(base64 ?? '', 'base64').toString('utf8');
+    const a = lines(text(before));
+    const b = lines(text(after));
+    files.push({
+      filename: path,
+      status: before === undefined ? 'added' : after === undefined ? 'removed' : 'modified',
+      additions: missingLines(b, a),
+      deletions: missingLines(a, b),
+    });
+  }
+  return files;
 }
 
 /**
@@ -146,6 +188,8 @@ export class FakeGitHub implements GitHubPort {
       jobs: [],
       logs: new Map(),
       dispatches: [],
+      reruns: [],
+      pullFiles: new Map(),
       secrets: new Map(),
       issueDependencies: this.defaultIssueDependencies,
       // Valeurs par défaut de GitHub pour un dépôt personnel.
@@ -186,6 +230,11 @@ export class FakeGitHub implements GitHubPort {
   }
 
   /** Simule le merge d'une PR par GitHub. */
+  /** Impose la liste des fichiers d'une PR (renommages, compteurs précis). */
+  seedPullRequestFiles(ref: RepoRef, prNumber: number, files: PullRequestFile[]): void {
+    this.state(ref).pullFiles.set(prNumber, clone(files));
+  }
+
   mergePullRequest(ref: RepoRef, prNumber: number): void {
     const pr = this.state(ref).pulls.get(prNumber);
     if (!pr) throw notFound(`PR #${String(prNumber)}`);
@@ -555,13 +604,19 @@ export class FakeGitHub implements GitHubPort {
   listPullRequests(ref: RepoRef, input: ListPullRequestsInput = {}): Promise<PullRequest[]> {
     return this.run(() => {
       const wanted = input.state ?? 'open';
-      return [...this.state(ref).pulls.values()]
+      const state = this.state(ref);
+      return [...state.pulls.values()]
         .filter(
           (p) => wanted === 'all' || (wanted === 'open' ? p.state === 'open' : p.state !== 'open'),
         )
         .filter((p) => input.head === undefined || p.head === input.head)
         .sort((a, b) => b.number - a.number)
-        .map(clone);
+        .map((p) => {
+          // Comme l'API : une PR ouverte suit le dernier commit de sa branche.
+          const head = state.branches.get(p.head);
+          if (p.state === 'open' && head) p.headSha = head.sha;
+          return clone(p);
+        });
     });
   }
 
@@ -592,8 +647,29 @@ export class FakeGitHub implements GitHubPort {
     });
   }
 
+  listPullRequestFiles(ref: RepoRef, prNumber: number): Promise<PullRequestFile[]> {
+    return this.run(() => {
+      const state = this.state(ref);
+      const pr = state.pulls.get(prNumber);
+      if (!pr) throw notFound(`PR #${String(prNumber)}`);
+      const seeded = state.pullFiles.get(prNumber);
+      if (seeded) return clone(seeded);
+      const head =
+        pr.state === 'open' ? state.branches.get(pr.head)?.files : state.commits.get(pr.headSha);
+      return diffTrees(
+        state.branches.get(pr.base)?.files ?? new Map<string, string>(),
+        head ?? state.commits.get(pr.headSha) ?? new Map<string, string>(),
+      );
+    });
+  }
+
   listCheckRuns(ref: RepoRef, sha: string): Promise<CheckRun[]> {
-    return this.run(() => clone(this.state(ref).checkRuns.get(sha) ?? []));
+    return this.run(() => {
+      const state = this.state(ref);
+      // Comme l'API : un nom de branche désigne son dernier commit.
+      const key = state.checkRuns.has(sha) ? sha : (state.branches.get(sha)?.sha ?? sha);
+      return clone(state.checkRuns.get(key) ?? []);
+    });
   }
 
   // Actions
@@ -626,6 +702,14 @@ export class FakeGitHub implements GitHubPort {
       const run = this.state(ref).runs.find((r) => r.id === runId);
       if (!run) throw notFound(`run ${String(runId)}`);
       return clone(run);
+    });
+  }
+
+  rerunFailedJobs(ref: RepoRef, runId: number): Promise<void> {
+    return this.run(() => {
+      const state = this.state(ref);
+      if (!state.runs.some((r) => r.id === runId)) throw notFound(`run ${String(runId)}`);
+      state.reruns.push(runId);
     });
   }
 

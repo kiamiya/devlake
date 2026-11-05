@@ -1,5 +1,5 @@
 import { FakeGitHub, GitHubError } from 'github';
-import { ALL_LABELS, COMMON_REQUIRED_CHECKS, ProjectConfigSchema } from 'shared';
+import { ALL_LABELS, ProjectConfigSchema, requiredChecksFor } from 'shared';
 import { describe, expect, it, vi } from 'vitest';
 import { parse } from 'yaml';
 import { MemoryVault } from '../../vault.js';
@@ -95,7 +95,7 @@ describe('bootstrap d’un projet', () => {
 
     expect(await github.getBranchProtection(ref, 'main')).toEqual({
       branch: 'main',
-      requiredChecks: [...COMMON_REQUIRED_CHECKS],
+      requiredChecks: requiredChecksFor('web'),
       enforceAdmins: false,
       requirePullRequest: true,
     });

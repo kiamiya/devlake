@@ -34,6 +34,8 @@ export interface PromptInput {
   branch: string;
   context: ProjectContext;
   resume: Resume;
+  /** Porte qualité à poser (tâche bootstrap de l'architecte). */
+  quality?: QualityGate;
 }
 
 /** Budget de caractères pour les documents du contexte et les journaux. */
@@ -108,6 +110,26 @@ function resumeSection(resume: Resume): string | null {
   }
 }
 
+/** Porte qualité du projet : gabarits du profil qualité à poser dans le dépôt. */
+export interface QualityGate {
+  profile: string;
+  /** Checks de la CI du projet, noms exacts des jobs. */
+  checks: readonly string[];
+  /** Dossier des gabarits dans le runner (copie de devlake). */
+  templatesDir: string;
+}
+
+function qualitySection(gate: QualityGate): string {
+  return [
+    `## Porte qualité (profil \`${gate.profile}\`)`,
+    '',
+    `Les gabarits sont dans \`${gate.templatesDir}\` (copie de devlake, hors du dépôt) : lis son \`README.md\`.`,
+    `- Copie \`ci.yml\` dans \`.github/workflows/ci.yml\` et adapte les commandes à la stack du projet (scripts \`package.json\`, configurations de lint, de types et de couverture à 80 % des lignes).`,
+    `- Garde exactement ces noms de jobs, ce sont les checks obligatoires de \`main\` : ${gate.checks.map((c) => `\`${c}\``).join(', ')}.`,
+    '- Aucun job vide, sauté ou non bloquant. Chaque check doit passer au vert sur ta PR : tant qu’ils ne sont pas tous verts sur `main`, aucune autre tâche du plan ne démarre.',
+  ].join('\n');
+}
+
 /** Prompt complet d'un agent : tâche, règles, reprise éventuelle, instructions et contexte du projet. */
 export function buildPrompt(input: PromptInput): string {
   const { task, profile } = input;
@@ -136,6 +158,7 @@ export function buildPrompt(input: PromptInput): string {
       '- Termine en remplissant la sortie structurée : `pr_title` (titre court) et `pr_summary` (ce qui a été fait, les choix, comment tester).',
     ].join('\n'),
     resumeSection(input.resume),
+    input.quality ? qualitySection(input.quality) : null,
     `## Instructions du projet (CLAUDE.md)\n\n${input.context.instructions?.trim() || '_Aucun CLAUDE.md._'}`,
     `## Décisions du projet\n\n${input.context.decisions?.trim() || '_Aucune décision._'}`,
     `## Contexte du projet\n\n${contextSection(input.context.documents)}`,
