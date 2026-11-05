@@ -11,6 +11,7 @@ import { ProjectsService } from './projects-service.js';
 import { CALLER_TEMPLATES } from './services/projects/caller-templates.js';
 import { ProjectCreationService } from './services/projects/creation-service.js';
 import { ContextService } from './services/ingestion/context-service.js';
+import { PlannerLaunchService } from './services/planner/planner-launch.js';
 import { defaultRegistry } from './services/ingestion/registry.js';
 import { readFile, stat } from 'node:fs/promises';
 import { SafeStorageVault } from './vault.js';
@@ -114,7 +115,13 @@ async function start(): Promise<void> {
   });
   registerIpc(
     ipcMain,
-    serviceHandlers({ cockpit: service, projects, creation, context }),
+    serviceHandlers({
+      cockpit: service,
+      projects,
+      creation,
+      context,
+      planner: new PlannerLaunchService(repos, () => service.githubPort()),
+    }),
     isTrustedUrl,
   );
   registerDroppedFiles(ipcMain, context, isTrustedUrl);

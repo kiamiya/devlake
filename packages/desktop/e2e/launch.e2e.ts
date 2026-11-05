@@ -293,4 +293,26 @@ test.describe('cockpit', () => {
     await expect(page.getByRole('article', { name: 'Aperçu du document' })).toBeVisible();
     await app.close();
   });
+  test('plan : le planificateur exige un modèle réglé, puis se lance', async () => {
+    const { app, page } = await launch(userData);
+    await saveToken(page);
+    await page.keyboard.press('Control+1');
+    await page.getByRole('button', { name: 'Ouvrir un dépôt existant' }).click();
+    await page.getByRole('button', { name: 'Ouvrir outil' }).click();
+    await page.getByRole('button', { name: 'Plan', exact: true }).click();
+    await page.getByRole('button', { name: 'Lancer le planificateur' }).click();
+    await expect(page.getByRole('alert')).toContainText('Aucun modèle pour le planificateur');
+
+    await page.getByRole('button', { name: 'Réglages' }).click();
+    await page.getByLabel('Modèle du planificateur').fill('modele-planificateur');
+    await page.getByRole('button', { name: 'Enregistrer les réglages' }).click();
+    await expect(page.getByText('Réglages enregistrés.')).toBeVisible();
+    await page.getByRole('tab', { name: /outil/ }).click();
+    await page.getByRole('button', { name: 'Lancer le planificateur' }).click();
+    await expect(page.getByRole('status')).toContainText('Planificateur lancé');
+    await expect(page.getByRole('button', { name: 'Régénérer le plan' })).toBeDisabled();
+    await page.getByLabel('Consigne pour régénérer le plan').fill('Moins de tâches.');
+    await expect(page.getByRole('button', { name: 'Régénérer le plan' })).toBeEnabled();
+    await app.close();
+  });
 });

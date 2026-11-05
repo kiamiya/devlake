@@ -1,0 +1,105 @@
+{
+  "type": "unity",
+  "brief": "# GDD — RPG SF low-tech (extrait fictif)\n\nExploration d'une station abandonnée, inventaire, dialogues à choix, combats au tour par tour.",
+  "questions": {
+    "questions": [
+      {
+        "blocking": true,
+        "text": "Vue de dessus ou à la troisième personne ?",
+        "options": ["Vue de dessus", "Troisième personne"]
+      }
+    ]
+  },
+  "plan": {
+    "summary": "Prototype jouable : déplacement, inventaire, dialogues, combat au tour par tour.",
+    "assumptions": ["Vue de dessus."],
+    "epics": [],
+    "milestones": [],
+    "tasks": [
+      {
+        "id": "T00",
+        "title": "Bootstrap Unity",
+        "description": "Projet Unity, Git LFS, GameCI, tests EditMode.",
+        "kind": "code",
+        "profile": "architect",
+        "complexity": "L",
+        "acceptanceCriteria": ["La CI construit le joueur"],
+        "requiredTests": { "unit": ["Test EditMode trivial"] },
+        "codeZones": ["/"],
+        "exclusiveResources": ["editor-unity"],
+        "dependencies": []
+      },
+      {
+        "id": "T01",
+        "title": "Inventaire (C#)",
+        "description": "Modèle d'inventaire testable hors éditeur.",
+        "kind": "code",
+        "profile": "unity",
+        "complexity": "M",
+        "acceptanceCriteria": ["Ajouter et retirer un objet"],
+        "requiredTests": { "unit": ["EditMode : inventaire"] },
+        "codeZones": ["Assets/Scripts/Inventory/"],
+        "exclusiveResources": [],
+        "dependencies": ["T00"]
+      },
+      {
+        "id": "T02",
+        "title": "Combat au tour par tour (C#)",
+        "description": "Règles du combat, testables hors éditeur.",
+        "kind": "code",
+        "profile": "unity",
+        "complexity": "L",
+        "acceptanceCriteria": ["Un combat se termine"],
+        "requiredTests": { "unit": ["EditMode : combat"] },
+        "codeZones": ["Assets/Scripts/Combat/"],
+        "exclusiveResources": [],
+        "dependencies": ["T00"]
+      },
+      {
+        "id": "T03",
+        "title": "Scène de la station",
+        "description": "Assemblage de la scène dans l'éditeur via Aura.",
+        "kind": "code",
+        "profile": "unity",
+        "complexity": "M",
+        "acceptanceCriteria": ["Le joueur se déplace dans la station"],
+        "requiredTests": { "e2e": ["PlayMode : déplacement"] },
+        "codeZones": ["Assets/Scenes/"],
+        "exclusiveResources": ["editor-unity"],
+        "dependencies": ["T00"]
+      },
+      {
+        "id": "T04",
+        "title": "Interface d'inventaire",
+        "description": "Écran d'inventaire dans l'éditeur via Aura.",
+        "kind": "code",
+        "profile": "unity",
+        "complexity": "M",
+        "acceptanceCriteria": ["L'inventaire s'ouvre en jeu"],
+        "requiredTests": { "e2e": ["PlayMode : ouverture"] },
+        "codeZones": ["Assets/UI/"],
+        "exclusiveResources": ["editor-unity"],
+        "dependencies": ["T01"]
+      },
+      {
+        "id": "T05",
+        "title": "Guide de jeu",
+        "description": "Document de prise en main.",
+        "kind": "docs",
+        "profile": "docs",
+        "complexity": "S",
+        "acceptanceCriteria": ["Le guide décrit les commandes"],
+        "requiredTests": {},
+        "codeZones": ["docs/"],
+        "exclusiveResources": [],
+        "dependencies": ["T03"]
+      }
+    ],
+    "profiles": [
+      { "profile": "architect", "justification": "Bootstrap." },
+      { "profile": "unity", "justification": "Gameplay et éditeur." },
+      { "profile": "docs", "justification": "Guide de jeu." }
+    ]
+  },
+  "expectedAgents": 3
+}

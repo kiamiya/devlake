@@ -267,6 +267,14 @@ export function githubEmulator(fake: FakeGitHub): HttpHandler[] {
 
     // Fichiers et Git Data
     http.get(
+      `${R}/branches/:branch`,
+      handle(({ params }) =>
+        fake.state(refOf(params)).branches.has(param(params, 'branch'))
+          ? json({ name: param(params, 'branch') })
+          : json({ message: 'Branch not found' }, 404),
+      ),
+    ),
+    http.get(
       `${R}/contents/*`,
       handle(async ({ params, url }) => {
         const path = wildcard(params);

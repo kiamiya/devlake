@@ -144,3 +144,29 @@ describe('protocole de questions', () => {
     ).toMatchSnapshot();
   });
 });
+
+describe('réponse ignorée', () => {
+  it('écrit et relit l’attribut ignored=true', () => {
+    const answer = { id: 'Q3', decision: false, text: 'Hors sujet.', ignored: true as const };
+    const body = renderAnswerComment(answer);
+    expect(body).toBe('<!-- agentlake:answer id=Q3 decision=false ignored=true -->\nHors sujet.\n');
+    expect(parseAnswerComment(body)).toEqual({ ok: true, value: answer });
+  });
+
+  it('accepte une question ignorée sans texte, écrite à la main', () => {
+    expect(parseAnswerComment('<!-- agentlake:answer id=Q3 ignored=true -->')).toEqual({
+      ok: true,
+      value: { id: 'Q3', decision: true, text: 'Question ignorée.', ignored: true },
+    });
+    expect(parseAnswerComment('<!-- agentlake:answer id=Q3 ignored=false -->\nOui')).toEqual({
+      ok: true,
+      value: { id: 'Q3', decision: true, text: 'Oui' },
+    });
+    expect(
+      parseAnswerComment('<!-- agentlake:answer id=Q3 ignored=peut-être -->\nOui'),
+    ).toMatchObject({
+      ok: false,
+      error: 'ignored doit valoir true ou false (reçu « peut-être »).',
+    });
+  });
+});

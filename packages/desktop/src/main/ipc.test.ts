@@ -8,6 +8,7 @@ import { createRepositories } from './db/repositories.js';
 import { ProjectsService } from './projects-service.js';
 import { ProjectCreationService } from './services/projects/creation-service.js';
 import { ContextService } from './services/ingestion/context-service.js';
+import { PlannerLaunchService } from './services/planner/planner-launch.js';
 import { defaultRegistry } from './services/ingestion/registry.js';
 import {
   dispatchIpc,
@@ -62,6 +63,7 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
         callerTemplates: { 'agentlake-x.yml': 'uses: __DEVLAKE_REPOSITORY__@__DEVLAKE_REF__' },
       }),
       context,
+      planner: new PlannerLaunchService(repos, () => service.githubPort()),
     }),
     vault,
     repos,
@@ -533,5 +535,62 @@ describe('IPC — bibliothèque du contexte', () => {
         { projectId: 'kiamiya/site', paths: ['x.md'] },
       ),
     ).toMatchObject({ ok: true });
+  });
+});
+
+describe('IPC — lancement du planificateur', () => {
+  it('refuse sans modèle réglé, puis déclenche le workflow d’appel avec modèle et plafond', async () => {
+    const env = setup();
+    const ref = { owner: 'kiamiya', repo: 'site' };
+    env.github.seedRepository(ref);
+    await env.github.commitFiles(ref, {
+      branch: 'main',
+      message: 'p',
+      changes: [{ path: '.agentlake/project.yml', content: 'type: web\n' }],
+    });
+    await dispatchIpc(env.handlers, 'token:set', { token: FAKE_TOKEN });
+    await dispatchIpc(env.handlers, 'projects:open', ref);
+
+    const start = { projectId: 'kiamiya/site', mode: 'auto' };
+    expect(await dispatchIpc(env.handlers, 'planner:start', start)).toMatchObject({
+      ok: false,
+      error: { code: 'PLANNER_MODEL_MISSING' },
+    });
+
+    await dispatchIpc(env.handlers, 'settings:update', {
+      plannerModel: 'modele-planif',
+      maxConcurrentAgents: 5,
+    });
+    expect(await dispatchIpc(env.handlers, 'planner:start', start)).toEqual({
+      ok: true,
+      data: { dispatched: true },
+    });
+    await dispatchIpc(env.handlers, 'planner:start', {
+      ...start,
+      mode: 'regenerate',
+      instruction: '  Fusionner T01 et T02.  ',
+    });
+    expect(env.github.state(ref).dispatches).toEqual([
+      {
+        workflow: 'agentlake-planner.yml',
+        ref: 'main',
+        inputs: { mode: 'auto', model: 'modele-planif', max_agents: '5', instruction: '' },
+      },
+      {
+        workflow: 'agentlake-planner.yml',
+        ref: 'main',
+        inputs: {
+          mode: 'regenerate',
+          model: 'modele-planif',
+          max_agents: '5',
+          instruction: 'Fusionner T01 et T02.',
+        },
+      },
+    ]);
+    expect(
+      await dispatchIpc(env.handlers, 'planner:start', { ...start, projectId: 'kiamiya/absent' }),
+    ).toMatchObject({
+      error: { code: 'UNKNOWN_PROJECT' },
+    });
   });
 });

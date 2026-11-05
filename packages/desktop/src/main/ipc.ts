@@ -14,6 +14,10 @@ import { NotAProjectError, UnknownProjectError, type ProjectsService } from './p
 import { BootstrapStepError, ClaudeTokenMissingError } from './services/projects/bootstrap.js';
 import type { ProjectCreationService } from './services/projects/creation-service.js';
 import {
+  PlannerModelMissingError,
+  type PlannerLaunchService,
+} from './services/planner/planner-launch.js';
+import {
   PublicRepoNotAcknowledgedError,
   UnknownFileError,
   type ContextService,
@@ -31,8 +35,9 @@ export function serviceHandlers(services: {
   projects: ProjectsService;
   creation: ProjectCreationService;
   context: ContextService;
+  planner: PlannerLaunchService;
 }): Record<IpcChannel, Handler> {
-  const { cockpit: service, projects, creation, context } = services;
+  const { cockpit: service, projects, creation, context, planner } = services;
   const input = <C extends IpcChannel>(_channel: C, value: unknown) =>
     value as z.output<(typeof IPC_CONTRACT)[C]['input']>;
   return {
@@ -79,6 +84,7 @@ export function serviceHandlers(services: {
       return context.remove(projectId, path);
     },
     'context:decisions': (value) => context.decisions(input('context:decisions', value).projectId),
+    'planner:start': (value) => planner.start(input('planner:start', value)),
     'projects:bootstrap': (value) =>
       creation.rebootstrap(input('projects:bootstrap', value).projectId),
   };
@@ -103,6 +109,7 @@ export function toIpcError(error: unknown): IpcErrorPayload {
     [UnsupportedFormatError, 'UNSUPPORTED_FORMAT'],
     [InvalidContextIndexError, 'INVALID_CONTEXT_INDEX'],
     [UnknownDocumentError, 'UNKNOWN_DOCUMENT'],
+    [PlannerModelMissingError, 'PLANNER_MODEL_MISSING'],
   ];
   for (const [type, code] of known)
     if (error instanceof type) return { code, message: error.message };

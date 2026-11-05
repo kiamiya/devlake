@@ -74,3 +74,35 @@ describe('gabarit d’appel de l’agent', () => {
     expect(workflow.concurrency).toBeUndefined();
   });
 });
+
+describe('gabarit d’appel du planificateur', () => {
+  const content =
+    renderCallers(CALLER_TEMPLATES, { repository: DEVLAKE_REPOSITORY, ref: 'v1' }).get(
+      '.github/workflows/agentlake-planner.yml',
+    ) ?? '';
+  const workflow = parse(content) as {
+    on: Record<string, unknown>;
+    concurrency?: unknown;
+    jobs: { plan: { if: string; with: Record<string, string> } };
+  };
+
+  it('se lance depuis le cockpit ou sur une réponse dans l’issue Cadrage, par le propriétaire seulement', () => {
+    expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch', 'issue_comment']);
+    expect(workflow.jobs.plan.if).toContain('github.event.sender.login == github.repository_owner');
+    expect(workflow.jobs.plan.if).toContain(
+      "contains(github.event.issue.labels.*.name, 'agentlake:cadrage')",
+    );
+    expect(workflow.concurrency).toBeUndefined();
+  });
+
+  it('transmet mode, modèle, plafond, consigne et version de devlake', () => {
+    expect(Object.keys(workflow.jobs.plan.with)).toEqual([
+      'mode',
+      'model',
+      'max_agents',
+      'instruction',
+      'devlake_ref',
+    ]);
+    expect(workflow.jobs.plan.with.devlake_ref).toBe('v1');
+  });
+});

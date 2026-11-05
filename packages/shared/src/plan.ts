@@ -77,13 +77,18 @@ const RetainedProfileSchema = z.object({
   justification: cleanText('La justification du profil'),
 });
 
-const ProjectPlanShape = z.object({
+/** Plan tel que produit par le modèle, avant le calcul déterministe du nombre d'agents. */
+export const PlanDraftSchema = z.object({
   summary: cleanText('Le résumé'),
   assumptions: z.array(cleanText('Une hypothèse')),
   epics: z.array(EpicSchema),
   milestones: z.array(MilestoneSchema),
   tasks: z.array(PlanTaskSchema).min(1, 'Le plan doit contenir au moins une tâche.'),
   profiles: z.array(RetainedProfileSchema).min(1, 'Le plan doit retenir au moins un profil.'),
+});
+export type PlanDraft = z.infer<typeof PlanDraftSchema>;
+
+const ProjectPlanShape = PlanDraftSchema.extend({
   /** Date de validation du plan par Kia (renseignée par la revue du plan, T10). */
   validatedAt: z.iso.datetime({ message: 'Date ISO 8601 attendue.' }).optional(),
   proposedAgents: z

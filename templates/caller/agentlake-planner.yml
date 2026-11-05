@@ -2,20 +2,50 @@
 name: AgentLake — planificateur
 
 on:
+  # Lancé par le cockpit.
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Mode
+        type: choice
+        options: [auto, regenerate]
+        default: auto
+      model:
+        description: Modèle du planificateur
+        type: string
+        default: ''
+      max_agents:
+        description: Plafond global d'agents
+        type: string
+        default: ''
+      instruction:
+        description: Consigne libre pour (re)générer le plan
+        type: string
+        default: ''
+  # Relancé par une réponse dans l'issue « Cadrage ».
+  issue_comment:
+    types: [created]
 
 permissions: {}
 
-concurrency:
-  group: agentlake-planner
-  cancel-in-progress: false
+# Pas de groupe de concurrence ici : le job appelé a déjà `agentlake-planner`
+# (le même groupe à deux niveaux bloquerait le job indéfiniment).
 
 jobs:
   plan:
-    if: github.actor == github.repository_owner
+    # Seul le propriétaire du dépôt déclenche le planificateur, et seulement depuis l'issue Cadrage.
+    if: >-
+      github.event.sender.login == github.repository_owner &&
+      (github.event_name == 'workflow_dispatch' ||
+      contains(github.event.issue.labels.*.name, 'agentlake:cadrage'))
     permissions:
       contents: write
       issues: write
-      pull-requests: write
     uses: __DEVLAKE_REPOSITORY__/.github/workflows/planner.yml@__DEVLAKE_REF__
+    with:
+      mode: ${{ inputs.mode || 'auto' }}
+      model: ${{ inputs.model || '' }}
+      max_agents: ${{ inputs.max_agents || '' }}
+      instruction: ${{ inputs.instruction || '' }}
+      devlake_ref: __DEVLAKE_REF__
     secrets: inherit

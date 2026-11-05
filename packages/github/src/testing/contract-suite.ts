@@ -130,6 +130,12 @@ export function describeGitHubContract(
         expect((await port.getFile(ref, 'a.txt'))?.content).toBe('A');
       });
 
+      it('sait si une branche existe ; un fichier d’une branche absente est absent', async () => {
+        expect(await port.branchExists(ref, 'main')).toBe(true);
+        expect(await port.branchExists(ref, 'plan/v1')).toBe(false);
+        expect(await port.getFile(ref, 'README.md', 'plan/v1')).toBeNull();
+      });
+
       it('refuse une branche absente sans branche de départ', async () => {
         await expect(
           port.commitFiles(ref, {
