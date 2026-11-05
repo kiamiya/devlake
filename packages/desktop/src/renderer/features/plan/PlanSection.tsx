@@ -9,8 +9,9 @@ import {
   Textarea,
 } from '../../components/ui/primitives.js';
 import { invoke } from '../../lib/ipc.js';
+import { PlanReview } from '../plan-review/PlanReview.js';
 
-/** Lancement du planificateur ; la revue et la validation du plan arrivent avec T10. */
+/** Lancement du planificateur, puis revue et validation du plan. */
 export function PlanSection({ projectId }: { projectId: string }) {
   const [instruction, setInstruction] = useState('');
   const start = useMutation({
@@ -76,6 +77,7 @@ export function PlanSection({ projectId }: { projectId: string }) {
           )}
         </div>
       </Card>
+      <PlanReview projectId={projectId} />
     </div>
   );
 }

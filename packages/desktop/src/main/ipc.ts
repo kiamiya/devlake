@@ -17,6 +17,7 @@ import {
   PlannerModelMissingError,
   type PlannerLaunchService,
 } from './services/planner/planner-launch.js';
+import { PlanError, type PlanService } from './services/plan/plan-service.js';
 import {
   PublicRepoNotAcknowledgedError,
   UnknownFileError,
@@ -36,8 +37,9 @@ export function serviceHandlers(services: {
   creation: ProjectCreationService;
   context: ContextService;
   planner: PlannerLaunchService;
+  plan: PlanService;
 }): Record<IpcChannel, Handler> {
-  const { cockpit: service, projects, creation, context, planner } = services;
+  const { cockpit: service, projects, creation, context, planner, plan } = services;
   const input = <C extends IpcChannel>(_channel: C, value: unknown) =>
     value as z.output<(typeof IPC_CONTRACT)[C]['input']>;
   return {
@@ -85,6 +87,23 @@ export function serviceHandlers(services: {
     },
     'context:decisions': (value) => context.decisions(input('context:decisions', value).projectId),
     'planner:start': (value) => planner.start(input('planner:start', value)),
+    'plan:versions': (value) => plan.versions(input('plan:versions', value).projectId),
+    'plan:get': (value) => {
+      const { projectId, version } = input('plan:get', value);
+      return plan.get(projectId, version);
+    },
+    'plan:save': (value) => {
+      const { projectId, version, plan: edited } = input('plan:save', value);
+      return plan.save(projectId, version, edited);
+    },
+    'plan:set-cap': (value) => {
+      const { projectId, cap } = input('plan:set-cap', value);
+      return plan.setProjectCap(projectId, cap);
+    },
+    'plan:validate': (value) => {
+      const { projectId, version } = input('plan:validate', value);
+      return plan.validate(projectId, version);
+    },
     'projects:bootstrap': (value) =>
       creation.rebootstrap(input('projects:bootstrap', value).projectId),
   };
@@ -110,6 +129,7 @@ export function toIpcError(error: unknown): IpcErrorPayload {
     [InvalidContextIndexError, 'INVALID_CONTEXT_INDEX'],
     [UnknownDocumentError, 'UNKNOWN_DOCUMENT'],
     [PlannerModelMissingError, 'PLANNER_MODEL_MISSING'],
+    [PlanError, 'PLAN_ERROR'],
   ];
   for (const [type, code] of known)
     if (error instanceof type) return { code, message: error.message };

@@ -12,6 +12,7 @@ import { CALLER_TEMPLATES } from './services/projects/caller-templates.js';
 import { ProjectCreationService } from './services/projects/creation-service.js';
 import { ContextService } from './services/ingestion/context-service.js';
 import { PlannerLaunchService } from './services/planner/planner-launch.js';
+import { PlanService } from './services/plan/plan-service.js';
 import { defaultRegistry } from './services/ingestion/registry.js';
 import { readFile, stat } from 'node:fs/promises';
 import { SafeStorageVault } from './vault.js';
@@ -121,6 +122,7 @@ async function start(): Promise<void> {
       creation,
       context,
       planner: new PlannerLaunchService(repos, () => service.githubPort()),
+      plan: new PlanService(repos, () => service.githubPort()),
     }),
     isTrustedUrl,
   );

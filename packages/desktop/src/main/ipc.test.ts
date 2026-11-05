@@ -9,6 +9,7 @@ import { ProjectsService } from './projects-service.js';
 import { ProjectCreationService } from './services/projects/creation-service.js';
 import { ContextService } from './services/ingestion/context-service.js';
 import { PlannerLaunchService } from './services/planner/planner-launch.js';
+import { PlanService } from './services/plan/plan-service.js';
 import { defaultRegistry } from './services/ingestion/registry.js';
 import {
   dispatchIpc,
@@ -64,6 +65,7 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
       }),
       context,
       planner: new PlannerLaunchService(repos, () => service.githubPort()),
+      plan: new PlanService(repos, () => service.githubPort()),
     }),
     vault,
     repos,

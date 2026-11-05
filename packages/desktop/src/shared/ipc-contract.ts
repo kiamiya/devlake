@@ -1,4 +1,10 @@
-import { ContextEntrySchema, ProjectTypeSchema, QualityProfileSchema } from 'shared';
+import {
+  ContextEntrySchema,
+  ProjectConfigSchema,
+  ProjectPlanSchema,
+  ProjectTypeSchema,
+  QualityProfileSchema,
+} from 'shared';
 import { z } from 'zod';
 import type { IpcChannel } from './channels.js';
 import { SettingsPatchSchema, SettingsSchema } from './settings.js';
@@ -180,6 +186,41 @@ export const IPC_CONTRACT = {
     output: CommitSchema,
   },
   'context:remove': { input: DocumentRefSchema, output: CommitSchema },
+  'plan:versions': {
+    input: z.object({ projectId: z.string() }),
+    output: z.array(z.object({ version: z.number().int().min(1), branch: z.string() })),
+  },
+  'plan:get': {
+    input: z.object({ projectId: z.string(), version: z.number().int().min(1) }),
+    output: z.object({ plan: ProjectPlanSchema, config: ProjectConfigSchema.nullable() }),
+  },
+  'plan:save': {
+    input: z.object({
+      projectId: z.string(),
+      version: z.number().int().min(1),
+      plan: ProjectPlanSchema,
+    }),
+    output: z.object({ commitSha: z.string().nullable() }),
+  },
+  'plan:set-cap': {
+    input: z.object({
+      projectId: z.string(),
+      cap: z.number().int().min(1, 'Le plafond doit être au moins 1.').nullable(),
+    }),
+    output: ProjectConfigSchema,
+  },
+  'plan:validate': {
+    input: z.object({ projectId: z.string(), version: z.number().int().min(1) }),
+    output: z.object({
+      issues: z.array(
+        z.object({ taskId: z.string(), issueNumber: z.number(), created: z.boolean() }),
+      ),
+      dependencies: z.number(),
+      planCommitted: z.boolean(),
+      dispatched: z.boolean(),
+      warnings: z.array(z.string()),
+    }),
+  },
   'planner:start': {
     input: z.object({
       projectId: z.string(),

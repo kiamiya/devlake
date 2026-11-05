@@ -132,10 +132,12 @@ test.describe('cockpit', () => {
         .click()
         .catch(() => undefined);
     }
-    expect(await tabsOf(page)).toEqual({
-      labels: ['Accueil', 'jeu', 'site', 'outil'],
-      active: 'Accueil',
-    });
+    await expect
+      .poll(() => tabsOf(page))
+      .toEqual({
+        labels: ['Accueil', 'jeu', 'site', 'outil'],
+        active: 'Accueil',
+      });
 
     // Badges et barre d'état globale.
     await expect(page.getByLabel('1 question en attente').first()).toBeVisible();
@@ -144,37 +146,45 @@ test.describe('cockpit', () => {
 
     // Navigation au clavier.
     await page.keyboard.press('Control+Tab');
-    expect((await tabsOf(page)).active).toBe('jeu');
+    await expect.poll(async () => (await tabsOf(page)).active).toBe('jeu');
     await page.keyboard.press('Control+9');
-    expect((await tabsOf(page)).active).toBe('outil');
+    await expect.poll(async () => (await tabsOf(page)).active).toBe('outil');
     await page.keyboard.press('Control+Shift+Tab');
-    expect((await tabsOf(page)).active).toBe('site');
+    await expect.poll(async () => (await tabsOf(page)).active).toBe('site');
     await page.getByRole('button', { name: 'Runs' }).click();
     await expect(page.getByRole('heading', { name: 'Runs' })).toBeVisible();
 
     // Réordonnancement : « outil » glissé en première position.
-    await page.getByTestId('tab-kiamiya/outil').dragTo(page.getByTestId('tab-kiamiya/jeu'));
-    expect(await tabsOf(page)).toEqual({
-      labels: ['Accueil', 'outil', 'jeu', 'site'],
-      active: 'site',
-    });
+    // Événements de glisser-déposer envoyés explicitement : dragTo est irrégulier sous Electron.
+    const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+    await page.getByTestId('tab-kiamiya/outil').dispatchEvent('dragstart', { dataTransfer });
+    await page.getByTestId('tab-kiamiya/jeu').dispatchEvent('dragover', { dataTransfer });
+    await page.getByTestId('tab-kiamiya/jeu').dispatchEvent('drop', { dataTransfer });
+    await expect
+      .poll(() => tabsOf(page))
+      .toEqual({
+        labels: ['Accueil', 'outil', 'jeu', 'site'],
+        active: 'site',
+      });
 
     // Ctrl+W ferme l'onglet actif ; on le rouvre depuis l'Accueil, en dernière position.
     await page.keyboard.press('Control+w');
-    expect(await tabsOf(page)).toEqual({ labels: ['Accueil', 'outil', 'jeu'], active: 'jeu' });
+    await expect
+      .poll(() => tabsOf(page))
+      .toEqual({ labels: ['Accueil', 'outil', 'jeu'], active: 'jeu' });
     await page.keyboard.press('Control+1');
     await page
       .getByRole('list', { name: 'Projets connus' })
       .getByRole('button', { name: /site/ })
       .click();
     await page.keyboard.press('Control+3');
-    const before = await tabsOf(page);
-    expect(before).toEqual({ labels: ['Accueil', 'outil', 'jeu', 'site'], active: 'jeu' });
+    const before = { labels: ['Accueil', 'outil', 'jeu', 'site'], active: 'jeu' };
+    await expect.poll(() => tabsOf(page)).toEqual(before);
     await app.close();
 
     ({ app, page } = await launch(userData));
     await expect(page.getByRole('tab', { name: /site/ })).toBeVisible();
-    expect(await tabsOf(page)).toEqual(before);
+    await expect.poll(() => tabsOf(page)).toEqual(before);
     await app.close();
   });
 
@@ -313,6 +323,50 @@ test.describe('cockpit', () => {
     await expect(page.getByRole('button', { name: 'Régénérer le plan' })).toBeDisabled();
     await page.getByLabel('Consigne pour régénérer le plan').fill('Moins de tâches.');
     await expect(page.getByRole('button', { name: 'Régénérer le plan' })).toBeEnabled();
+    await app.close();
+  });
+  test('revue du plan : lecture, graphe, ajustement revalidé, validation idempotente', async () => {
+    const { app, page } = await launch(userData);
+    await saveToken(page);
+    await page.keyboard.press('Control+1');
+    await page.getByRole('button', { name: 'Ouvrir un dépôt existant' }).click();
+    await page.getByRole('button', { name: 'Ouvrir site' }).click();
+    await page.getByRole('button', { name: 'Plan', exact: true }).click();
+    await expect(page.getByText('3 tâches.', { exact: false })).toBeVisible();
+
+    await page.getByRole('tab', { name: 'Graphe' }).click();
+    await expect(
+      page.getByLabel('Graphe des dépendances').getByText('T01 — Écran de connexion'),
+    ).toBeVisible();
+    await page.getByRole('tab', { name: 'Équipe' }).click();
+    await expect(page.getByTestId('agents-proposed')).toHaveText('2');
+
+    // Ajustement : une dépendance qui crée un cycle est refusée immédiatement.
+    await page.getByRole('tab', { name: 'Arborescence' }).click();
+    await page.getByRole('button', { name: /^T01/ }).click();
+    await page.getByLabel(/T02 — README/).check();
+    await page.getByRole('button', { name: /^T02/ }).click();
+    await page.getByLabel(/T01 — Écran de connexion/).check();
+    await expect(page.getByRole('alert')).toContainText('Dépendances circulaires');
+    await expect(
+      page.getByRole('button', { name: 'Enregistrer les modifications' }),
+    ).toBeDisabled();
+    await page.getByLabel(/T01 — Écran de connexion/).uncheck();
+    await page.getByLabel('Titre').fill('Documentation d’installation');
+    await expect(page.getByRole('button', { name: 'Valider le plan' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Enregistrer les modifications' }).click();
+    await expect(page.getByRole('button', { name: 'Valider le plan' })).toBeEnabled();
+
+    await page.getByRole('button', { name: 'Valider le plan' }).click();
+    await page.getByRole('button', { name: 'Confirmer la validation' }).click();
+    await expect(page.getByRole('status')).toContainText(
+      '3 issue(s) créée(s), 0 déjà existante(s), 3 dépendance(s)',
+    );
+    await page.getByRole('button', { name: 'Valider le plan' }).click();
+    await page.getByRole('button', { name: 'Confirmer la validation' }).click();
+    await expect(page.getByRole('status')).toContainText(
+      '0 issue(s) créée(s), 3 déjà existante(s)',
+    );
     await app.close();
   });
 });
