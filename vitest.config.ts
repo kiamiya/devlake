@@ -3,7 +3,7 @@ import { defineConfig } from 'vitest/config';
 // Tests unitaires : aucun accès réseau (voir tests/setup/no-network.ts).
 export default defineConfig({
   test: {
-    include: ['packages/*/src/**/*.test.ts', 'tests/**/*.test.ts'],
+    include: ['packages/*/src/**/*.test.{ts,tsx}', 'tests/**/*.test.ts'],
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
@@ -16,7 +16,7 @@ export default defineConfig({
       provider: 'v8',
       include: ['packages/*/src/**/*.ts'],
       exclude: [
-        '**/*.test.ts',
+        '**/*.test.{ts,tsx}',
         '**/src/testing/**',
         'packages/desktop/src/renderer/**',
         // Amorçage Electron et preload : couverts par les tests E2E Playwright.

@@ -5,6 +5,7 @@ import { DEFAULT_SETTINGS } from '../shared/settings.js';
 import { CockpitService, NoTokenError } from './cockpit-service.js';
 import { openDatabase } from './db/database.js';
 import { createRepositories } from './db/repositories.js';
+import { ProjectsService } from './projects-service.js';
 import { dispatchIpc, registerIpc, serviceHandlers, toIpcError, type IpcMainLike } from './ipc.js';
 import { MemoryVault, VaultUnavailableError } from './vault.js';
 
@@ -23,7 +24,14 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
   const vault = new MemoryVault(options.vaultAvailable ?? true);
   const github = options.github ?? new FakeGitHub({ actor: 'kiamiya' });
   const service = new CockpitService({ repos, vault, github: () => github });
-  return { service, handlers: serviceHandlers(service), vault, repos, github };
+  const projects = new ProjectsService(repos, () => service.githubPort());
+  return {
+    service,
+    handlers: serviceHandlers({ cockpit: service, projects }),
+    vault,
+    repos,
+    github,
+  };
 }
 
 describe('IPC — validation des canaux et des entrées', () => {
