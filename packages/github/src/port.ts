@@ -1,4 +1,5 @@
 import type {
+  AuthenticatedUser,
   BranchProtection,
   BranchProtectionInput,
   Capabilities,
@@ -28,6 +29,12 @@ import type {
  * et `FakeGitHub` (doublure en mémoire). Les erreurs sont des `GitHubError`.
  */
 export interface GitHubPort {
+  // Compte
+  /** Compte du jeton ; sert aussi à vérifier le jeton. */
+  getAuthenticatedUser(): Promise<AuthenticatedUser>;
+  /** Dépôts dont le compte authentifié est propriétaire. */
+  listRepositories(): Promise<Repository[]>;
+
   // Dépôts
   createRepository(input: CreateRepositoryInput): Promise<Repository>;
   getRepository(ref: RepoRef): Promise<Repository>;

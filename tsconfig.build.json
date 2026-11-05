@@ -5,7 +5,6 @@
     { "path": "packages/github/tsconfig.build.json" },
     { "path": "packages/planner/tsconfig.build.json" },
     { "path": "packages/dispatcher/tsconfig.build.json" },
-    { "path": "packages/aura-bridge/tsconfig.build.json" },
-    { "path": "packages/desktop/tsconfig.build.json" }
+    { "path": "packages/aura-bridge/tsconfig.build.json" }
   ]
 }

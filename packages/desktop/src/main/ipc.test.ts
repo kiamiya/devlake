@@ -1,0 +1,188 @@
+import { FakeGitHub, GitHubError } from 'github';
+import { describe, expect, it, vi } from 'vitest';
+import { IPC_CHANNELS, isIpcChannel } from '../shared/channels.js';
+import { DEFAULT_SETTINGS } from '../shared/settings.js';
+import { CockpitService, NoTokenError } from './cockpit-service.js';
+import { openDatabase } from './db/database.js';
+import { createRepositories } from './db/repositories.js';
+import { dispatchIpc, registerIpc, serviceHandlers, toIpcError, type IpcMainLike } from './ipc.js';
+import { MemoryVault, VaultUnavailableError } from './vault.js';
+
+/** Faux jeton de test, sans valeur réelle. */
+const FAKE_TOKEN = 'ghp_abcdefghijklmnop1234'; // gitleaks:allow
+
+async function githubStatus(handlers: ReturnType<typeof serviceHandlers>) {
+  const result = await dispatchIpc(handlers, 'status:get', undefined);
+  if (!result.ok) throw new Error(result.error.message);
+  return (result.data as { id: string }[]).find((s) => s.id === 'github');
+}
+
+function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) {
+  const { db } = openDatabase(':memory:');
+  const repos = createRepositories(db);
+  const vault = new MemoryVault(options.vaultAvailable ?? true);
+  const github = options.github ?? new FakeGitHub({ actor: 'kiamiya' });
+  const service = new CockpitService({ repos, vault, github: () => github });
+  return { service, handlers: serviceHandlers(service), vault, repos, github };
+}
+
+describe('IPC — validation des canaux et des entrées', () => {
+  it('refuse un canal non déclaré', async () => {
+    const { handlers } = setup();
+    expect(await dispatchIpc(handlers, 'fs:read', '/etc/passwd')).toEqual({
+      ok: false,
+      error: { code: 'UNKNOWN_CHANNEL', message: 'Canal IPC non déclaré : fs:read.' },
+    });
+    expect(isIpcChannel(42)).toBe(false);
+  });
+
+  it('refuse une entrée invalide avec un message précis', async () => {
+    const { handlers } = setup();
+    const result = await dispatchIpc(handlers, 'settings:update', { maxAttempts: 0 });
+    expect(result).toEqual({
+      ok: false,
+      error: { code: 'INVALID_INPUT', message: 'maxAttempts : Il faut au moins une tentative.' },
+    });
+    expect(await dispatchIpc(handlers, 'token:set', { token: '   ' })).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_INPUT', message: 'token : Le jeton est vide.' },
+    });
+    expect(await dispatchIpc(handlers, 'settings:get', { inattendu: true })).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_INPUT' },
+    });
+  });
+
+  it('lit et met à jour les réglages', async () => {
+    const { handlers } = setup();
+    expect(await dispatchIpc(handlers, 'settings:get', undefined)).toEqual({
+      ok: true,
+      data: DEFAULT_SETTINGS,
+    });
+    const updated = await dispatchIpc(handlers, 'settings:update', {
+      maxAttempts: 5,
+      modelsByProfile: { qa: 'modele-qa' },
+    });
+    expect(updated).toEqual({
+      ok: true,
+      data: { ...DEFAULT_SETTINGS, maxAttempts: 5, modelsByProfile: { qa: 'modele-qa' } },
+    });
+  });
+
+  it('expose un gestionnaire pour chaque canal déclaré', () => {
+    expect(Object.keys(setup().handlers).sort()).toEqual([...IPC_CHANNELS].sort());
+  });
+});
+
+describe('IPC — jeton et statut', () => {
+  it('enregistre le jeton, ne renvoie que sa forme masquée et passe GitHub à OK', async () => {
+    const { handlers, vault } = setup();
+    expect(await dispatchIpc(handlers, 'status:get', undefined)).toMatchObject({
+      ok: true,
+      data: [
+        { id: 'github', state: 'absent' },
+        { id: 'aura', state: 'absent' },
+      ],
+    });
+
+    const result = await dispatchIpc(handlers, 'token:set', { token: FAKE_TOKEN });
+    expect(result).toEqual({ ok: true, data: { masked: 'ghp_••••••••1234' } });
+    expect(JSON.stringify(result)).not.toContain('abcdefghijklmnop');
+    expect(await vault.getToken()).toBe(FAKE_TOKEN);
+    expect(await githubStatus(handlers)).toMatchObject({
+      state: 'ok',
+      detail: 'Connecté en tant que kiamiya.',
+    });
+    expect(await dispatchIpc(handlers, 'token:test', undefined)).toEqual({
+      ok: true,
+      data: { login: 'kiamiya' },
+    });
+
+    expect(await dispatchIpc(handlers, 'token:clear', undefined)).toEqual({
+      ok: true,
+      data: { masked: null },
+    });
+    expect(await dispatchIpc(handlers, 'token:get-masked', undefined)).toEqual({
+      ok: true,
+      data: { masked: null },
+    });
+  });
+
+  it('signale un jeton refusé par GitHub comme DÉGRADÉ', async () => {
+    const github = new FakeGitHub();
+    vi.spyOn(github, 'getAuthenticatedUser').mockRejectedValue(
+      new GitHubError('unauthorized', 'Jeton GitHub refusé : Bad credentials', 401),
+    );
+    const { handlers } = setup({ github });
+    await dispatchIpc(handlers, 'token:set', { token: 'ghp_invalideinvalide0000' });
+    expect(await dispatchIpc(handlers, 'token:test', undefined)).toEqual({
+      ok: false,
+      error: { code: 'GITHUB_UNAUTHORIZED', message: 'Jeton GitHub refusé : Bad credentials' },
+    });
+    expect(await githubStatus(handlers)).toMatchObject({
+      state: 'degraded',
+      detail: 'Jeton GitHub refusé : Bad credentials',
+    });
+  });
+
+  it('signale l’absence de jeton et un coffre indisponible', async () => {
+    expect(await dispatchIpc(setup().handlers, 'token:test', undefined)).toMatchObject({
+      ok: false,
+      error: { code: 'NO_TOKEN' },
+    });
+    const unavailable = setup({ vaultAvailable: false });
+    expect(await dispatchIpc(unavailable.handlers, 'token:set', { token: 'ghp_x' })).toMatchObject({
+      ok: false,
+      error: { code: 'VAULT_UNAVAILABLE' },
+    });
+    expect(await githubStatus(unavailable.handlers)).toMatchObject({ state: 'degraded' });
+  });
+
+  it('ne divulgue jamais le détail d’une erreur interne', () => {
+    expect(toIpcError(new Error('jeton ghp_secret dans la pile'))).toEqual({
+      code: 'INTERNAL',
+      message: 'Erreur interne du cockpit.',
+    });
+    expect(toIpcError(new NoTokenError()).code).toBe('NO_TOKEN');
+    expect(toIpcError(new VaultUnavailableError()).code).toBe('VAULT_UNAVAILABLE');
+    expect(toIpcError(new GitHubError('rate-limited', 'Limite')).code).toBe('GITHUB_RATE_LIMITED');
+  });
+
+  it('reconstruit le cache par IPC', async () => {
+    const github = new FakeGitHub({ actor: 'kiamiya' });
+    const { handlers } = setup({ github });
+    await dispatchIpc(handlers, 'token:set', { token: FAKE_TOKEN });
+    expect(await dispatchIpc(handlers, 'cache:rebuild', undefined)).toEqual({
+      ok: true,
+      data: { projects: 0, issues: 0, runs: 0 },
+    });
+  });
+});
+
+describe('IPC — enregistrement auprès d’Electron', () => {
+  it('enregistre chaque canal et refuse les origines non autorisées', async () => {
+    const listeners = new Map<string, Parameters<IpcMainLike['handle']>[1]>();
+    const ipcMain: IpcMainLike = {
+      handle: (channel, listener) => {
+        listeners.set(channel, listener);
+      },
+    };
+    registerIpc(ipcMain, setup().handlers, (url) => url.startsWith('file://'));
+    expect([...listeners.keys()].sort()).toEqual([...IPC_CHANNELS].sort());
+
+    const listener = listeners.get('settings:get');
+    if (!listener) throw new Error('canal absent');
+    expect(
+      await listener({ senderFrame: { url: 'https://malveillant.example' } }, undefined),
+    ).toEqual({
+      ok: false,
+      error: { code: 'FORBIDDEN_SENDER', message: 'Appel IPC refusé : origine non autorisée.' },
+    });
+    expect(await listener({ senderFrame: null }, undefined)).toMatchObject({ ok: false });
+    expect(
+      await listener({ senderFrame: { url: 'file:///app/renderer/index.html' } }, undefined),
+    ).toMatchObject({
+      ok: true,
+    });
+  });
+});

@@ -12,6 +12,8 @@ export default defineConfig(
       '**/coverage/**',
       '**/out/**',
       'tests/fixtures/**',
+      '**/playwright-report/**',
+      '**/test-results/**',
     ],
   },
   js.configs.recommended,

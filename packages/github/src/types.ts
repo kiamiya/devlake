@@ -5,6 +5,10 @@ export interface RepoRef {
   repo: string;
 }
 
+export interface AuthenticatedUser {
+  login: string;
+}
+
 export interface Repository {
   owner: string;
   name: string;

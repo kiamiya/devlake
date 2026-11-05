@@ -33,6 +33,7 @@ import {
 import type { GitHubPort } from './port.js';
 import { encryptSecret } from './secrets.js';
 import type {
+  AuthenticatedUser,
   BranchProtection,
   BranchProtectionInput,
   Capabilities,
@@ -110,6 +111,20 @@ export class OctokitGitHub implements GitHubPort {
       all.push(...batch);
       if (batch.length < PER_PAGE) return all;
     }
+  }
+
+  // Compte
+
+  async getAuthenticatedUser(): Promise<AuthenticatedUser> {
+    return this.http.request('GET /user', {}, z.object({ login: z.string() }));
+  }
+
+  async listRepositories(): Promise<Repository[]> {
+    return this.paginate(
+      'GET /user/repos',
+      { affiliation: 'owner', sort: 'full_name' },
+      RepositoryApi,
+    );
   }
 
   // Dépôts

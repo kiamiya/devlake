@@ -8,3 +8,6 @@ out/
 !.env.example
 *.log
 .DS_Store
+out/
+playwright-report/
+test-results/
