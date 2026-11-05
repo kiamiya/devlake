@@ -6,7 +6,7 @@ import { CockpitService } from './cockpit-service.js';
 import { openDatabase } from './db/database.js';
 import { seedFakeProjects } from './e2e-fixtures.js';
 import { createRepositories } from './db/repositories.js';
-import { registerIpc, serviceHandlers } from './ipc.js';
+import { registerDroppedFiles, registerIpc, serviceHandlers } from './ipc.js';
 import { ProjectsService } from './projects-service.js';
 import { CALLER_TEMPLATES } from './services/projects/caller-templates.js';
 import { ProjectCreationService } from './services/projects/creation-service.js';
@@ -117,6 +117,7 @@ async function start(): Promise<void> {
     serviceHandlers({ cockpit: service, projects, creation, context }),
     isTrustedUrl,
   );
+  registerDroppedFiles(ipcMain, context, isTrustedUrl);
 
   createWindow();
   await service.refreshGitHubStatus();

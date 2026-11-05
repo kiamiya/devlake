@@ -153,6 +153,12 @@ export function describeGitHubContract(
         expect(fake.state(ref).lfsUploads).toBe(2);
         expect(await port.uploadLfsObjects(ref, [])).toEqual([]);
         expect(fake.state(ref).lfs.get(pointers[0]?.oid ?? '')).toEqual(image);
+        expect(await port.downloadLfsObject(ref, pointers[1] ?? { oid: '', size: 0 })).toEqual(
+          other,
+        );
+        await expect(
+          port.downloadLfsObject(ref, { oid: 'f'.repeat(64), size: 1 }),
+        ).rejects.toSatisfy((e: unknown) => isGitHubError(e, 'not-found'));
       });
     });
 

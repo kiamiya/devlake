@@ -9,7 +9,15 @@ import { ProjectsService } from './projects-service.js';
 import { ProjectCreationService } from './services/projects/creation-service.js';
 import { ContextService } from './services/ingestion/context-service.js';
 import { defaultRegistry } from './services/ingestion/registry.js';
-import { dispatchIpc, registerIpc, serviceHandlers, toIpcError, type IpcMainLike } from './ipc.js';
+import {
+  dispatchIpc,
+  handleDroppedFiles,
+  registerDroppedFiles,
+  registerIpc,
+  serviceHandlers,
+  toIpcError,
+  type IpcMainLike,
+} from './ipc.js';
 import { MemoryVault, VaultUnavailableError } from './vault.js';
 
 /** Faux jeton de test, sans valeur réelle. */
@@ -31,8 +39,18 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
   const github = options.github ?? new FakeGitHub({ actor: 'kiamiya' });
   const service = new CockpitService({ repos, vault, github: () => github });
   const projects = new ProjectsService(repos, () => service.githubPort());
+  const context = new ContextService({
+    repos,
+    github: () => service.githubPort(),
+    registry: defaultRegistry(),
+    pickFiles: () => Promise.resolve(picked),
+    // Chaque faux fichier contient un titre Markdown tiré de son chemin.
+    readFile: (path) => Promise.resolve(new TextEncoder().encode(['# ' + path, ''].join('\n'))),
+    fileSize: () => Promise.resolve(10),
+  });
   return {
     service,
+    context,
     handlers: serviceHandlers({
       cockpit: service,
       projects,
@@ -43,18 +61,7 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
         projects,
         callerTemplates: { 'agentlake-x.yml': 'uses: __DEVLAKE_REPOSITORY__@__DEVLAKE_REF__' },
       }),
-      context: new ContextService({
-        repos,
-        github: () => service.githubPort(),
-        registry: defaultRegistry(),
-        pickFiles: () => Promise.resolve(picked),
-        readFile: (path) =>
-          Promise.resolve(
-            new TextEncoder().encode(`# ${path}
-`),
-          ),
-        fileSize: () => Promise.resolve(10),
-      }),
+      context,
     }),
     vault,
     repos,
@@ -363,10 +370,13 @@ describe('IPC — contexte du projet', () => {
       await dispatchIpc(handlers, 'context:list', { projectId: 'kiamiya/site' }),
     ).toMatchObject({
       ok: true,
-      data: [
-        { path: '.agentlake/context/annexes/annexe.md', role: 'annex' },
-        { path: '.agentlake/context/brief.md', role: 'brief' },
-      ],
+      data: {
+        entries: [
+          { path: '.agentlake/context/annexes/annexe.md', role: 'annex' },
+          { path: '.agentlake/context/brief.md', role: 'brief' },
+        ],
+        planValidatedAt: null,
+      },
     });
     // Un identifiant ne sert qu'une fois.
     expect(
@@ -408,5 +418,120 @@ describe('IPC — contexte du projet', () => {
       ok: false,
       error: { code: 'UNKNOWN_PROJECT' },
     });
+  });
+});
+
+describe('IPC — bibliothèque du contexte', () => {
+  async function withDocuments() {
+    const env = setup();
+    env.github.seedRepository({ owner: 'kiamiya', repo: 'site' });
+    await env.github.commitFiles(
+      { owner: 'kiamiya', repo: 'site' },
+      {
+        branch: 'main',
+        message: 'p',
+        changes: [{ path: '.agentlake/project.yml', content: 'type: web\n' }],
+      },
+    );
+    await dispatchIpc(env.handlers, 'token:set', { token: FAKE_TOKEN });
+    await dispatchIpc(env.handlers, 'projects:open', { owner: 'kiamiya', repo: 'site' });
+    const dropped = await handleDroppedFiles(env.context, {
+      projectId: 'kiamiya/site',
+      paths: ['C:/docs/a.md', 'C:/docs/b.md'],
+    });
+    if (!dropped.ok) throw new Error(dropped.error.message);
+    const tokens = (dropped.data as { files: { token: string }[] }).files.map((f) => f.token);
+    return { ...env, tokens };
+  }
+
+  it('enregistre des fichiers déposés et les prévisualise avant versement', async () => {
+    const { handlers, tokens } = await withDocuments();
+    const previews = await dispatchIpc(handlers, 'context:preview-staged', {
+      projectId: 'kiamiya/site',
+      tokens,
+    });
+    expect(previews).toMatchObject({
+      ok: true,
+      data: [
+        { token: tokens[0], markdown: '# C:/docs/a.md\n' },
+        { token: tokens[1], markdown: '# C:/docs/b.md\n' },
+      ],
+    });
+  });
+
+  it('change le rôle, annote, prévisualise et retire un document versé', async () => {
+    const { handlers, tokens } = await withDocuments();
+    await dispatchIpc(handlers, 'context:import', {
+      projectId: 'kiamiya/site',
+      files: tokens.map((token) => ({ token, role: 'annex' })),
+      acknowledgePublic: true,
+    });
+    const projectId = 'kiamiya/site';
+    const a = '.agentlake/context/annexes/a.md';
+    expect(
+      await dispatchIpc(handlers, 'context:set-role', { projectId, path: a, role: 'brief' }),
+    ).toMatchObject({
+      ok: true,
+      data: { commitSha: expect.any(String) as string },
+    });
+    const brief = '.agentlake/context/brief.md';
+    expect(
+      await dispatchIpc(handlers, 'context:set-note', { projectId, path: brief, note: 'Validé' }),
+    ).toMatchObject({ ok: true });
+    expect(
+      await dispatchIpc(handlers, 'context:preview', { projectId, path: brief }),
+    ).toMatchObject({
+      ok: true,
+      data: { markdown: '# C:/docs/a.md\n', images: {}, warnings: [] },
+    });
+    expect(await dispatchIpc(handlers, 'context:remove', { projectId, path: brief })).toMatchObject(
+      { ok: true },
+    );
+    expect(await dispatchIpc(handlers, 'context:list', { projectId })).toMatchObject({
+      data: { entries: [{ path: '.agentlake/context/annexes/b.md' }] },
+    });
+    expect(await dispatchIpc(handlers, 'context:remove', { projectId, path: brief })).toMatchObject(
+      {
+        ok: false,
+        error: { code: 'UNKNOWN_DOCUMENT' },
+      },
+    );
+    expect(await dispatchIpc(handlers, 'context:decisions', { projectId })).toEqual({
+      ok: true,
+      data: { content: null },
+    });
+  });
+
+  it('valide le canal des fichiers déposés et n’accepte que l’interface du cockpit', async () => {
+    const { context } = await withDocuments();
+    expect(
+      await handleDroppedFiles(context, { projectId: 'kiamiya/site', paths: [] }),
+    ).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_INPUT', message: 'Aucun fichier déposé.' },
+    });
+    expect(
+      await handleDroppedFiles(context, { projectId: 'kiamiya/absent', paths: ['a.md'] }),
+    ).toMatchObject({
+      ok: false,
+      error: { code: 'UNKNOWN_PROJECT' },
+    });
+
+    let listener: Parameters<IpcMainLike['handle']>[1] | undefined;
+    registerDroppedFiles({ handle: (_c, l) => (listener = l) }, context, (url) =>
+      url.startsWith('file://'),
+    );
+    expect(
+      await listener?.({ senderFrame: { url: 'https://malveillant.example' } }, {}),
+    ).toMatchObject({
+      ok: false,
+      error: { code: 'FORBIDDEN_SENDER' },
+    });
+    expect(
+      await listener?.(
+        { senderFrame: { url: 'file:///app/renderer/index.html' } },
+        { projectId: 'kiamiya/site', paths: ['x.md'] },
+      ),
+    ).toMatchObject({ ok: true });
   });
 });

@@ -21,6 +21,8 @@ export const ContextEntrySchema = z.object({
   sha256: z.string().regex(/^[0-9a-f]{64}$/, 'Empreinte SHA-256 invalide.'),
   size: z.number().int().min(0),
   importedAt: z.iso.datetime({ message: 'Date ISO 8601 attendue.' }),
+  /** Note libre de Kia sur le document. */
+  note: z.string().max(2000, 'Note trop longue (2 000 caractères au plus).').optional(),
 });
 export type ContextEntry = z.infer<typeof ContextEntrySchema>;
 

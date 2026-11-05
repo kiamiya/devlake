@@ -54,7 +54,7 @@ export class InvalidContextIndexError extends Error {
   }
 }
 
-function slug(name: string): string {
+export function slug(name: string): string {
   const base = basename(name, extname(name))
     .normalize('NFD')
     .replace(/[^\p{ASCII}]/gu, (c) => (/\p{Diacritic}/u.test(c) ? '' : c))

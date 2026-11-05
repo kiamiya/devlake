@@ -350,6 +350,14 @@ export class FakeGitHub implements GitHubPort {
     });
   }
 
+  downloadLfsObject(ref: RepoRef, pointer: LfsPointer): Promise<Uint8Array> {
+    return this.run(() => {
+      const data = this.state(ref).lfs.get(pointer.oid);
+      if (!data) throw notFound(`objet LFS ${pointer.oid}`);
+      return new Uint8Array(data);
+    });
+  }
+
   // Issues, labels, commentaires
 
   private publicIssue(issue: FakeIssue): Issue {

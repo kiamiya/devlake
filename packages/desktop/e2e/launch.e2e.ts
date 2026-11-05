@@ -12,9 +12,9 @@ import { fileURLToPath } from 'node:url';
 
 // Sans séparateur final : sous Windows, « …\" » échapperait le guillemet de l'argument.
 const appDir = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const BRIEF_DOCX = fileURLToPath(
-  new URL('../src/main/services/ingestion/__fixtures__/brief.docx', import.meta.url),
-);
+const fixture = (name: string) =>
+  fileURLToPath(new URL(`../src/main/services/ingestion/__fixtures__/${name}`, import.meta.url));
+const BRIEF_DOCX = fixture('brief.docx');
 
 /** Faux jeton de test, sans valeur réelle. */
 const FAKE_TOKEN = 'ghp_e2eJetonDeTest1234'; // gitleaks:allow
@@ -224,7 +224,7 @@ test.describe('cockpit', () => {
       await page.getByRole('button', { name: 'Choisir des fichiers' }).click();
       await page.getByLabel('Rôle de brief.docx').selectOption('brief');
       await expect(page.getByRole('note')).toContainText('public');
-      const send = page.getByRole('button', { name: 'Verser dans le dépôt' });
+      const send = page.getByRole('button', { name: 'Verser 1 fichier' });
       await expect(send).toBeDisabled();
       await page.getByLabel('Je confirme que ces documents peuvent être publics.').check();
       await send.click();
@@ -238,6 +238,59 @@ test.describe('cockpit', () => {
         await expect(page.getByRole('status')).toContainText('déjà importé');
       }
     }
+    await app.close();
+  });
+
+  test('bibliothèque : cinq fichiers déposés d’un coup, prévisualisés et versés en un commit', async () => {
+    const { app, page } = await launch(userData);
+    await saveToken(page);
+    await page.keyboard.press('Control+1');
+    await page.getByRole('button', { name: 'Ouvrir un dépôt existant' }).click();
+    await page.getByRole('button', { name: 'Ouvrir site' }).click();
+    await expect(page.getByTestId('drop-zone')).toBeVisible();
+
+    // Vrai glisser-déposer : des File adossés aux fichiers du disque (comme depuis l'explorateur),
+    // portés par un DataTransfer jusqu'à l'événement drop de la zone.
+    const names = ['brief.docx', 'annexe.pdf', 'page.html', 'notes.md', 'logo.png'];
+    await page.evaluate(() => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.multiple = true;
+      input.id = 'e2e-source';
+      input.style.display = 'none';
+      document.body.append(input);
+    });
+    await page.setInputFiles('#e2e-source', names.map(fixture));
+    await page.evaluate(() => {
+      const input = document.getElementById('e2e-source') as HTMLInputElement;
+      const transfer = new DataTransfer();
+      for (const file of Array.from(input.files ?? [])) transfer.items.add(file);
+      const zone = document.querySelector('[data-testid=drop-zone]');
+      zone?.dispatchEvent(new DragEvent('dragover', { dataTransfer: transfer, bubbles: true }));
+      zone?.dispatchEvent(new DragEvent('drop', { dataTransfer: transfer, bubbles: true }));
+    });
+
+    const staged = page.getByRole('list', { name: 'Fichiers à verser' }).getByRole('listitem');
+    await expect(staged).toHaveCount(5);
+    for (const name of names) {
+      await expect(page.getByRole('article', { name: `Aperçu de ${name}` })).toBeVisible();
+    }
+    await expect(
+      page.getByRole('article', { name: 'Aperçu de brief.docx' }).getByRole('table'),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('article', { name: 'Aperçu de logo.png' }).getByRole('img'),
+    ).toBeVisible();
+
+    await page.getByLabel('Rôle de brief.docx').selectOption('brief');
+    await page.getByLabel('Je confirme que ces documents peuvent être publics.').check();
+    await page.getByRole('button', { name: 'Verser 5 fichiers' }).click();
+    await expect(page.getByRole('status')).toContainText('5 documents versés en un commit.');
+
+    const documents = page.getByRole('list', { name: 'Documents versés' }).getByRole('listitem');
+    await expect(documents).toHaveCount(5);
+    await page.getByRole('button', { name: 'Aperçu' }).first().click();
+    await expect(page.getByRole('article', { name: 'Aperçu du document' })).toBeVisible();
     await app.close();
   });
 });

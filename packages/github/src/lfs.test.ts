@@ -2,7 +2,7 @@ import { http, HttpResponse, type RequestHandler } from 'msw';
 import { describe, expect, it } from 'vitest';
 import { GitHubError } from './errors.js';
 import { DEFAULT_RETRY_OPTIONS, type Clock } from './http.js';
-import { LfsClient, lfsPointerOf, lfsPointerText } from './lfs.js';
+import { LfsClient, lfsPointerOf, lfsPointerText, parseLfsPointer } from './lfs.js';
 import { mswFetch } from './testing/msw-fetch.js';
 
 const ref = { owner: 'kiamiya', repo: 'demo' };
@@ -38,6 +38,19 @@ describe('pointeurs LFS', () => {
     expect(lfsPointerText(pointer)).toBe(
       'version https://git-lfs.github.com/spec/v1\noid sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\nsize 3\n',
     );
+  });
+});
+
+describe('lecture des pointeurs', () => {
+  it('relit un pointeur et refuse un texte quelconque', () => {
+    const pointer = lfsPointerOf(new TextEncoder().encode('abc'));
+    expect(parseLfsPointer(lfsPointerText(pointer))).toEqual(pointer);
+    expect(parseLfsPointer(['# Titre', ''].join(String.fromCharCode(10)))).toBeNull();
+    expect(
+      parseLfsPointer(
+        ['version https://git-lfs.github.com/spec/v1', 'size 3', ''].join(String.fromCharCode(10)),
+      ),
+    ).toBeNull();
   });
 });
 

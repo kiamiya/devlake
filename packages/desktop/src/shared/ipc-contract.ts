@@ -86,6 +86,31 @@ export const DepositResultSchema = z.object({
 });
 export type DepositResultView = z.infer<typeof DepositResultSchema>;
 
+const ChosenFilesSchema = z.object({
+  files: z.array(z.object({ token: z.string(), name: z.string(), size: z.number() })),
+  repositoryPrivate: z.boolean(),
+});
+export type ChosenFilesView = z.infer<typeof ChosenFilesSchema>;
+
+export const PreviewSchema = z.object({
+  markdown: z.string(),
+  images: z.record(z.string(), z.string()),
+  warnings: z.array(z.string()),
+});
+export type PreviewView = z.infer<typeof PreviewSchema>;
+
+const DocumentRefSchema = z.object({ projectId: z.string(), path: z.string() });
+const CommitSchema = z.object({ commitSha: z.string().nullable() });
+
+/** Entrée du canal réservé au preload (fichiers déposés). */
+export const DroppedFilesSchema = z.object({
+  projectId: z.string(),
+  paths: z
+    .array(z.string().min(1))
+    .min(1, 'Aucun fichier déposé.')
+    .max(50, 'Au plus 50 fichiers à la fois.'),
+});
+
 /** Contrat de chaque canal : entrée et sortie validées des deux côtés. */
 export const IPC_CONTRACT = {
   'settings:get': { input: NoInput, output: SettingsSchema },
@@ -119,13 +144,7 @@ export const IPC_CONTRACT = {
     input: CreateProjectSchema,
     output: z.object({ project: ProjectSummarySchema, report: BootstrapReportSchema }),
   },
-  'context:choose-files': {
-    input: z.object({ projectId: z.string() }),
-    output: z.object({
-      files: z.array(z.object({ token: z.string(), name: z.string(), size: z.number() })),
-      repositoryPrivate: z.boolean(),
-    }),
-  },
+  'context:choose-files': { input: z.object({ projectId: z.string() }), output: ChosenFilesSchema },
   'context:import': {
     input: z.object({
       projectId: z.string(),
@@ -140,7 +159,30 @@ export const IPC_CONTRACT = {
   },
   'context:list': {
     input: z.object({ projectId: z.string() }),
-    output: z.array(ContextEntrySchema),
+    output: z.object({
+      entries: z.array(ContextEntrySchema),
+      planValidatedAt: z.string().nullable(),
+    }),
+  },
+  'context:preview': { input: DocumentRefSchema, output: PreviewSchema },
+  'context:preview-staged': {
+    input: z.object({ projectId: z.string(), tokens: z.array(z.string()) }),
+    output: z.array(PreviewSchema.extend({ token: z.string() })),
+  },
+  'context:set-role': {
+    input: DocumentRefSchema.extend({ role: z.enum(['brief', 'gdd', 'annex']) }),
+    output: CommitSchema,
+  },
+  'context:set-note': {
+    input: DocumentRefSchema.extend({
+      note: z.string().max(2000, 'Note trop longue (2 000 caractères au plus).'),
+    }),
+    output: CommitSchema,
+  },
+  'context:remove': { input: DocumentRefSchema, output: CommitSchema },
+  'context:decisions': {
+    input: z.object({ projectId: z.string() }),
+    output: z.object({ content: z.string().nullable() }),
   },
   'projects:bootstrap': {
     input: z.object({ projectId: z.string() }),

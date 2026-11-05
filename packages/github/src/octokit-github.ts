@@ -361,6 +361,10 @@ export class OctokitGitHub implements GitHubPort {
     return this.lfs.upload(ref, files);
   }
 
+  async downloadLfsObject(ref: RepoRef, pointer: LfsPointer): Promise<Uint8Array> {
+    return this.lfs.download(ref, pointer);
+  }
+
   // Issues, labels, commentaires
 
   async createIssue(ref: RepoRef, input: CreateIssueInput): Promise<Issue> {

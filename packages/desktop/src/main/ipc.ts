@@ -1,13 +1,14 @@
 import { isGitHubError } from 'github';
 import type { z } from 'zod';
 import {
+  DROPPED_FILES_CHANNEL,
   IPC_CHANNELS,
   isIpcChannel,
   type IpcChannel,
   type IpcErrorPayload,
   type IpcResult,
 } from '../shared/channels.js';
-import { IPC_CONTRACT } from '../shared/ipc-contract.js';
+import { DroppedFilesSchema, IPC_CONTRACT } from '../shared/ipc-contract.js';
 import { NoTokenError, type CockpitService } from './cockpit-service.js';
 import { NotAProjectError, UnknownProjectError, type ProjectsService } from './projects-service.js';
 import { BootstrapStepError, ClaudeTokenMissingError } from './services/projects/bootstrap.js';
@@ -17,6 +18,7 @@ import {
   UnknownFileError,
   type ContextService,
 } from './services/ingestion/context-service.js';
+import { UnknownDocumentError } from './services/ingestion/context-ops.js';
 import { FileTooLargeError, InvalidContextIndexError } from './services/ingestion/deposit.js';
 import { UnsupportedFormatError } from './services/ingestion/types.js';
 import { VaultUnavailableError } from './vault.js';
@@ -58,6 +60,25 @@ export function serviceHandlers(services: {
       context.chooseFiles(input('context:choose-files', value).projectId),
     'context:import': (value) => context.import(input('context:import', value)),
     'context:list': (value) => context.list(input('context:list', value).projectId),
+    'context:preview': (value) => {
+      const { projectId, path } = input('context:preview', value);
+      return context.preview(projectId, path);
+    },
+    'context:preview-staged': (value) =>
+      context.previewStaged(input('context:preview-staged', value).tokens),
+    'context:set-role': (value) => {
+      const { projectId, path, role } = input('context:set-role', value);
+      return context.setRole(projectId, path, role);
+    },
+    'context:set-note': (value) => {
+      const { projectId, path, note } = input('context:set-note', value);
+      return context.setNote(projectId, path, note);
+    },
+    'context:remove': (value) => {
+      const { projectId, path } = input('context:remove', value);
+      return context.remove(projectId, path);
+    },
+    'context:decisions': (value) => context.decisions(input('context:decisions', value).projectId),
     'projects:bootstrap': (value) =>
       creation.rebootstrap(input('projects:bootstrap', value).projectId),
   };
@@ -81,6 +102,7 @@ export function toIpcError(error: unknown): IpcErrorPayload {
     [FileTooLargeError, 'FILE_TOO_LARGE'],
     [UnsupportedFormatError, 'UNSUPPORTED_FORMAT'],
     [InvalidContextIndexError, 'INVALID_CONTEXT_INDEX'],
+    [UnknownDocumentError, 'UNKNOWN_DOCUMENT'],
   ];
   for (const [type, code] of known)
     if (error instanceof type) return { code, message: error.message };
@@ -155,4 +177,45 @@ export function registerIpc(
       return dispatchIpc(handlers, channel, input);
     });
   }
+}
+
+/** Canal réservé au preload : fichiers déposés dans le cockpit (chemins issus de webUtils). */
+export async function handleDroppedFiles(
+  context: ContextService,
+  raw: unknown,
+): Promise<IpcResult<unknown>> {
+  const parsed = DroppedFilesSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: {
+        code: 'INVALID_INPUT',
+        message: parsed.error.issues.map((i) => i.message).join('\n'),
+      },
+    };
+  }
+  try {
+    return {
+      ok: true,
+      data: await context.registerDropped(parsed.data.projectId, parsed.data.paths),
+    };
+  } catch (error) {
+    return { ok: false, error: toIpcError(error) };
+  }
+}
+
+export function registerDroppedFiles(
+  ipcMain: IpcMainLike,
+  context: ContextService,
+  isTrustedUrl: (url: string) => boolean,
+): void {
+  ipcMain.handle(DROPPED_FILES_CHANNEL, (event, input) => {
+    if (!isTrustedUrl(event.senderFrame?.url ?? '')) {
+      return {
+        ok: false,
+        error: { code: 'FORBIDDEN_SENDER', message: 'Appel IPC refusé : origine non autorisée.' },
+      };
+    }
+    return handleDroppedFiles(context, input);
+  });
 }
