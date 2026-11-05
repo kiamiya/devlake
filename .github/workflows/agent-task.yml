@@ -126,6 +126,9 @@ jobs:
         id: prepare
         env:
           GH_TOKEN: ${{ github.token }}
+          # Pont Aura (profils Unity et Unreal) : URL du tunnel, variable du projet.
+          # Le jeton signé AURA_BRIDGE_TOKEN sera produit ici avec le pont (T17).
+          AURA_BRIDGE_URL: ${{ vars.AURA_BRIDGE_URL }}
         run: node "$RUNTIME/packages/dispatcher/dist/agent-context/cli.js" prepare
 
       - name: Claude Code
