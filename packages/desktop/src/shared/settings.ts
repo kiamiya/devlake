@@ -31,6 +31,8 @@ export const SettingsSchema = z.object({
     .int('Le nombre de tentatives doit être un entier.')
     .min(1, 'Il faut au moins une tentative.')
     .max(10, 'Au plus 10 tentatives.'),
+  /** Modèle du planificateur ; sans réglage, le cockpit refuse de le lancer. */
+  plannerModel: z.string().trim().min(1, 'Modèle vide.').nullable(),
   /** Modèle Claude par profil ; aucun modèle n'est codé en dur. */
   modelsByProfile: z.partialRecord(ProfileIdSchema, z.string().trim().min(1, 'Modèle vide.')),
   /** Dossier des clones dédiés à l'éditeur Unity/Unreal. */
@@ -54,6 +56,7 @@ export const DEFAULT_SETTINGS: Settings = {
   githubAccount: 'kiamiya',
   maxConcurrentAgents: 3,
   maxAttempts: 3,
+  plannerModel: null,
   modelsByProfile: {},
   editorClonesDir: null,
   workflowsVersion: 'v1',

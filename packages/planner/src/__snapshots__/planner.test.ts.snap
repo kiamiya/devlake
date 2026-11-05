@@ -1,0 +1,66 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`prompts > rend la clarification et la découpe (régression) 1`] = `
+"# Phase 1 : questions de clarification
+
+Projet : kiamiya/projet (web)
+
+## Projet web (React, Supabase, Vercel)
+
+- Tests : Vitest et Testing Library, pgTAP pour les règles RLS, Playwright pour les parcours et la régression visuelle ; accessibilité (axe).
+- Séparer schéma de données et migrations (profil \`data\`, ressource exclusive \`migrations\`), API et logique métier (\`backend\`), interface (\`frontend\`).
+
+
+## Documents du projet
+
+- \`brief.md\`
+
+## Consigne
+
+Lis tous les documents ci-dessus. Liste les questions dont les réponses changent la découpe en tâches : périmètre, choix techniques imposés, priorités, contraintes, critères de réussite.
+
+- Une question est **bloquante** si aucun plan raisonnable n'est possible sans sa réponse ; sinon elle ne l'est pas, et tu proposes un choix par défaut dans ses options.
+- Propose des options courtes quand c'est possible.
+- Ne pose pas de question dont la réponse figure dans les documents.
+- S'il n'y a aucune question utile, renvoie une liste vide.
+"
+`;
+
+exports[`prompts > rend la clarification et la découpe (régression) 2`] = `
+"# Phase 2 : découpe en tâches
+
+Projet : kiamiya/projet (unity)
+
+## Jeu Unity
+
+- Les tâches qui touchent scènes, prefabs ou assets passent par l'éditeur via le pont Aura : profil \`unity\`, ressource exclusive \`editor-unity\` (un seul éditeur à la fois).
+- Tests : Unity Test Framework en EditMode et PlayMode, scènes de test automatisées, build joueur (GameCI).
+- Séparer le gameplay en C# testable des tâches d'assemblage dans l'éditeur.
+
+
+## Documents du projet
+
+- \`gdd.md\`
+
+## Questions et réponses du cadrage
+
+- **C1** Vue ?
+  → Dessus
+
+## Consigne de Kia
+
+_Aucune consigne particulière._
+
+## Règles du plan
+
+- La première tâche (\`T00\`) est le bootstrap du dépôt par le profil \`architect\`, sans dépendance : structure, conventions, CI complète.
+- Identifiants stables \`Txx\` (deux chiffres au moins), uniques ; dépendances existantes et sans cycle.
+- Chaque tâche est réalisable par un agent en une PR : objectif clair, critères d'acceptation vérifiables, zones de code.
+- Chaque tâche de type \`code\` exige au moins un test ; catégories de tests : unit, e2e.
+- Profils possibles : architect, unity. Retiens seulement les profils utiles, chacun avec une justification ; chaque tâche utilise un profil retenu.
+- Ressources exclusives : une même ressource (éditeur, migrations…) n'est utilisée que par une tâche à la fois.
+- Découpe par zones de code pour limiter les conflits entre tâches parallèles.
+- Épopées et jalons facultatifs ; une tâche ne renvoie qu'à une épopée ou un jalon défini.
+- Ne fixe pas le nombre d'agents : il est calculé à partir du graphe.
+"
+`;

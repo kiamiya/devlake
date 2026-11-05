@@ -23,6 +23,8 @@ export const AnswerSchema = z.object({
   /** Promue dans `.agentlake/decisions.md` (case cochée par défaut). */
   decision: z.boolean({ error: 'decision doit valoir true ou false.' }),
   text: cleanText('La réponse'),
+  /** Question écartée par Kia : elle ne bloque plus le planificateur. */
+  ignored: z.literal(true).optional(),
 });
 export type Answer = z.infer<typeof AnswerSchema>;
 
@@ -109,7 +111,8 @@ export function parseQuestionComment(body: string): ParseResult<Question> {
 }
 
 export function renderAnswerComment(answer: Answer): string {
-  return `<!-- agentlake:answer id=${answer.id} decision=${String(answer.decision)} -->\n${answer.text}\n`;
+  const ignored = answer.ignored ? ' ignored=true' : '';
+  return `<!-- agentlake:answer id=${answer.id} decision=${String(answer.decision)}${ignored} -->\n${answer.text}\n`;
 }
 
 /**
@@ -125,9 +128,14 @@ export function parseAnswerComment(body: string): ParseResult<Answer> {
   const attributes = parseAttributes(header[1] ?? '');
   const decision = parseBoolean(attributes.get('decision'), 'decision');
   if (!decision.ok) return decision;
+  const ignored = parseBoolean(attributes.get('ignored'), 'ignored');
+  if (!ignored.ok) return ignored;
+  const content = text.slice(header[0].length).trim();
   return safeParseWith(AnswerSchema, {
     id: attributes.get('id'),
     decision: decision.value ?? true,
-    text: text.slice(header[0].length).trim(),
+    // Une question ignorée n'a pas forcément de texte de réponse.
+    text: content === '' && ignored.value === true ? 'Question ignorée.' : content,
+    ...(ignored.value === true ? { ignored: true } : {}),
   });
 }

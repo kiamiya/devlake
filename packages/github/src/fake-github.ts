@@ -297,11 +297,16 @@ export class FakeGitHub implements GitHubPort {
 
   // Fichiers
 
+  branchExists(ref: RepoRef, branch: string): Promise<boolean> {
+    return this.run(() => this.state(ref).branches.has(branch));
+  }
+
   getFile(ref: RepoRef, path: string, branch?: string): Promise<FileContent | null> {
     return this.run(() => {
       const state = this.state(ref);
       const target = state.branches.get(branch ?? state.repository.defaultBranch);
-      if (!target) throw notFound(`branche ${branch ?? ''}`);
+      // Comme l'API : une branche absente donne un 404, lu comme « fichier absent ».
+      if (!target) return null;
       const content = target.files.get(path);
       if (content === undefined) return null;
       return {

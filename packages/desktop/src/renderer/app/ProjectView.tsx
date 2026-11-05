@@ -1,5 +1,6 @@
 import { Button } from '../components/ui/button.js';
 import { ContextSection } from '../features/context/ContextSection.js';
+import { PlanSection } from '../features/plan/PlanSection.js';
 import { useRebootstrap } from '../hooks/projects.js';
 import { cn } from '../lib/utils.js';
 import { BootstrapSteps } from './NewProjectWizard.js';
@@ -66,6 +67,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
         <h1 className="mb-2 text-xl font-semibold">{SECTION_LABELS[section]}</h1>
         {section === 'context' ? (
           <ContextSection projectId={projectId} />
+        ) : section === 'plan' ? (
+          <PlanSection projectId={projectId} />
         ) : (
           <p className="text-sm text-muted-foreground">Vue à venir.</p>
         )}

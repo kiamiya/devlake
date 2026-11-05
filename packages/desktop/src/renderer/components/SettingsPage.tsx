@@ -198,6 +198,16 @@ function SettingsForm({ initial }: { initial: Settings }) {
         <CardDescription>
           Aucun modèle n’est imposé : laisser vide tant qu’un profil n’est pas utilisé.
         </CardDescription>
+        <div className="mb-4 flex flex-col gap-2 md:w-1/3">
+          <Label htmlFor="plannerModel">Modèle du planificateur</Label>
+          <Input
+            id="plannerModel"
+            value={form.plannerModel ?? ''}
+            onChange={(e) => {
+              set('plannerModel', e.target.value.trim() === '' ? null : e.target.value);
+            }}
+          />
+        </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {PROFILE_IDS.map((profile) => (
             <div key={profile} className="flex flex-col gap-2">

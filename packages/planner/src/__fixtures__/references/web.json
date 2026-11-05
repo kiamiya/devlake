@@ -1,0 +1,120 @@
+{
+  "type": "web",
+  "brief": "# Brief — Réservations de salon\n\nApplication web pour réserver un créneau de coiffure. Comptes clients, agenda des salons, rappels par e-mail. Supabase et Vercel.",
+  "questions": {
+    "questions": [
+      {
+        "blocking": true,
+        "text": "Les salons gèrent-ils eux-mêmes leur agenda dans l'application ?",
+        "options": ["Oui, espace salon", "Non, import d'un agenda existant"]
+      },
+      {
+        "blocking": false,
+        "text": "Faut-il un paiement en ligne ?",
+        "options": ["Non pour la V1", "Oui"]
+      }
+    ]
+  },
+  "plan": {
+    "summary": "Application de réservation : comptes, agenda des salons, réservation, rappels.",
+    "assumptions": ["Pas de paiement en ligne en V1."],
+    "epics": [{ "id": "E1", "title": "Réservation" }],
+    "milestones": [{ "id": "J1", "title": "Première version" }],
+    "tasks": [
+      {
+        "id": "T00",
+        "title": "Bootstrap du dépôt",
+        "description": "Structure Vite + React, Supabase local, CI complète.",
+        "kind": "code",
+        "profile": "architect",
+        "complexity": "L",
+        "acceptanceCriteria": ["La CI tourne sur main"],
+        "requiredTests": { "unit": ["Test trivial"] },
+        "codeZones": ["/"],
+        "exclusiveResources": [],
+        "dependencies": [],
+        "milestone": "J1"
+      },
+      {
+        "id": "T01",
+        "title": "Schéma et règles RLS",
+        "description": "Tables salons, créneaux, réservations ; RLS.",
+        "kind": "code",
+        "profile": "data",
+        "complexity": "M",
+        "acceptanceCriteria": ["Un client ne voit que ses réservations"],
+        "requiredTests": { "integration": ["pgTAP sur les RLS"] },
+        "codeZones": ["supabase/"],
+        "exclusiveResources": ["migrations"],
+        "dependencies": ["T00"],
+        "epic": "E1",
+        "milestone": "J1"
+      },
+      {
+        "id": "T02",
+        "title": "Authentification",
+        "description": "Inscription et connexion par e-mail.",
+        "kind": "code",
+        "profile": "frontend",
+        "complexity": "M",
+        "acceptanceCriteria": ["Un client se connecte"],
+        "requiredTests": { "unit": ["Formulaire"], "e2e": ["Parcours de connexion"] },
+        "codeZones": ["src/auth/"],
+        "exclusiveResources": [],
+        "dependencies": ["T00"],
+        "milestone": "J1"
+      },
+      {
+        "id": "T03",
+        "title": "Espace salon : agenda",
+        "description": "Le salon publie ses créneaux.",
+        "kind": "code",
+        "profile": "frontend",
+        "complexity": "M",
+        "acceptanceCriteria": ["Un créneau publié est visible"],
+        "requiredTests": { "unit": ["Agenda"], "e2e": ["Publication d'un créneau"] },
+        "codeZones": ["src/salon/"],
+        "exclusiveResources": [],
+        "dependencies": ["T01", "T02"],
+        "epic": "E1",
+        "milestone": "J1"
+      },
+      {
+        "id": "T04",
+        "title": "Réservation d'un créneau",
+        "description": "Le client réserve un créneau libre.",
+        "kind": "code",
+        "profile": "frontend",
+        "complexity": "M",
+        "acceptanceCriteria": ["Un créneau réservé n'est plus libre"],
+        "requiredTests": { "unit": ["Réservation"], "e2e": ["Parcours de réservation"] },
+        "codeZones": ["src/booking/"],
+        "exclusiveResources": [],
+        "dependencies": ["T01", "T02"],
+        "epic": "E1",
+        "milestone": "J1"
+      },
+      {
+        "id": "T05",
+        "title": "Rappels par e-mail",
+        "description": "E-mail la veille du rendez-vous.",
+        "kind": "code",
+        "profile": "backend",
+        "complexity": "S",
+        "acceptanceCriteria": ["Un rappel part la veille"],
+        "requiredTests": { "unit": ["Calcul de la date de rappel"] },
+        "codeZones": ["supabase/functions/"],
+        "exclusiveResources": [],
+        "dependencies": ["T01"],
+        "milestone": "J1"
+      }
+    ],
+    "profiles": [
+      { "profile": "architect", "justification": "Bootstrap." },
+      { "profile": "data", "justification": "Schéma et RLS." },
+      { "profile": "frontend", "justification": "Interface." },
+      { "profile": "backend", "justification": "Fonctions planifiées." }
+    ]
+  },
+  "expectedAgents": 3
+}

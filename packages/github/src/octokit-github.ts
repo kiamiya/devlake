@@ -268,6 +268,19 @@ export class OctokitGitHub implements GitHubPort {
 
   // Fichiers
 
+  async branchExists(ref: RepoRef, branch: string): Promise<boolean> {
+    try {
+      await this.http.raw('GET /repos/{owner}/{repo}/branches/{branch}', {
+        ...repoParams(ref),
+        branch,
+      });
+      return true;
+    } catch (error) {
+      if (isGitHubError(error, 'not-found')) return false;
+      throw error;
+    }
+  }
+
   async getFile(ref: RepoRef, path: string, branch?: string): Promise<FileContent | null> {
     try {
       const file = await this.http.request(

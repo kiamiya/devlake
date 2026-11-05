@@ -2,6 +2,9 @@ import { PROFILE_IDS, type ProfileId } from './ids.js';
 
 export const TASK_LABEL = 'agentlake:task';
 
+/** Issue « Cadrage » : questions de clarification du planificateur. */
+export const CADRAGE_LABEL = 'agentlake:cadrage';
+
 export const TASK_STATES = [
   'queued',
   'ready',
@@ -59,6 +62,7 @@ export function parseProfileLabel(label: string): ProfileId | undefined {
 /** Tous les labels qu'AgentLake pose sur un dépôt. */
 export const ALL_LABELS: readonly string[] = [
   TASK_LABEL,
+  CADRAGE_LABEL,
   ...TASK_STATES.map(stateLabel),
   ...PROFILE_IDS.map(profileLabel),
 ];

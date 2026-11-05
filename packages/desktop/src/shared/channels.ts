@@ -32,6 +32,7 @@ export const IPC_CHANNELS = [
   'context:set-note',
   'context:remove',
   'context:decisions',
+  'planner:start',
 ] as const;
 
 /**

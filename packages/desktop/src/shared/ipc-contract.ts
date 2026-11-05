@@ -180,6 +180,17 @@ export const IPC_CONTRACT = {
     output: CommitSchema,
   },
   'context:remove': { input: DocumentRefSchema, output: CommitSchema },
+  'planner:start': {
+    input: z.object({
+      projectId: z.string(),
+      mode: z.enum(['auto', 'regenerate']),
+      instruction: z
+        .string()
+        .max(4000, 'Consigne trop longue (4 000 caractères au plus).')
+        .optional(),
+    }),
+    output: z.object({ dispatched: z.literal(true) }),
+  },
   'context:decisions': {
     input: z.object({ projectId: z.string() }),
     output: z.object({ content: z.string().nullable() }),

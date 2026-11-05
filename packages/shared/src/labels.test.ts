@@ -35,7 +35,7 @@ describe('labels', () => {
   });
 
   it('liste tous les labels sans doublon', () => {
-    expect(ALL_LABELS).toHaveLength(1 + TASK_STATES.length + PROFILE_IDS.length);
+    expect(ALL_LABELS).toHaveLength(2 + TASK_STATES.length + PROFILE_IDS.length);
     expect(new Set(ALL_LABELS).size).toBe(ALL_LABELS.length);
   });
 

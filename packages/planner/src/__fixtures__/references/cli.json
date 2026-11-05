@@ -1,0 +1,71 @@
+{
+  "type": "tool",
+  "brief": "# Brief — Outil de renommage de photos\n\nUn outil en ligne de commande qui renomme les photos d'un dossier selon leur date de prise de vue.",
+  "questions": { "questions": [] },
+  "plan": {
+    "summary": "Outil CLI de renommage par date EXIF.",
+    "assumptions": ["Node.js 24."],
+    "epics": [],
+    "milestones": [],
+    "tasks": [
+      {
+        "id": "T00",
+        "title": "Bootstrap",
+        "description": "Projet TypeScript, CI.",
+        "kind": "code",
+        "profile": "architect",
+        "complexity": "M",
+        "acceptanceCriteria": ["La CI tourne"],
+        "requiredTests": { "unit": ["Test trivial"] },
+        "codeZones": ["/"],
+        "exclusiveResources": [],
+        "dependencies": []
+      },
+      {
+        "id": "T01",
+        "title": "Lecture EXIF",
+        "description": "Lire la date de prise de vue.",
+        "kind": "code",
+        "profile": "backend",
+        "complexity": "S",
+        "acceptanceCriteria": ["La date est lue"],
+        "requiredTests": { "unit": ["Fixtures JPEG réelles"] },
+        "codeZones": ["src/exif/"],
+        "exclusiveResources": [],
+        "dependencies": ["T00"]
+      },
+      {
+        "id": "T02",
+        "title": "Commande rename",
+        "description": "Renommer avec un modèle de nom.",
+        "kind": "code",
+        "profile": "backend",
+        "complexity": "M",
+        "acceptanceCriteria": ["Les fichiers sont renommés"],
+        "requiredTests": { "e2e": ["CLI de bout en bout"], "regression": ["Sorties de référence"] },
+        "codeZones": ["src/cli/"],
+        "exclusiveResources": [],
+        "dependencies": ["T01"]
+      },
+      {
+        "id": "T03",
+        "title": "README",
+        "description": "Installation et usage.",
+        "kind": "docs",
+        "profile": "docs",
+        "complexity": "S",
+        "acceptanceCriteria": ["Le README décrit l'usage"],
+        "requiredTests": {},
+        "codeZones": ["README.md"],
+        "exclusiveResources": [],
+        "dependencies": ["T02"]
+      }
+    ],
+    "profiles": [
+      { "profile": "architect", "justification": "Bootstrap." },
+      { "profile": "backend", "justification": "Logique de l'outil." },
+      { "profile": "docs", "justification": "README." }
+    ]
+  },
+  "expectedAgents": 1
+}

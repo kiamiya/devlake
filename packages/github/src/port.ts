@@ -51,6 +51,7 @@ export interface GitHubPort {
   configureActionsPermissions(ref: RepoRef): Promise<void>;
 
   // Fichiers
+  branchExists(ref: RepoRef, branch: string): Promise<boolean>;
   getFile(ref: RepoRef, path: string, branch?: string): Promise<FileContent | null>;
   /** Plusieurs fichiers en un seul commit ; renvoie le SHA du commit. */
   commitFiles(ref: RepoRef, input: CommitFilesInput): Promise<string>;
