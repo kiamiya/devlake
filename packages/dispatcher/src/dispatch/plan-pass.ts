@@ -13,7 +13,9 @@ export interface TaskView {
   open: boolean;
   /** Label d'état ; null si aucun (issue fermée, ou label retiré à la main). */
   state: TaskState | null;
-  meta: DispatchMeta;
+  meta: Omit<DispatchMeta, 'resumes'> & { resumes?: number };
+  /** En attente de réponse et une réponse valide est arrivée (fil de questions). */
+  answered?: boolean;
 }
 
 /** Un run du workflow d'agent, relié à son issue par son titre. */
@@ -48,7 +50,7 @@ export interface PassInput {
   estimateMinutes: (task: TaskIssue) => number;
 }
 
-export type ResumeKind = 'none' | 'ci-failure';
+export type ResumeKind = 'none' | 'ci-failure' | 'answer';
 
 export type PassAction =
   | { kind: 'promote'; issue: number; taskId: string; from: TaskState }
@@ -176,7 +178,13 @@ export function planPass(input: PassInput): PassPlan {
   const candidates = input.tasks
     .filter((t) => {
       const state = effective.get(t.number);
-      return t.open && (state === 'ready' || state === 'waiting-editor' || state === 'fixing');
+      return (
+        t.open &&
+        (state === 'ready' ||
+          state === 'waiting-editor' ||
+          state === 'fixing' ||
+          (state === 'awaiting-answer' && t.answered === true))
+      );
     })
     .sort(
       (a, b) =>
@@ -194,7 +202,9 @@ export function planPass(input: PassInput): PassPlan {
   for (const view of candidates) {
     const state = effective.get(view.number) as TaskState;
     const label = `#${String(view.number)} ${view.task.id}`;
-    if (state === 'fixing' && view.meta.attempts >= input.limits.maxAttempts) {
+    // Les reprises après réponse ne sont pas des échecs : elles ne comptent pas.
+    const failures = view.meta.attempts - (view.meta.resumes ?? 0);
+    if (state === 'fixing' && failures >= input.limits.maxAttempts) {
       actions.push({
         kind: 'escalate',
         issue: view.number,
@@ -242,7 +252,7 @@ export function planPass(input: PassInput): PassPlan {
       taskId: view.task.id,
       profile: view.task.profile,
       attempt: view.meta.attempts + 1,
-      resume: state === 'fixing' ? 'ci-failure' : 'none',
+      resume: state === 'fixing' ? 'ci-failure' : state === 'awaiting-answer' ? 'answer' : 'none',
       from,
     });
     effective.set(view.number, 'running');

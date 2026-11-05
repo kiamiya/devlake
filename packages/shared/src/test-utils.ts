@@ -78,7 +78,7 @@ export function makeProjectConfig(overrides: Partial<ProjectConfig> = {}): Proje
   return {
     type: 'web',
     qualityProfile: 'web',
-    limits: { maxConcurrentAgents: 3, maxAttempts: 3 },
+    limits: { maxConcurrentAgents: 3, maxAttempts: 3, answerReminderHours: 24 },
     profiles: ['architect', 'frontend'],
     exclusiveResources: ['migrations'],
     bridgeRequired: false,

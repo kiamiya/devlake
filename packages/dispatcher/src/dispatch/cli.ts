@@ -15,6 +15,7 @@ import {
   readMinutesRemaining,
   type Fetch,
 } from './adapters.js';
+import { answerEventFrom, traceIgnoredAnswer } from '../questions/answers.js';
 import { runDispatch, type DispatchResult } from './dispatcher.js';
 
 const optional = z
@@ -59,13 +60,21 @@ export async function runDispatchCli(
 
   const payload: unknown =
     e.GITHUB_EVENT_PATH === null ? {} : JSON.parse(await deps.readText(e.GITHUB_EVENT_PATH));
+  const github = deps.github(e.GH_TOKEN);
+  // Toute réponse qui ne relance rien est tracée, y compris celle d'un autre compte.
+  const answer = e.GITHUB_EVENT_NAME === 'issue_comment' ? answerEventFrom(payload) : null;
+  if (answer !== null) {
+    const ignored = await traceIgnoredAnswer(github, ref, answer);
+    if (ignored !== null)
+      deps.log(`Réponse ignorée sur #${String(answer.issueNumber)} : ${ignored}.`);
+  }
+
   const filter = eventAllowed(e.GITHUB_EVENT_NAME, payload, ref.owner);
   if (!filter.allowed) {
     deps.log(`Passe annulée : ${filter.reason}`);
     return null;
   }
 
-  const github = deps.github(e.GH_TOKEN);
   const configToken = e.AGENTLAKE_CONFIG_TOKEN;
   const result = await runDispatch(ref, {
     github,

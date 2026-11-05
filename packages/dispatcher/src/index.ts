@@ -8,3 +8,6 @@ export * from './agent-context/resume.js';
 export * from './dispatch/adapters.js';
 export * from './dispatch/dispatcher.js';
 export * from './dispatch/plan-pass.js';
+export * from './questions/answers.js';
+export * from './questions/decisions.js';
+export * from './questions/thread.js';

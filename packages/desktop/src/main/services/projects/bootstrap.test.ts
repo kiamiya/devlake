@@ -87,7 +87,7 @@ describe('bootstrap d’un projet', () => {
     expect(config).toEqual({
       type: 'web',
       qualityProfile: 'web',
-      limits: { maxAttempts: 3 },
+      limits: { maxAttempts: 3, answerReminderHours: 24 },
       profiles: ['architect', 'reviewer'],
       exclusiveResources: [],
       bridgeRequired: false,

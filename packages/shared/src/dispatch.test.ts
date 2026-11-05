@@ -25,12 +25,13 @@ describe('métadonnées du dispatcher dans l’issue', () => {
   it('écrites en fin de corps, remplacées sans toucher à la tâche', () => {
     const once = writeDispatchMeta(body, { attempts: 1, launchedAt: '2026-11-05T12:00:00.000Z' });
     const twice = writeDispatchMeta(once, { attempts: 2, launchedAt: null });
-    expect(readDispatchMeta(twice)).toEqual({ attempts: 2, launchedAt: null });
+    expect(readDispatchMeta(twice)).toEqual({ attempts: 2, launchedAt: null, resumes: 0 });
     expect(twice.match(/agentlake:dispatch/g)).toHaveLength(1);
     expect(parseTaskIssueBody(twice)).toEqual(parseTaskIssueBody(body));
     expect(readDispatchMeta(twice.replaceAll('\n', '\r\n'))).toEqual({
       attempts: 2,
       launchedAt: null,
+      resumes: 0,
     });
   });
 });

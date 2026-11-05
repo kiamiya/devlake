@@ -103,6 +103,7 @@ export async function runPrepare(env: NodeJS.ProcessEnv, deps: CliDeps): Promise
       github: deps.github(e.GH_TOKEN),
       git: deps.git(e.GITHUB_WORKSPACE),
       readFile: (path) => deps.readText(join(e.GITHUB_WORKSPACE, path)),
+      writeFile: (path, content) => deps.writeText(join(e.GITHUB_WORKSPACE, path), content),
       token: e.GH_TOKEN,
     },
   );

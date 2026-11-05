@@ -15,6 +15,7 @@ import {
 } from 'shared';
 import { parse } from 'yaml';
 import { setTaskState } from '../agent-context/resume.js';
+import { readThread, reminderComment, reminderDue } from '../questions/thread.js';
 import {
   GAME_PROFILES,
   planPass,
@@ -137,6 +138,34 @@ export interface DispatchResult {
   applied: PassAction[];
 }
 
+/**
+ * Tâches en attente de réponse : marque celles dont la question a reçu une réponse valide
+ * (propriétaire, bon identifiant) et poste un rappel unique passé le délai, sans autre action.
+ */
+async function readQuestionThreads(
+  ref: RepoRef,
+  views: TaskView[],
+  reminderHours: number,
+  deps: DispatcherDeps,
+): Promise<void> {
+  for (const view of views) {
+    if (!view.open || view.state !== 'awaiting-answer') continue;
+    const thread = readThread(await deps.github.listComments(ref, view.number), ref.owner);
+    const label = `#${String(view.number)} ${view.task.id}`;
+    if (thread.answer !== null) {
+      view.answered = true;
+      deps.log(`${label} : réponse à ${thread.answer.id} reçue, reprise.`);
+    } else if (reminderDue(thread, deps.now(), reminderHours)) {
+      await deps.github.createComment(
+        ref,
+        view.number,
+        reminderComment(ref.owner, thread.pending.question, reminderHours),
+      );
+      deps.log(`${label} : rappel posté pour ${thread.pending.question.id}.`);
+    }
+  }
+}
+
 /** Une passe complète : lit l'état sur GitHub, décide, applique. */
 export async function runDispatch(ref: RepoRef, deps: DispatcherDeps): Promise<DispatchResult> {
   const { github, log } = deps;
@@ -150,6 +179,7 @@ export async function runDispatch(ref: RepoRef, deps: DispatcherDeps): Promise<D
   ]);
   if (global.note) log(global.note);
   if (minutes.note) log(minutes.note);
+  await readQuestionThreads(ref, views, limits.answerReminderHours, deps);
 
   const gameWaiting = views.some(
     (v) => v.open && GAME_PROFILES.includes(v.task.profile) && WAITING_STATES.includes(v.state),
@@ -241,7 +271,12 @@ async function launch(
 ): Promise<boolean> {
   const { github, log } = deps;
   const body = bodies.get(action.issue) ?? (await github.getIssue(ref, action.issue)).body;
-  const meta = { attempts: action.attempt, launchedAt: deps.now().toISOString() };
+  const previous = readDispatchMeta(body);
+  const meta = {
+    attempts: action.attempt,
+    launchedAt: deps.now().toISOString(),
+    resumes: previous.resumes + (action.resume === 'answer' ? 1 : 0),
+  };
   await setTaskState(github, ref, action.issue, 'running');
   await github.updateIssue(ref, action.issue, { body: writeDispatchMeta(body, meta) });
   try {

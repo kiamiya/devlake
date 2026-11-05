@@ -55,7 +55,9 @@ class Simulation {
         {
           path: PROJECT_CONFIG,
           content: stringify(
-            makeProjectConfig({ limits: { maxConcurrentAgents: cap, maxAttempts: 3 } }),
+            makeProjectConfig({
+              limits: { maxConcurrentAgents: cap, maxAttempts: 3, answerReminderHours: 24 },
+            }),
           ),
         },
       ],

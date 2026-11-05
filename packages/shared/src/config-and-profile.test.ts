@@ -33,7 +33,7 @@ describe('ProjectConfig', () => {
       value: {
         type: 'unity',
         qualityProfile: 'unity',
-        limits: { maxAttempts: 3 },
+        limits: { maxAttempts: 3, answerReminderHours: 24 },
         profiles: ['architect', 'unity'],
         exclusiveResources: [],
         bridgeRequired: true,

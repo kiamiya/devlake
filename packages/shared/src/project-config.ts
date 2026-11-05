@@ -19,6 +19,12 @@ export const ProjectConfigSchema = z.object({
       .int('Le nombre de tentatives doit être un entier.')
       .min(1, 'Il faut au moins une tentative.')
       .default(3),
+    /** Rappel d'une question sans réponse au bout de N heures (24 par défaut). */
+    answerReminderHours: z
+      .number()
+      .int('Le délai de rappel doit être un nombre entier d’heures.')
+      .min(1, 'Le délai de rappel doit être d’au moins une heure.')
+      .default(24),
   }),
   profiles: z
     .array(ProfileIdSchema)

@@ -92,12 +92,16 @@ describe('lecture et édition du plan', () => {
   it('modifie le plafond d’agents du projet dans project.yml', async () => {
     expect((await service.setProjectCap('kiamiya/site', 2)).limits).toEqual({
       maxAttempts: 3,
+      answerReminderHours: 24,
       maxConcurrentAgents: 2,
     });
     expect((await github.getFile(ref, '.agentlake/project.yml'))?.content).toContain(
       'maxConcurrentAgents: 2',
     );
-    expect((await service.setProjectCap('kiamiya/site', null)).limits).toEqual({ maxAttempts: 3 });
+    expect((await service.setProjectCap('kiamiya/site', null)).limits).toEqual({
+      maxAttempts: 3,
+      answerReminderHours: 24,
+    });
   });
 
   it('signale un plan illisible et un projet inconnu', async () => {
