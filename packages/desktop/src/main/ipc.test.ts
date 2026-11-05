@@ -117,6 +117,40 @@ describe('IPC — validation des canaux et des entrées', () => {
     });
   });
 
+  it('publie le plafond global dans devlake-config quand il change', async () => {
+    const { handlers, github, vault } = setup();
+    // Sans jeton GitHub : enregistré localement seulement.
+    expect(
+      await dispatchIpc(handlers, 'settings:update', { maxConcurrentAgents: 4 }),
+    ).toMatchObject({
+      ok: true,
+    });
+    const configRef = { owner: 'kiamiya', repo: 'devlake-config' };
+    await expect(github.getRepository(configRef)).rejects.toThrow();
+
+    await vault.set('github-token', FAKE_TOKEN);
+    await dispatchIpc(handlers, 'settings:update', { maxConcurrentAgents: 5 });
+    expect((await github.getRepository(configRef)).private).toBe(true);
+    expect((await github.getFile(configRef, 'config.yml'))?.content).toContain(
+      'maxConcurrentAgents: 5',
+    );
+    const commits = github.state(configRef).commits.size;
+    await dispatchIpc(handlers, 'settings:update', { maxAttempts: 4 });
+    await dispatchIpc(handlers, 'settings:update', { maxConcurrentAgents: 6 });
+    expect(github.state(configRef).commits.size).toBe(commits + 1);
+
+    vi.spyOn(github, 'commitFiles').mockRejectedValueOnce(new Error('réseau coupé.'));
+    const failed = await dispatchIpc(handlers, 'settings:update', { maxConcurrentAgents: 2 });
+    expect(failed).toMatchObject({
+      ok: false,
+      error: { code: 'GLOBAL_CONFIG_SYNC_FAILED' },
+    });
+    expect(JSON.stringify(failed)).toContain('Réglage enregistré dans le cockpit');
+    expect(await dispatchIpc(handlers, 'settings:get', undefined)).toMatchObject({
+      data: { maxConcurrentAgents: 2 },
+    });
+  });
+
   it('expose un gestionnaire pour chaque canal déclaré', () => {
     expect(Object.keys(setup().handlers).sort()).toEqual([...IPC_CHANNELS].sort());
   });

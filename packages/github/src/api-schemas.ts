@@ -157,6 +157,7 @@ const WorkflowRunObject = z
   .object({
     id: z.number(),
     name: z.string().nullish(),
+    display_title: z.string().nullish(),
     path: z.string(),
     status: z.string().nullable(),
     conclusion: z.string().nullable(),
@@ -168,6 +169,7 @@ const WorkflowRunObject = z
   .transform((r): WorkflowRun => ({
     id: r.id,
     name: r.name ?? '',
+    title: r.display_title ?? r.name ?? '',
     workflow: r.path.split('/').pop() ?? r.path,
     status: r.status ?? '',
     conclusion: r.conclusion,

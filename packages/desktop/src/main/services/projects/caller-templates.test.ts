@@ -36,9 +36,36 @@ describe('gabarits réels templates/caller', () => {
     },
   );
 
-  it('le dispatcher ignore les événements d’un autre auteur que le propriétaire', () => {
-    expect(files.get('.github/workflows/agentlake-dispatcher.yml')).toContain(
-      "github.event_name == 'schedule' || github.event.sender.login == github.repository_owner",
+  it('le dispatcher écoute les événements du cycle de vie, filtrés par le script lui-même', () => {
+    const workflow = parse(files.get('.github/workflows/agentlake-dispatcher.yml') ?? '') as {
+      on: Record<string, unknown>;
+      concurrency?: unknown;
+      jobs: { dispatch: { if?: string; with: Record<string, string> } };
+    };
+    expect(Object.keys(workflow.on)).toEqual([
+      'schedule',
+      'issues',
+      'issue_comment',
+      'pull_request',
+      'check_suite',
+      'workflow_run',
+      'workflow_dispatch',
+    ]);
+    expect(workflow.on.schedule).toEqual([{ cron: '*/10 * * * *' }]);
+    expect(workflow.on.workflow_run).toEqual({
+      workflows: ['AgentLake — agent'],
+      types: ['completed'],
+    });
+    // Filtre d'auteur dans le script, avec une trace : pas de `if` qui sauterait le job en silence.
+    expect(workflow.jobs.dispatch.if).toBeUndefined();
+    expect(workflow.concurrency).toBeUndefined();
+    expect(workflow.jobs.dispatch.with).toEqual({ devlake_ref: 'v1' });
+  });
+
+  it('l’agent porte un titre de run qui le relie à son issue et sa tentative', () => {
+    const content = files.get('.github/workflows/agentlake-agent-task.yml') ?? '';
+    expect((parse(content) as { 'run-name': string })['run-name']).toBe(
+      'AgentLake — agent, issue #${{ inputs.issue_number }}, tentative ${{ inputs.attempt }}',
     );
   });
 });

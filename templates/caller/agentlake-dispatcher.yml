@@ -6,27 +6,33 @@ on:
     # Passe de rattrapage toutes les 10 minutes.
     - cron: '*/10 * * * *'
   issues:
-    types: [opened, edited, labeled, unlabeled, closed, reopened]
+    types: [labeled, closed]
   issue_comment:
     types: [created]
   pull_request:
     types: [closed]
+  check_suite:
+    types: [completed]
+  workflow_run:
+    workflows: ['AgentLake — agent']
+    types: [completed]
   workflow_dispatch:
 
 permissions: {}
 
-concurrency:
-  group: agentlake-dispatcher
-  cancel-in-progress: false
+# Pas de groupe de concurrence ici : le job appelé a déjà `agentlake-dispatcher`
+# (le même groupe à deux niveaux bloquerait le job indéfiniment).
+# Pas de filtre d'auteur ici non plus : le dispatcher ignore lui-même les événements
+# d'autres comptes, avec une trace dans le journal du run.
 
 jobs:
   dispatch:
-    # Seuls les événements dont l'auteur est le propriétaire du dépôt déclenchent quelque chose.
-    if: github.event_name == 'schedule' || github.event.sender.login == github.repository_owner
     permissions:
       contents: read
       issues: write
       pull-requests: read
       actions: write
     uses: __DEVLAKE_REPOSITORY__/.github/workflows/dispatcher.yml@__DEVLAKE_REF__
+    with:
+      devlake_ref: __DEVLAKE_REF__
     secrets: inherit
