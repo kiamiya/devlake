@@ -8,6 +8,8 @@ import { seedFakeProjects } from './e2e-fixtures.js';
 import { createRepositories } from './db/repositories.js';
 import { registerIpc, serviceHandlers } from './ipc.js';
 import { ProjectsService } from './projects-service.js';
+import { CALLER_TEMPLATES } from './services/projects/caller-templates.js';
+import { ProjectCreationService } from './services/projects/creation-service.js';
 import { SafeStorageVault } from './vault.js';
 
 /**
@@ -78,18 +80,22 @@ async function start(): Promise<void> {
 
   const { db, created } = openDatabase(join(app.getPath('userData'), 'cockpit.sqlite'));
   const repos = createRepositories(db);
-  const vault = new SafeStorageVault(
-    join(app.getPath('userData'), 'github-token.bin'),
-    safeStorage,
-  );
+  const vault = new SafeStorageVault(app.getPath('userData'), safeStorage);
   const service = new CockpitService({ repos, vault, github: await githubFactory() });
   const projects = new ProjectsService(repos, () => service.githubPort());
-  registerIpc(ipcMain, serviceHandlers({ cockpit: service, projects }), isTrustedUrl);
+  const creation = new ProjectCreationService({
+    repos,
+    vault,
+    github: () => service.githubPort(),
+    projects,
+    callerTemplates: CALLER_TEMPLATES,
+  });
+  registerIpc(ipcMain, serviceHandlers({ cockpit: service, projects, creation }), isTrustedUrl);
 
   createWindow();
   await service.refreshGitHubStatus();
   // Base créée à l'instant (supprimée ou poste neuf) : reconstruction depuis GitHub en arrière-plan.
-  if (created && (await vault.getToken()) !== null) {
+  if (created && (await vault.get('github-token')) !== null) {
     service.rebuildCache().catch(() => undefined);
   }
 

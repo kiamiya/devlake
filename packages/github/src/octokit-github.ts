@@ -33,6 +33,7 @@ import {
 import type { GitHubPort } from './port.js';
 import { encryptSecret } from './secrets.js';
 import type {
+  ActionsPermissions,
   AuthenticatedUser,
   BranchProtection,
   BranchProtectionInput,
@@ -221,6 +222,42 @@ export class OctokitGitHub implements GitHubPort {
       if (isGitHubError(error, 'not-found') || isGitHubError(error, 'forbidden')) return false;
       throw error;
     }
+  }
+
+  async getActionsPermissions(ref: RepoRef): Promise<ActionsPermissions> {
+    const workflow = await this.http.request(
+      'GET /repos/{owner}/{repo}/actions/permissions/workflow',
+      repoParams(ref),
+      z.object({
+        default_workflow_permissions: z.enum(['read', 'write']),
+        can_approve_pull_request_reviews: z.boolean(),
+      }),
+    );
+    const fork = await this.http.request(
+      'GET /repos/{owner}/{repo}/actions/permissions/fork-pr-contributor-approval',
+      repoParams(ref),
+      z.object({ approval_policy: z.string() }),
+    );
+    return {
+      defaultWorkflowPermissions: workflow.default_workflow_permissions,
+      canApprovePullRequestReviews: workflow.can_approve_pull_request_reviews,
+      forkPrApproval: fork.approval_policy,
+    };
+  }
+
+  async configureActionsPermissions(ref: RepoRef): Promise<void> {
+    await this.http.raw('PUT /repos/{owner}/{repo}/actions/permissions/workflow', {
+      ...repoParams(ref),
+      default_workflow_permissions: 'read',
+      can_approve_pull_request_reviews: false,
+    });
+    await this.http.raw(
+      'PUT /repos/{owner}/{repo}/actions/permissions/fork-pr-contributor-approval',
+      {
+        ...repoParams(ref),
+        approval_policy: 'all_external_contributors',
+      },
+    );
   }
 
   // Fichiers

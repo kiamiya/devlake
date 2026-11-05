@@ -1,4 +1,13 @@
-const KNOWN_PREFIXES = ['github_pat_', 'ghp_', 'gho_', 'ghu_', 'ghs_', 'ghr_'];
+const KNOWN_PREFIXES = [
+  'github_pat_',
+  'ghp_',
+  'gho_',
+  'ghu_',
+  'ghs_',
+  'ghr_',
+  'sk-ant-oat01-',
+  'sk-ant-',
+];
 const DOTS = '••••••••';
 
 /** Affichage d'un jeton : préfixe connu et 4 derniers caractères au plus. */

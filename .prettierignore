@@ -11,3 +11,4 @@ packages/desktop/src/main/db/migrations/
 packages/desktop/out/
 playwright-report/
 test-results/
+.generated/

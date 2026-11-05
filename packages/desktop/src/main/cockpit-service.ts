@@ -38,20 +38,36 @@ export class CockpitService {
   }
 
   async getMaskedToken(): Promise<{ masked: string | null }> {
-    const token = await this.deps.vault.getToken();
+    const token = await this.deps.vault.get('github-token');
     return { masked: token === null ? null : maskToken(token) };
   }
 
   async setToken(token: string): Promise<{ masked: string | null }> {
-    await this.deps.vault.setToken(token.trim());
+    await this.deps.vault.set('github-token', token.trim());
     this.githubCheck = { state: 'unchecked' };
     await this.refreshGitHubStatus();
     return this.getMaskedToken();
   }
 
   async clearToken(): Promise<{ masked: string | null }> {
-    await this.deps.vault.clearToken();
+    await this.deps.vault.clear('github-token');
     this.githubCheck = { state: 'unchecked' };
+    return { masked: null };
+  }
+
+  /** Jeton d'abonnement Claude Code (claude setup-token), poussé dans chaque nouveau dépôt. */
+  async getMaskedClaudeToken(): Promise<{ masked: string | null }> {
+    const token = await this.deps.vault.get('claude-oauth-token');
+    return { masked: token === null ? null : maskToken(token) };
+  }
+
+  async setClaudeToken(token: string): Promise<{ masked: string | null }> {
+    await this.deps.vault.set('claude-oauth-token', token.trim());
+    return this.getMaskedClaudeToken();
+  }
+
+  async clearClaudeToken(): Promise<{ masked: string | null }> {
+    await this.deps.vault.clear('claude-oauth-token');
     return { masked: null };
   }
 
@@ -82,7 +98,7 @@ export class CockpitService {
   }
 
   async getStatus(): Promise<IntegrationStatus[]> {
-    const token = await this.deps.vault.getToken();
+    const token = await this.deps.vault.get('github-token');
     return [this.githubStatus(token !== null), auraStatus()];
   }
 
@@ -112,7 +128,7 @@ export class CockpitService {
 
   /** Port GitHub du jeton enregistré ; lève NoTokenError sans jeton. */
   async githubPort(): Promise<GitHubPort> {
-    const token = await this.deps.vault.getToken();
+    const token = await this.deps.vault.get('github-token');
     if (token === null) throw new NoTokenError();
     return this.deps.github(token);
   }

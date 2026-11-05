@@ -6,5 +6,5 @@
     "jsx": "react-jsx",
     "types": ["node", "vite/client"]
   },
-  "include": ["src", "e2e", "*.config.ts"]
+  "include": ["src", "e2e", "scripts", "*.config.ts"]
 }

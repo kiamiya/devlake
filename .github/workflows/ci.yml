@@ -33,6 +33,10 @@ jobs:
       - run: npm test
       - run: npm run test:integration
       - run: npm run depcruise
+      - name: Workflows d'appel des projets (actionlint)
+        run: |
+          npm run generate:callers
+          docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.7 -color .generated/callers/*.yml
 
   actionlint:
     name: actionlint

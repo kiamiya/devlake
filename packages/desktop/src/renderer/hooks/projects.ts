@@ -1,4 +1,5 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { CreateProjectInput } from '../../shared/ipc-contract.js';
 import { invoke } from '../lib/ipc.js';
 
 const keys = {
@@ -54,5 +55,22 @@ export function useTabsSync(projectIds: readonly string[]) {
       // Pas de jeton ou GitHub injoignable : le cache local reste affiché.
       retry: false,
     })),
+  });
+}
+
+export function useCreateProject() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateProjectInput) => invoke('projects:create', input),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: keys.projects });
+      await client.invalidateQueries({ queryKey: keys.activity });
+    },
+  });
+}
+
+export function useRebootstrap() {
+  return useMutation({
+    mutationFn: (projectId: string) => invoke('projects:bootstrap', { projectId }),
   });
 }

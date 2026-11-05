@@ -228,6 +228,41 @@ export function githubEmulator(fake: FakeGitHub): HttpHandler[] {
       }),
     ),
 
+    // Permissions Actions
+    http.get(
+      `${R}/actions/permissions/workflow`,
+      handle(async ({ params }) => {
+        const p = await fake.getActionsPermissions(refOf(params));
+        return json({
+          default_workflow_permissions: p.defaultWorkflowPermissions,
+          can_approve_pull_request_reviews: p.canApprovePullRequestReviews,
+        });
+      }),
+    ),
+    http.put(
+      `${R}/actions/permissions/workflow`,
+      handle(({ params, body }) => {
+        const state = fake.state(refOf(params));
+        state.actions.defaultWorkflowPermissions =
+          body.default_workflow_permissions === 'read' ? 'read' : 'write';
+        state.actions.canApprovePullRequestReviews = body.can_approve_pull_request_reviews === true;
+        return empty();
+      }),
+    ),
+    http.get(
+      `${R}/actions/permissions/fork-pr-contributor-approval`,
+      handle(async ({ params }) =>
+        json({ approval_policy: (await fake.getActionsPermissions(refOf(params))).forkPrApproval }),
+      ),
+    ),
+    http.put(
+      `${R}/actions/permissions/fork-pr-contributor-approval`,
+      handle(({ params, body }) => {
+        fake.state(refOf(params)).actions.forkPrApproval = str(body.approval_policy);
+        return empty();
+      }),
+    ),
+
     // Fichiers et Git Data
     http.get(
       `${R}/contents/*`,

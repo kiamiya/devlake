@@ -18,6 +18,11 @@ export const IPC_CHANNELS = [
   'tabs:get',
   'tabs:save',
   'activity:get',
+  'claude-token:get-masked',
+  'claude-token:set',
+  'claude-token:clear',
+  'projects:create',
+  'projects:bootstrap',
 ] as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[number];

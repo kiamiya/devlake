@@ -21,7 +21,8 @@
     "test:e2e": "npm run test:e2e -w desktop",
     "depcruise": "depcruise packages/*/src --config .dependency-cruiser.cjs",
     "clean": "tsc -b tsconfig.build.json --clean",
-    "prepare": "husky"
+    "prepare": "husky",
+    "generate:callers": "tsx packages/desktop/scripts/generate-callers.ts .generated/callers"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,cjs}": [
@@ -44,6 +45,7 @@
     "lint-staged": "^17.6.0",
     "msw": "^3.0.3",
     "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.1",
     "vitest": "^5.1.0"

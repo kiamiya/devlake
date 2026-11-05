@@ -1,0 +1,21 @@
+# Généré par AgentLake : relancer le bootstrap plutôt que modifier ce fichier.
+name: AgentLake — planificateur
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: agentlake-planner
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.actor == github.repository_owner
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    uses: __DEVLAKE_REPOSITORY__/.github/workflows/planner.yml@__DEVLAKE_REF__
+    secrets: inherit

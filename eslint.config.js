@@ -12,6 +12,7 @@ export default defineConfig(
       '**/coverage/**',
       '**/out/**',
       'tests/fixtures/**',
+      '.generated/**',
       '**/playwright-report/**',
       '**/test-results/**',
     ],

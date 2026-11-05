@@ -1,3 +1,4 @@
+import { ProjectTypeSchema, QualityProfileSchema } from 'shared';
 import { z } from 'zod';
 import type { IpcChannel } from './channels.js';
 import { SettingsPatchSchema, SettingsSchema } from './settings.js';
@@ -49,6 +50,31 @@ export const ActivitySchema = z.object({
 });
 export type Activity = z.infer<typeof ActivitySchema>;
 
+export const CreateProjectSchema = z.object({
+  name: z
+    .string()
+    .regex(
+      /^[A-Za-z0-9._-]{1,100}$/,
+      'Nom de dépôt invalide : lettres, chiffres, « . », « _ » ou « - ».',
+    )
+    .refine((n) => n !== '.' && n !== '..', 'Nom de dépôt invalide.'),
+  type: ProjectTypeSchema,
+  private: z.boolean(),
+  qualityProfile: QualityProfileSchema,
+});
+export type CreateProjectInput = z.infer<typeof CreateProjectSchema>;
+
+export const BootstrapReportSchema = z.object({
+  repository: RepoRefSchema,
+  steps: z.array(
+    z.object({
+      step: z.string(),
+      status: z.enum(['created', 'updated', 'unchanged']),
+    }),
+  ),
+});
+export type BootstrapReportView = z.infer<typeof BootstrapReportSchema>;
+
 /** Contrat de chaque canal : entrée et sortie validées des deux côtés. */
 export const IPC_CONTRACT = {
   'settings:get': { input: NoInput, output: SettingsSchema },
@@ -72,6 +98,20 @@ export const IPC_CONTRACT = {
   'tabs:get': { input: NoInput, output: TabsStateSchema },
   'tabs:save': { input: TabsStateSchema, output: TabsStateSchema },
   'activity:get': { input: NoInput, output: ActivitySchema },
+  'claude-token:get-masked': { input: NoInput, output: MaskedTokenSchema },
+  'claude-token:set': {
+    input: z.object({ token: z.string().trim().min(1, 'Le jeton est vide.') }),
+    output: MaskedTokenSchema,
+  },
+  'claude-token:clear': { input: NoInput, output: MaskedTokenSchema },
+  'projects:create': {
+    input: CreateProjectSchema,
+    output: z.object({ project: ProjectSummarySchema, report: BootstrapReportSchema }),
+  },
+  'projects:bootstrap': {
+    input: z.object({ projectId: z.string() }),
+    output: BootstrapReportSchema,
+  },
 } as const satisfies Record<IpcChannel, { input: z.ZodType; output: z.ZodType }>;
 
 export type IpcInput<C extends IpcChannel> = z.input<(typeof IPC_CONTRACT)[C]['input']>;
