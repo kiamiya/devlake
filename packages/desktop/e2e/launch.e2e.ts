@@ -232,7 +232,11 @@ test.describe('cockpit', () => {
 
     for (const attempt of [1, 2]) {
       await page.getByRole('button', { name: 'Choisir des fichiers' }).click();
-      await page.getByLabel('Rôle de brief.docx').selectOption('brief');
+      // Dans les fichiers à verser : la liste des documents versés a aussi un « Rôle de brief.docx ».
+      await page
+        .getByRole('list', { name: 'Fichiers à verser' })
+        .getByLabel('Rôle de brief.docx')
+        .selectOption('brief');
       await expect(page.getByRole('note')).toContainText('public');
       const send = page.getByRole('button', { name: 'Verser 1 fichier' });
       await expect(send).toBeDisabled();
