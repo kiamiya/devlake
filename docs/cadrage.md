@@ -35,7 +35,7 @@ Les treize décisions ci-dessous sont actées et servent de contraintes à toute
 | D5 | Bus d'événements | GitHub : issues, labels, commentaires, PR, checks, runs | État durable sans serveur à maintenir ; le cockpit lit et écrit par l'API |
 | D6 | Découpe | Planificateur dans un workflow, plan validé par schéma zod dans le job | Même canal d'exécution que les agents |
 | D7 | Autonomie | Validation du plan obligatoire ; ensuite autonomie, sauf questions non couvertes par la documentation | Label d'attente bloquant sur l'issue de la tâche |
-| D8 | Dépôts | Compte GitHub Kiamiya, dépôts publics par défaut pour des minutes Actions gratuites et illimitées : un dépôt par projet, plus le dépôt `agentlake` qui héberge les workflows réutilisables | Chaque projet appelle les workflows d'`agentlake` |
+| D8 | Dépôts | Compte GitHub Kiamiya, dépôts publics par défaut pour des minutes Actions gratuites et illimitées : un dépôt par projet, plus le dépôt `devlake` qui héberge les workflows réutilisables | Chaque projet appelle les workflows de `devlake` |
 | D9 | Merge | Auto-merge GitHub, squash, checks obligatoires dont la relecture par Claude | La qualité repose entièrement sur la CI, exhaustive dès le bootstrap |
 | D10 | Jeux vidéo | Aura reste sur le poste ; les agents l'utilisent via un pont MCP sécurisé exposé par le cockpit | Poste allumé et éditeur ouvert pendant les tâches de jeu |
 | D11 | Parallélisme | Nombre d'agents calculé par projet, plafonné par des réglages globaux | Groupes de concurrence GitHub Actions pour les ressources exclusives |
@@ -108,7 +108,7 @@ Le cockpit peut être fermé sans arrêter les projets ; seul le pont Aura doit 
 
 Stack : monorepo npm workspaces en TypeScript strict (ESM). Côté GitHub : GitHub Actions, `anthropics/claude-code-action`, workflows réutilisables, scripts Node pour le dispatcher et le validateur de plan. Côté cockpit : Electron + electron-vite, React 18, Tailwind, shadcn/ui, Zustand, TanStack Query, Octokit, better-sqlite3 + Drizzle pour le cache, mammoth, pdf-parse et turndown pour l'ingestion. Côté pont : SDK MCP TypeScript et un tunnel HTTPS. Partout : zod pour les contrats, Vitest, Playwright, dependency-cruiser.
 
-Paquets du monorepo `agentlake`, sur le modèle du PRIF :
+Paquets du monorepo `devlake`, sur le modèle du PRIF :
 
 | Paquet | Contenu | Peut dépendre de |
 | --- | --- | --- |
@@ -239,7 +239,7 @@ Trois intégrations, chacune derrière un port testable : GitHub Actions avec l'
 
 ### Claude Code dans GitHub Actions
 
-- Le dépôt `agentlake` héberge les workflows réutilisables `planner.yml`, `agent-task.yml`, `review.yml` et `dispatcher.yml` ; chaque projet reçoit au bootstrap de petits workflows qui les appellent.
+- Le dépôt `devlake` héberge les workflows réutilisables `planner.yml`, `agent-task.yml`, `review.yml` et `dispatcher.yml` ; chaque projet reçoit au bootstrap de petits workflows qui les appellent.
 - Selon la [documentation officielle](https://code.claude.com/docs/en/github-actions), le secret `CLAUDE_CODE_OAUTH_TOKEN` authentifie l'action avec l'abonnement Claude ; il se génère avec `claude setup-token`. Le jeton est lié à l'abonnement de Kia : pour un dépôt d'organisation, la doc recommande plutôt une clé API de la Console.
 - Chaque job reçoit le profil (prompt système, outils autorisés, nombre maximal de tours, modèle), le corps de l'issue, le contexte `.agentlake/` et des permissions GitHub minimales.
 - Timeout par job ; transcription de session et journaux conservés en artefacts, liés depuis l'issue.
@@ -321,9 +321,9 @@ Points ouverts à trancher pendant J1 :
 
 ## Mode d'emploi pour Claude Code
 
-Posez `CLAUDE.md`, le dossier `tasks/` et ce document exporté en `docs/cadrage.md` à la racine d'un dépôt vide `agentlake`, puis donnez les tâches une par une dans l'ordre du tableau.
+Posez `CLAUDE.md`, le dossier `tasks/` et ce document exporté en `docs/cadrage.md` à la racine d'un dépôt vide `devlake`, puis donnez les tâches une par une dans l'ordre du tableau.
 
-1. Créer le dépôt `agentlake` sur GitHub (Kiamiya), y copier les fichiers.
+1. Créer le dépôt `devlake` sur GitHub (Kiamiya), y copier les fichiers.
 2. Pour J1, faire réaliser chaque tâche par Claude Code avec le prompt type de `tasks/README.md`, une PR par tâche.
 3. Relire la PR et la CI, merger, puis passer à la tâche suivante dont les dépendances sont mergées.
 4. Les tâches sans dépendance commune (T02 et T03, ou T06 et T08) peuvent avancer en parallèle.

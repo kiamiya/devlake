@@ -6,7 +6,7 @@
 
 ## Objectif
 
-Créer le dépôt `agentlake` prêt pour un développement professionnel : paquets, outillage, tests et CI opérationnels dès le premier commit.
+Créer le dépôt `devlake` prêt pour un développement professionnel : paquets, outillage, tests et CI opérationnels dès le premier commit.
 
 ## Contexte
 
