@@ -56,6 +56,7 @@ import type {
   RepoRef,
   Repository,
   UpdateIssueInput,
+  UpdatePullRequestInput,
   WorkflowJob,
   WorkflowRun,
 } from './types.js';
@@ -561,6 +562,20 @@ export class OctokitGitHub implements GitHubPort {
       PullRequestApi,
     );
     return pulls.map(toPullRequest);
+  }
+
+  async updatePullRequest(
+    ref: RepoRef,
+    prNumber: number,
+    input: UpdatePullRequestInput,
+  ): Promise<PullRequest> {
+    return toPullRequest(
+      await this.http.request(
+        'PATCH /repos/{owner}/{repo}/pulls/{pull_number}',
+        { ...repoParams(ref), pull_number: prNumber, ...input },
+        PullRequestApi,
+      ),
+    );
   }
 
   async enableAutoMerge(ref: RepoRef, prNumber: number): Promise<void> {

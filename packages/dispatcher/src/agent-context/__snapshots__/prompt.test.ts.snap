@@ -1,0 +1,57 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`construction du prompt > premier passage : tâche, règles, instructions, décisions et contexte (régression) 1`] = `
+"# Tâche T04 — Ajouter une fonction et son test
+
+Tu es l’agent « frontend » d’AgentLake. Tu travailles sur l’issue #12 de ce dépôt.
+
+## Objectif
+
+Créer l’écran de connexion avec e-mail et mot de passe.
+
+## Critères d’acceptation
+
+- Un utilisateur valide se connecte
+- Un mauvais mot de passe affiche une erreur
+
+## Tests exigés
+
+- Unitaires : Validation du formulaire
+- E2E : Parcours de connexion complet
+
+## Zones de code
+
+- src/auth/
+
+## Règles
+
+- La branche \`task/T04-ajouter-une-fonction-et-son-test\` est déjà extraite : travaille dessus et commite avec des messages Conventional Commits. Ne pousse pas et n’ouvre pas de PR : le workflow s’en charge.
+- Livre le code et ses tests dans le même changement ; fais passer les tests localement avant de terminer.
+- Ne désactive, ne saute et n’affaiblis jamais un test existant.
+- Reste dans le périmètre de la tâche ; respecte le \`CLAUDE.md\` et les décisions du projet.
+- S’il manque une information indispensable, arrête-toi et termine avec \`outcome = blocked\` en expliquant ce qui manque.
+- Termine en remplissant la sortie structurée : \`pr_title\` (titre court) et \`pr_summary\` (ce qui a été fait, les choix, comment tester).
+
+## Instructions du projet (CLAUDE.md)
+
+# Projet
+
+TypeScript strict.
+
+## Décisions du projet
+
+- Supabase pour l’authentification.
+
+## Contexte du projet
+
+### .agentlake/context/brief.md (brief)
+
+# Brief
+
+Réservation de créneaux.
+
+### .agentlake/context/annexes/maquettes.md (annex)
+
+# Maquettes
+"
+`;

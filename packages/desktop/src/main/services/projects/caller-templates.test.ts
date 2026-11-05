@@ -41,3 +41,36 @@ describe('gabarits réels templates/caller', () => {
     );
   });
 });
+
+describe('gabarit d’appel de l’agent', () => {
+  const content =
+    renderCallers(CALLER_TEMPLATES, { repository: DEVLAKE_REPOSITORY, ref: 'v1' }).get(
+      '.github/workflows/agentlake-agent-task.yml',
+    ) ?? '';
+  const workflow = parse(content) as {
+    on: { workflow_dispatch: { inputs: Record<string, unknown> } };
+    concurrency?: unknown;
+    jobs: { agent: { with: Record<string, string>; permissions: Record<string, string> } };
+  };
+
+  it('transmet issue, profil, tentative, raison et version de devlake', () => {
+    expect(Object.keys(workflow.on.workflow_dispatch.inputs)).toEqual([
+      'issue_number',
+      'profile',
+      'attempt',
+      'resume_reason',
+    ]);
+    expect(workflow.jobs.agent.with).toEqual({
+      issue_number: '${{ inputs.issue_number }}',
+      profile: '${{ inputs.profile }}',
+      attempt: '${{ inputs.attempt }}',
+      resume_reason: '${{ inputs.resume_reason }}',
+      devlake_ref: 'v1',
+    });
+  });
+
+  it('accorde le jeton OIDC de l’app Claude et n’ajoute pas de concurrence en double', () => {
+    expect(workflow.jobs.agent.permissions['id-token']).toBe('write');
+    expect(workflow.concurrency).toBeUndefined();
+  });
+});
