@@ -8,6 +8,9 @@ import { createRepositories } from './db/repositories.js';
 import { dispatchIpc, registerIpc, serviceHandlers, toIpcError, type IpcMainLike } from './ipc.js';
 import { MemoryVault, VaultUnavailableError } from './vault.js';
 
+/** Faux jeton de test, sans valeur réelle. */
+const FAKE_TOKEN = 'ghp_abcdefghijklmnop1234'; // gitleaks:allow
+
 async function githubStatus(handlers: ReturnType<typeof serviceHandlers>) {
   const result = await dispatchIpc(handlers, 'status:get', undefined);
   if (!result.ok) throw new Error(result.error.message);
@@ -82,10 +85,10 @@ describe('IPC — jeton et statut', () => {
       ],
     });
 
-    const result = await dispatchIpc(handlers, 'token:set', { token: 'ghp_abcdefghijklmnop1234' });
+    const result = await dispatchIpc(handlers, 'token:set', { token: FAKE_TOKEN });
     expect(result).toEqual({ ok: true, data: { masked: 'ghp_••••••••1234' } });
     expect(JSON.stringify(result)).not.toContain('abcdefghijklmnop');
-    expect(await vault.getToken()).toBe('ghp_abcdefghijklmnop1234');
+    expect(await vault.getToken()).toBe(FAKE_TOKEN);
     expect(await githubStatus(handlers)).toMatchObject({
       state: 'ok',
       detail: 'Connecté en tant que kiamiya.',
@@ -148,7 +151,7 @@ describe('IPC — jeton et statut', () => {
   it('reconstruit le cache par IPC', async () => {
     const github = new FakeGitHub({ actor: 'kiamiya' });
     const { handlers } = setup({ github });
-    await dispatchIpc(handlers, 'token:set', { token: 'ghp_abcdefghijklmnop1234' });
+    await dispatchIpc(handlers, 'token:set', { token: FAKE_TOKEN });
     expect(await dispatchIpc(handlers, 'cache:rebuild', undefined)).toEqual({
       ok: true,
       data: { projects: 0, issues: 0, runs: 0 },
