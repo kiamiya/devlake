@@ -1,0 +1,21 @@
+{
+  "name": "desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "node -e \"console.log('Le cockpit Electron arrive avec la tâche T03.')\"",
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

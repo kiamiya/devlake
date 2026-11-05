@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+package-lock.json
+# Documents de cadrage fournis tels quels : on ne les reformate pas.
+CLAUDE.md
+docs/
+tasks/
