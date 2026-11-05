@@ -33,6 +33,11 @@ export const IPC_CHANNELS = [
   'context:remove',
   'context:decisions',
   'planner:start',
+  'plan:versions',
+  'plan:get',
+  'plan:save',
+  'plan:set-cap',
+  'plan:validate',
 ] as const;
 
 /**

@@ -1,6 +1,8 @@
 import type { GitHubPort, RepoRef } from 'github';
 import {
   CADRAGE_LABEL,
+  DEFAULT_RUNNER_CAP,
+  proposeAgents,
   CONTEXT_INDEX_PATH,
   ContextIndexSchema,
   formatZodError,
@@ -17,7 +19,7 @@ import {
 } from 'shared';
 import { parse } from 'yaml';
 import { z } from 'zod';
-import { DEFAULT_RUNNER_CAP, proposeAgents } from './agents.js';
+
 import {
   findCadrageIssue,
   pendingBlocking,

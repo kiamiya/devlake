@@ -1,4 +1,4 @@
-import type { PlanTask } from 'shared';
+import type { PlanTask } from './plan.js';
 
 /** Jobs simultanés permis par GitHub Actions sur un compte gratuit (C_runners). */
 export const DEFAULT_RUNNER_CAP = 20;
