@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { maskToken } from '../shared/mask.js';
 import { SafeStorageVault, VaultUnavailableError, type SafeStorageLike } from './vault.js';
 
+/** Faux jeton de test, sans valeur réelle. */
+const FAKE_TOKEN = 'ghp_secretsecret1234'; // gitleaks:allow
+
 /** Doublure de safeStorage : « chiffrement » réversible, jamais le texte en clair. */
 function fakeSafeStorage(available = true, backend = 'dpapi'): SafeStorageLike {
   return {
@@ -41,9 +44,9 @@ describe('coffre safeStorage', () => {
     const vault = new SafeStorageVault(join(dir, 'sous-dossier'), fakeSafeStorage());
     const file = join(dir, 'sous-dossier', 'github-token.bin');
     expect(await vault.get('github-token')).toBeNull();
-    await vault.set('github-token', 'ghp_secretsecret1234');
+    await vault.set('github-token', FAKE_TOKEN);
     expect(readFileSync(file).toString()).not.toContain('ghp_secret');
-    expect(await vault.get('github-token')).toBe('ghp_secretsecret1234');
+    expect(await vault.get('github-token')).toBe(FAKE_TOKEN);
     await vault.clear('github-token');
     expect(await vault.get('github-token')).toBeNull();
   });
