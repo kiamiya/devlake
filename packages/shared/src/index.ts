@@ -10,3 +10,4 @@ export * from './task-issue.js';
 export * from './quality.js';
 export * from './context.js';
 export * from './agents.js';
+export * from './dispatch.js';

@@ -5,3 +5,6 @@ export * from './agent-context/prepare.js';
 export * from './agent-context/profile.js';
 export * from './agent-context/prompt.js';
 export * from './agent-context/resume.js';
+export * from './dispatch/adapters.js';
+export * from './dispatch/dispatcher.js';
+export * from './dispatch/plan-pass.js';

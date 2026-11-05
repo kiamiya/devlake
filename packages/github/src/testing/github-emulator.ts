@@ -124,6 +124,7 @@ function runJson(r: WorkflowRun) {
   return {
     id: r.id,
     name: r.name,
+    display_title: r.title ?? r.name,
     path: `.github/workflows/${r.workflow}`,
     status: r.status,
     conclusion: r.conclusion,

@@ -4,6 +4,7 @@ import { maskToken } from '../shared/mask.js';
 import type { Settings, SettingsPatch } from '../shared/settings.js';
 import { rebuildAll, type RebuildSummary } from './db/rebuild.js';
 import type { Repositories } from './db/repositories.js';
+import { GlobalConfigSyncError, publishGlobalConfig } from './services/global-config.js';
 import type { SecretVault } from './vault.js';
 
 export class NoTokenError extends Error {
@@ -33,8 +34,23 @@ export class CockpitService {
     return this.deps.repos.settings.get();
   }
 
-  updateSettings(patch: SettingsPatch): Settings {
-    return this.deps.repos.settings.update(patch);
+  /**
+   * Enregistre les réglages. Un plafond global modifié est publié dans `devlake-config`,
+   * où les dispatchers le lisent (sans jeton GitHub, il le sera au prochain changement).
+   */
+  async updateSettings(patch: SettingsPatch): Promise<Settings> {
+    const previous = this.deps.repos.settings.get().maxConcurrentAgents;
+    const settings = this.deps.repos.settings.update(patch);
+    if (settings.maxConcurrentAgents === previous) return settings;
+    if ((await this.deps.vault.get('github-token')) === null) return settings;
+    try {
+      await publishGlobalConfig(await this.githubPort(), {
+        maxConcurrentAgents: settings.maxConcurrentAgents,
+      });
+    } catch (error) {
+      throw new GlobalConfigSyncError(error);
+    }
+    return settings;
   }
 
   async getMaskedToken(): Promise<{ masked: string | null }> {

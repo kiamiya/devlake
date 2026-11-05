@@ -1,0 +1,68 @@
+name: AgentLake — dispatcher
+
+# Une passe du dispatcher sur un projet AgentLake : tâches prêtes, capacité, lancement des agents,
+# jobs morts, tentatives et santé du pont. Appelé par le workflow d'appel `agentlake-dispatcher.yml`
+# du projet, sur ses événements et toutes les 10 minutes pour le rattrapage.
+
+on:
+  workflow_call:
+    inputs:
+      devlake_ref:
+        description: Version de devlake qui fournit les scripts
+        type: string
+        default: v1
+    secrets:
+      AGENTLAKE_CONFIG_TOKEN:
+        description: Jeton en lecture sur <propriétaire>/devlake-config (plafond global)
+        required: false
+      AGENTLAKE_BILLING_TOKEN:
+        description: Jeton de lecture de la facturation (dépôts privés)
+        required: false
+
+permissions: {}
+
+jobs:
+  dispatch:
+    name: Passe du dispatcher
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Un seul groupe par dépôt : les passes sont sérialisées.
+    concurrency:
+      group: agentlake-dispatcher
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+      actions: write
+    env:
+      RUNTIME: .agentlake-runtime
+    steps:
+      - name: Scripts AgentLake (devlake ${{ inputs.devlake_ref }})
+        uses: actions/checkout@v4
+        with:
+          repository: kiamiya/devlake
+          ref: ${{ inputs.devlake_ref }}
+          path: ${{ env.RUNTIME }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Installer et compiler les scripts
+        working-directory: ${{ env.RUNTIME }}
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc -b tsconfig.build.json
+
+      - name: Passe
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AGENTLAKE_CONFIG_TOKEN: ${{ secrets.AGENTLAKE_CONFIG_TOKEN }}
+          AGENTLAKE_BILLING_TOKEN: ${{ secrets.AGENTLAKE_BILLING_TOKEN }}
+          # Pont Aura : URL du tunnel, variable du projet.
+          AURA_BRIDGE_URL: ${{ vars.AURA_BRIDGE_URL }}
+        run: node "$RUNTIME/packages/dispatcher/dist/dispatch/cli.js"

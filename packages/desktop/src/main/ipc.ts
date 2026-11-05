@@ -1,3 +1,4 @@
+import { GlobalConfigSyncError } from './services/global-config.js';
 import { isGitHubError } from 'github';
 import type { z } from 'zod';
 import {
@@ -44,8 +45,7 @@ export function serviceHandlers(services: {
     value as z.output<(typeof IPC_CONTRACT)[C]['input']>;
   return {
     'settings:get': () => Promise.resolve(service.getSettings()),
-    'settings:update': (value) =>
-      Promise.resolve(service.updateSettings(input('settings:update', value))),
+    'settings:update': (value) => service.updateSettings(input('settings:update', value)),
     'token:get-masked': () => service.getMaskedToken(),
     'token:set': (value) => service.setToken(input('token:set', value).token),
     'token:clear': () => service.clearToken(),
@@ -130,6 +130,7 @@ export function toIpcError(error: unknown): IpcErrorPayload {
     [UnknownDocumentError, 'UNKNOWN_DOCUMENT'],
     [PlannerModelMissingError, 'PLANNER_MODEL_MISSING'],
     [PlanError, 'PLAN_ERROR'],
+    [GlobalConfigSyncError, 'GLOBAL_CONFIG_SYNC_FAILED'],
   ];
   for (const [type, code] of known)
     if (error instanceof type) return { code, message: error.message };

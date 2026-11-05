@@ -177,7 +177,8 @@ export class FakeGitHub implements GitHubPort {
     jobs: { job: WorkflowJob; logs: string }[] = [],
   ): void {
     const state = this.state(ref);
-    state.runs.push(clone(run));
+    // Comme l'API : sans `run-name`, le titre affiché est le nom du workflow.
+    state.runs.push({ ...clone(run), title: run.title ?? run.name });
     for (const { job, logs } of jobs) {
       state.jobs.push(clone(job));
       state.logs.set(job.id, logs);

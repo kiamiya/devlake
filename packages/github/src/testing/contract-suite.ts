@@ -372,6 +372,7 @@ export function describeGitHubContract(
         const run = {
           id: 7,
           name: 'Agent',
+          title: 'Agent, issue #1',
           workflow: 'agent-task.yml',
           status: 'completed',
           conclusion: 'failure',

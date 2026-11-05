@@ -141,6 +141,8 @@ export interface CheckRun {
 export interface WorkflowRun {
   id: number;
   name: string;
+  /** Titre affiché du run (`run-name`), s'il diffère du nom du workflow. */
+  title?: string;
   /** Nom de fichier du workflow, ex. `agent-task.yml`. */
   workflow: string;
   status: string;

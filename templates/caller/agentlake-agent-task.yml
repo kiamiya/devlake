@@ -1,5 +1,7 @@
 # Généré par AgentLake : relancer le bootstrap plutôt que modifier ce fichier.
 name: AgentLake — agent
+# Le dispatcher relie un run à son issue par ce titre (détection des jobs morts).
+run-name: 'AgentLake — agent, issue #${{ inputs.issue_number }}, tentative ${{ inputs.attempt }}'
 
 on:
   # Déclenché par le dispatcher ; workflow_dispatch exige le droit d'écriture.
