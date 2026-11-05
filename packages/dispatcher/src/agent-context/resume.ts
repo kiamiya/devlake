@@ -1,11 +1,6 @@
 import type { GitHubPort, RepoRef } from 'github';
-import {
-  parseAnswerComment,
-  parseQuestionComment,
-  parseStateLabel,
-  stateLabel,
-  type TaskState,
-} from 'shared';
+import { readThread } from '../questions/thread.js';
+import { parseStateLabel, stateLabel, type TaskState } from 'shared';
 import type { Resume } from './prompt.js';
 
 export const RESUME_REASONS = ['none', 'answer', 'ci-failure'] as const;
@@ -30,18 +25,18 @@ export async function gatherResume(
   if (input.reason === 'none') return { kind: 'none' };
 
   if (input.reason === 'answer') {
-    const comments = await github.listComments(ref, input.issueNumber);
-    const answers = comments.map((c) => parseAnswerComment(c.body)).filter((r) => r.ok);
-    const answer = answers.at(-1)?.value;
-    if (!answer)
-      throw new ResumeError('Reprise après réponse demandée, mais aucune réponse sur l’issue.');
-    const question = comments
-      .map((c) => parseQuestionComment(c.body))
-      .filter((r) => r.ok)
-      .map((r) => r.value)
-      .findLast((q) => q.id === answer.id);
-    if (!question) throw new ResumeError(`Question ${answer.id} introuvable sur l’issue.`);
-    return { kind: 'answer', question, answer };
+    // Même règle que le dispatcher : réponse du propriétaire à la dernière question bloquante.
+    const thread = readThread(await github.listComments(ref, input.issueNumber), ref.owner);
+    if (!thread.pending)
+      throw new ResumeError(
+        'Reprise après réponse demandée, mais aucune question bloquante sur l’issue.',
+      );
+    if (!thread.answer)
+      throw new ResumeError(
+        `Reprise après réponse demandée, mais la question ${thread.pending.question.id} n’a pas de réponse de ${ref.owner}.`,
+      );
+    const { commentId: _comment, ...answer } = thread.answer;
+    return { kind: 'answer', question: thread.pending.question, answer };
   }
 
   const runs = (await github.listWorkflowRuns(ref, { branch: input.branch }))

@@ -1,5 +1,6 @@
 import { FakeGitHub, GitHubError } from 'github';
 import {
+  parseQuestionComment,
   renderAnswerComment,
   renderQuestionComment,
   renderTaskIssueBody,
@@ -147,7 +148,12 @@ describe('contexte et reprise', () => {
     );
     await expect(
       gatherResume(github, ref, { ...input, issueNumber: empty.number }),
-    ).rejects.toThrow('Question Q9 introuvable');
+    ).rejects.toThrow('aucune question bloquante');
+    // Une question sans réponse du propriétaire ne permet pas de reprendre.
+    await github.createComment(ref, empty.number, renderQuestionComment({ ...question, id: 'Q9' }));
+    await expect(
+      gatherResume(github, ref, { ...input, issueNumber: empty.number }),
+    ).rejects.toThrow('la question Q9 n’a pas de réponse de kiamiya');
     expect(await gatherResume(github, ref, { ...input, reason: 'none' })).toEqual({ kind: 'none' });
   });
 
@@ -281,6 +287,46 @@ describe('préparation et finalisation', () => {
     await expect(
       prepareAgent({ ref, issueNumber, profileId: 'backend', attempt: 1, reason: 'none' }, deps),
     ).rejects.toThrow(ProfileError);
+  });
+
+  it('reprise après réponse : décision ajoutée à decisions.md et commitée sur la branche', async () => {
+    const question = { id: 'arrondi', blocking: true, text: 'Arrondir ?', options: [] };
+    await github.createComment(ref, issueNumber, renderQuestionComment(question));
+    await github.createComment(
+      ref,
+      issueNumber,
+      renderAnswerComment({ id: 'arrondi', decision: true, text: 'Oui, à 2 décimales.' }),
+    );
+    const files: Record<string, string> = { '.agentlake/profiles/frontend.yml': profileYaml };
+    const deps = (git: FakeGit) => ({
+      github,
+      git,
+      readFile: (path: string) => Promise.resolve(files[path] ?? null),
+      writeFile: (path: string, content: string) => {
+        files[path] = content;
+        return Promise.resolve();
+      },
+      token: 'jeton',
+      today: () => '2026-11-05',
+    });
+    const git = new FakeGit();
+    const prepared = await prepareAgent(
+      { ref, issueNumber, profileId: 'frontend', attempt: 2, reason: 'answer' },
+      deps(git),
+    );
+    expect(files['.agentlake/decisions.md']).toContain('## T04 — `arrondi` (2026-11-05)');
+    expect(files['.agentlake/decisions.md']).toContain('**Décision** : Oui, à 2 décimales.');
+    expect(git.commands()).toContain('commit -m docs(decisions): T04, réponse à arrondi');
+    expect(prepared.prompt).toContain('**Réponse** : Oui, à 2 décimales.');
+    expect(prepared.prompt).toContain('**Décision** : Oui, à 2 décimales.');
+
+    // Relancée (job mort) : la décision est déjà là, rien de plus.
+    const again = new FakeGit();
+    await prepareAgent(
+      { ref, issueNumber, profileId: 'frontend', attempt: 3, reason: 'answer' },
+      deps(again),
+    );
+    expect(again.commands()).not.toContain('docs(decisions)');
   });
 
   it('refuse un profil à pont sans variables, sans passer la tâche en running', async () => {
@@ -427,20 +473,90 @@ describe('préparation et finalisation', () => {
     expect(comments.at(-1)?.body).toContain('Auto-merge non activé');
   });
 
-  it.each([
-    ['Claude en échec', { conclusion: 'failure' }, 'l’exécution de Claude Code n’a pas abouti.'],
-    [
-      'agent bloqué',
-      {
+  it('question bloquante : publiée, travail poussé sans PR, tâche en attente de réponse', async () => {
+    await withBranch();
+    const git = workingGit();
+    const result = await finalizeAgent(
+      finalizeInput({
+        structuredOutput: JSON.stringify({
+          outcome: 'blocked',
+          pr_title: 'x',
+          pr_summary: 'x',
+          questions: [
+            { id: 'nommage', blocking: false, text: 'J’ai nommé la fonction somme.' },
+            {
+              id: 'arrondi',
+              blocking: true,
+              text: 'Faut-il arrondir les décimales ?',
+              context: 'La maquette ne le précise pas.',
+              options: ['Oui, à 2 décimales', 'Non'],
+            },
+            { id: 'mauvais id', blocking: true, text: 'ignorée : identifiant invalide' },
+          ],
+        }),
+      }),
+      { github, appGithub: github, git, appToken: 'a' },
+    );
+    expect(result).toEqual({ status: 'awaiting-answer', questionId: 'arrondi', pushed: true });
+    expect((await github.getIssue(ref, issueNumber)).labels).toEqual([
+      stateLabel('awaiting-answer'),
+    ]);
+    expect(git.commands()).toContain('push origin HEAD:refs/heads/task/T04-ajouter-une-fonction');
+    expect(await github.listPullRequests(ref)).toEqual([]);
+    const questions = (await github.listComments(ref, issueNumber)).map((c) =>
+      parseQuestionComment(c.body),
+    );
+    expect(questions.map((q) => q.ok && [q.value.id, q.value.blocking])).toEqual([
+      ['nommage', false],
+      ['arrondi', true],
+    ]);
+  });
+
+  it('agent bloqué sans question : la raison devient la question ; identifiant déjà pris suffixé', async () => {
+    await github.createComment(
+      ref,
+      issueNumber,
+      renderQuestionComment({ id: 'T04-q1', blocking: true, text: 'Ancienne.', options: [] }),
+    );
+    const result = await finalizeAgent(
+      finalizeInput({
         structuredOutput: JSON.stringify({
           outcome: 'blocked',
           pr_title: 'x',
           pr_summary: 'x',
           blocked_reason: 'Il manque la maquette.',
         }),
-      },
-      'Il manque la maquette.',
-    ],
+      }),
+      { github, appGithub: github, git: workingGit(false, '0'), appToken: 'a' },
+    );
+    expect(result).toEqual({ status: 'awaiting-answer', questionId: 'T04-q1-2', pushed: false });
+    const last = parseQuestionComment(
+      (await github.listComments(ref, issueNumber)).at(-1)?.body ?? '',
+    );
+    expect(last.ok && last.value.text).toBe('Il manque la maquette.');
+  });
+
+  it('livraison avec une question non bloquante : signalée sur l’issue, PR ouverte', async () => {
+    await withBranch();
+    const result = await finalizeAgent(
+      finalizeInput({
+        structuredOutput: JSON.stringify({
+          outcome: 'completed',
+          pr_title: 'Fonction somme',
+          pr_summary: 'Ajout.',
+          questions: [{ id: 'choix', blocking: false, text: 'Entiers seulement.' }],
+        }),
+      }),
+      { github, appGithub: github, git: workingGit(), appToken: 'a' },
+    );
+    expect(result.status).toBe('delivered');
+    expect((await github.listComments(ref, issueNumber))[0]?.body).toContain(
+      'Question non bloquante `choix`',
+    );
+  });
+
+  it.each([
+    ['Claude en échec', { conclusion: 'failure' }, 'l’exécution de Claude Code n’a pas abouti.'],
   ])('échec (%s) : fixing et commentaire de diagnostic', async (_name, overrides, reason) => {
     const result = await finalizeAgent(finalizeInput(overrides), {
       github,

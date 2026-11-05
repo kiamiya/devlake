@@ -1,6 +1,7 @@
 import type { GitHubPort, RepoRef } from 'github';
 import { parseTaskIssueBody, type TaskIssue } from 'shared';
-import { readProjectContext, taskBranch, type ReadFile } from './context.js';
+import { appendDecision } from '../questions/decisions.js';
+import { DECISIONS_PATH, readProjectContext, taskBranch, type ReadFile } from './context.js';
 import { checkoutTaskBranch, type Git } from './git.js';
 import {
   buildMcpConfig,
@@ -29,8 +30,12 @@ export interface PrepareDeps {
   github: GitHubPort;
   git: Git;
   readFile: ReadFile;
+  /** Écrit un fichier du dépôt (chemin relatif) ; sert à ajouter une décision. */
+  writeFile?: (path: string, content: string) => Promise<void>;
   /** Jeton du job, pour les opérations git de lecture. */
   token: string;
+  /** Date du jour (AAAA-MM-JJ) inscrite avec une décision. */
+  today?: () => string;
 }
 
 export interface Prepared {
@@ -67,15 +72,33 @@ export async function prepareAgent(input: PrepareInput, deps: PrepareDeps): Prom
   const branch = taskBranch(task.id, task.title);
   const branchState = await checkoutTaskBranch(deps.git, branch, deps.token);
 
-  const [context, resume] = await Promise.all([
-    readProjectContext(deps.readFile),
-    gatherResume(deps.github, input.ref, {
+  const resume = await gatherResume(deps.github, input.ref, {
+    issueNumber: input.issueNumber,
+    reason: input.reason,
+    branch,
+    attempt: input.attempt,
+  });
+  // Réponse promue en décision : ajoutée à decisions.md sur la branche de la tâche,
+  // avant la lecture du contexte (l'agent la voit) ; elle arrive sur main avec la PR.
+  if (resume.kind === 'answer' && resume.answer.decision && resume.answer.ignored !== true) {
+    const updated = appendDecision(await deps.readFile(DECISIONS_PATH), {
       issueNumber: input.issueNumber,
-      reason: input.reason,
-      branch,
-      attempt: input.attempt,
-    }),
-  ]);
+      taskId: task.id,
+      question: resume.question,
+      answer: resume.answer,
+      date: (deps.today ?? (() => new Date().toISOString().slice(0, 10)))(),
+    });
+    if (updated !== null && deps.writeFile) {
+      await deps.writeFile(DECISIONS_PATH, updated);
+      await deps.git.run(['add', DECISIONS_PATH]);
+      await deps.git.run([
+        'commit',
+        '-m',
+        `docs(decisions): ${task.id}, réponse à ${resume.question.id}`,
+      ]);
+    }
+  }
+  const context = await readProjectContext(deps.readFile);
   return {
     task,
     branch,

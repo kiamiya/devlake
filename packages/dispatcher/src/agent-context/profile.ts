@@ -96,6 +96,27 @@ export const OUTCOME_SCHEMA = {
       type: 'string',
       description: 'Si outcome = blocked : ce qui manque pour avancer.',
     },
+    questions: {
+      type: 'array',
+      description:
+        'Questions à Kia. Une question bloquante (blocking = true) suspend la tâche : outcome = blocked. Une question non bloquante signale un choix par défaut que tu as fait.',
+      items: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            description:
+              'Identifiant court, sans espace (lettres, chiffres, point, tiret, souligné).',
+          },
+          blocking: { type: 'boolean' },
+          text: { type: 'string', description: 'La question, en français.' },
+          context: { type: 'string', description: 'Ce que tu as vérifié, pourquoi tu demandes.' },
+          options: { type: 'array', items: { type: 'string' }, description: 'Réponses proposées.' },
+        },
+        required: ['id', 'blocking', 'text'],
+        additionalProperties: false,
+      },
+    },
   },
   required: ['outcome', 'pr_title', 'pr_summary'],
   additionalProperties: false,

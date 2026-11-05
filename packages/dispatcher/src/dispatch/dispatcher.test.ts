@@ -73,7 +73,7 @@ describe('passe sur GitHub', () => {
     const after = await github.getIssue(ref, issue.number);
     expect(after.labels).toEqual([TASK_LABEL, stateLabel('running')]);
     expect(after.body).toContain(
-      `<!-- agentlake:dispatch {"attempts":1,"launchedAt":"${NOW.toISOString()}"} -->`,
+      `<!-- agentlake:dispatch {"attempts":1,"launchedAt":"${NOW.toISOString()}","resumes":0} -->`,
     );
     expect(github.state(ref).dispatches).toEqual([
       {

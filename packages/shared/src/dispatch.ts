@@ -48,10 +48,12 @@ export function parseGlobalConfig(text: string): ParseResult<GlobalConfig> {
 export const DispatchMetaSchema = z.object({
   attempts: z.number().int().min(0),
   launchedAt: z.string().nullable(),
+  /** Lancements de reprise après une réponse : ils ne comptent pas comme des échecs. */
+  resumes: z.number().int().min(0).default(0),
 });
 export type DispatchMeta = z.infer<typeof DispatchMetaSchema>;
 
-export const EMPTY_DISPATCH_META: DispatchMeta = { attempts: 0, launchedAt: null };
+export const EMPTY_DISPATCH_META: DispatchMeta = { attempts: 0, launchedAt: null, resumes: 0 };
 
 const META_BLOCK = /\n*<!-- agentlake:dispatch ([^>]*) -->\s*$/;
 
@@ -68,7 +70,7 @@ export function readDispatchMeta(body: string): DispatchMeta {
 }
 
 /** Remplace (ou ajoute) le bloc du dispatcher en fin de corps ; le reste est inchangé. */
-export function writeDispatchMeta(body: string, meta: DispatchMeta): string {
+export function writeDispatchMeta(body: string, meta: z.input<typeof DispatchMetaSchema>): string {
   const base = normalizeNewlines(body).replace(META_BLOCK, '').trimEnd();
   return `${base}\n\n<!-- agentlake:dispatch ${encodeHiddenJson(DispatchMetaSchema.parse(meta))} -->\n`;
 }

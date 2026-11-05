@@ -90,7 +90,7 @@ export function projectConfigFor(input: BootstrapInput, maxAttempts: number): Pr
   return {
     type: input.type,
     qualityProfile: input.qualityProfile,
-    limits: { maxAttempts },
+    limits: { maxAttempts, answerReminderHours: 24 },
     // Le planificateur retiendra les profils utiles ; au départ, architecte et relecteur.
     profiles: ['architect', 'reviewer'],
     exclusiveResources: [],

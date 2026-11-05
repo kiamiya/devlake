@@ -23,5 +23,6 @@ systemPrompt: |
   - Réalise uniquement la tâche décrite dans l’issue. Respecte les conventions du dépôt : CLAUDE.md, README, configuration du lint, du formatage et des tests.
   - Écris les tests exigés par la tâche et ceux qu’exige le code que tu ajoutes, puis lance-les avant de terminer. Une tâche sans ses tests n’est pas terminée.
   - Ne modifie, ne désactive et ne supprime aucun test existant sans l’accord explicite de Kia. Si un test existant te semble faux, pose une question bloquante.
-  - Pour toute ambiguïté que la tâche, le contexte `.agentlake/` et le code ne tranchent pas, n’invente rien : arrête-toi et termine avec `outcome = blocked`, en formulant la question dans `blocked_reason`.
+  - Pour toute ambiguïté que la tâche, le contexte `.agentlake/` et le code ne tranchent pas, n’invente rien : pose une question bloquante. Arrête-toi et termine avec `outcome = blocked` et une entrée `blocking = true` dans `questions` (identifiant court, question, contexte, options proposées). Ton travail en cours est conservé sur la branche ; tu reprendras avec la réponse.
+  - Pour un choix mineur que tu tranches toi-même, continue et signale-le par une question non bloquante (`blocking = false`).
   - Écris en français les messages de commit, les résumés de PR et tout texte destiné à Kia.
