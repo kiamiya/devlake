@@ -59,6 +59,8 @@ export interface GitHubPort {
    * à commiter (`lfsPointerText`) à la place du binaire.
    */
   uploadLfsObjects(ref: RepoRef, files: readonly Uint8Array[]): Promise<LfsPointer[]>;
+  /** Télécharge un binaire du stockage Git LFS du dépôt. */
+  downloadLfsObject(ref: RepoRef, pointer: LfsPointer): Promise<Uint8Array>;
 
   // Issues, labels, commentaires
   createIssue(ref: RepoRef, input: CreateIssueInput): Promise<Issue>;

@@ -10,7 +10,22 @@ import {
   type DepositResult,
   type ImportRole,
 } from './deposit.js';
+import {
+  planValidatedAt,
+  previewDocument,
+  previewFiles,
+  readDecisions,
+  removeDocument,
+  setDocumentNote,
+  setDocumentRole,
+  type Preview,
+} from './context-ops.js';
 import type { ParserRegistry } from './registry.js';
+
+export interface ChosenFiles {
+  files: { token: string; name: string; size: number }[];
+  repositoryPrivate: boolean;
+}
 
 export class PublicRepoNotAcknowledgedError extends Error {
   constructor() {
@@ -53,20 +68,31 @@ export class ContextService {
     return { owner: project.owner, repo: project.repo };
   }
 
-  async chooseFiles(projectId: string): Promise<{
-    files: { token: string; name: string; size: number }[];
-    repositoryPrivate: boolean;
-  }> {
+  async chooseFiles(projectId: string): Promise<ChosenFiles> {
     const ref = this.project(projectId);
     const repository = await (await this.deps.github()).getRepository(ref);
     const paths = await this.deps.pickFiles(this.deps.registry.extensions());
+    return this.register(paths, repository.private);
+  }
+
+  /** Fichiers déposés dans le cockpit : chemins fournis par le preload (webUtils). */
+  async registerDropped(projectId: string, paths: readonly string[]): Promise<ChosenFiles> {
+    const ref = this.project(projectId);
+    const repository = await (await this.deps.github()).getRepository(ref);
+    return this.register(paths, repository.private);
+  }
+
+  private async register(
+    paths: readonly string[],
+    repositoryPrivate: boolean,
+  ): Promise<ChosenFiles> {
     const files = [];
     for (const path of paths) {
       const token = randomUUID();
       this.chosen.set(token, path);
       files.push({ token, name: basename(path), size: await this.deps.fileSize(path) });
     }
-    return { files, repositoryPrivate: repository.private };
+    return { files, repositoryPrivate };
   }
 
   async import(input: {
@@ -94,8 +120,71 @@ export class ContextService {
     return result;
   }
 
-  async list(projectId: string): Promise<ContextEntry[]> {
-    return (await readContextIndex(await this.deps.github(), this.project(projectId), 'main'))
-      .files;
+  async list(
+    projectId: string,
+  ): Promise<{ entries: ContextEntry[]; planValidatedAt: string | null }> {
+    const github = await this.deps.github();
+    const ref = this.project(projectId);
+    const [index, validatedAt] = await Promise.all([
+      readContextIndex(github, ref, 'main'),
+      planValidatedAt(github, ref),
+    ]);
+    return { entries: index.files, planValidatedAt: validatedAt };
+  }
+
+  /** Aperçu des fichiers choisis ou déposés, avant versement. */
+  async previewStaged(tokens: readonly string[]): Promise<(Preview & { token: string })[]> {
+    const files = [];
+    for (const token of tokens) {
+      const path = this.chosen.get(token);
+      if (path === undefined) throw new UnknownFileError();
+      files.push({ name: basename(path), data: await this.deps.readFile(path) });
+    }
+    const previews = await previewFiles(this.deps.registry, files);
+    return previews.map((preview, i) => ({ ...preview, token: tokens[i] ?? '' }));
+  }
+
+  async preview(projectId: string, path: string): Promise<Preview> {
+    return previewDocument(await this.deps.github(), this.project(projectId), path);
+  }
+
+  async setRole(
+    projectId: string,
+    path: string,
+    role: ImportRole,
+  ): Promise<{ commitSha: string | null }> {
+    return {
+      commitSha: await setDocumentRole(
+        await this.deps.github(),
+        this.project(projectId),
+        path,
+        role,
+      ),
+    };
+  }
+
+  async setNote(
+    projectId: string,
+    path: string,
+    note: string,
+  ): Promise<{ commitSha: string | null }> {
+    return {
+      commitSha: await setDocumentNote(
+        await this.deps.github(),
+        this.project(projectId),
+        path,
+        note,
+      ),
+    };
+  }
+
+  async remove(projectId: string, path: string): Promise<{ commitSha: string | null }> {
+    return {
+      commitSha: await removeDocument(await this.deps.github(), this.project(projectId), path),
+    };
+  }
+
+  async decisions(projectId: string): Promise<{ content: string | null }> {
+    return { content: await readDecisions(await this.deps.github(), this.project(projectId)) };
   }
 }

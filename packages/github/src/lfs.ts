@@ -34,6 +34,9 @@ const BatchResponse = z.object({
           verify: z
             .object({ href: z.string(), header: z.record(z.string(), z.string()).optional() })
             .optional(),
+          download: z
+            .object({ href: z.string(), header: z.record(z.string(), z.string()).optional() })
+            .optional(),
         })
         .optional(),
       error: z.object({ code: z.number(), message: z.string() }).optional(),
@@ -144,4 +147,50 @@ export class LfsClient {
     }
     return pointers;
   }
+
+  /** Télécharge un objet du stockage LFS du dépôt. */
+  async download(ref: RepoRef, pointer: LfsPointer): Promise<Uint8Array> {
+    const auth = `Basic ${Buffer.from(`x-access-token:${this.token}`).toString('base64')}`;
+    const batch = await this.send(
+      `${this.webUrl}/${ref.owner}/${ref.repo}.git/info/lfs/objects/batch`,
+      {
+        method: 'POST',
+        headers: { accept: LFS_JSON, 'content-type': LFS_JSON, authorization: auth },
+        body: JSON.stringify({
+          operation: 'download',
+          transfers: ['basic'],
+          objects: [pointer],
+          hash_algo: 'sha256',
+        }),
+      },
+      'batch',
+    );
+    const parsed = BatchResponse.safeParse(await batch.json());
+    if (!parsed.success)
+      throw new GitHubError('invalid-response', 'Réponse inattendue de l’API LFS.');
+    const object = parsed.data.objects[0];
+    if (object?.error) {
+      throw new GitHubError(
+        object.error.code === 404 ? 'not-found' : 'validation',
+        `LFS : ${object.error.message}`,
+        object.error.code,
+      );
+    }
+    const download = object?.actions?.download;
+    if (!download) throw new GitHubError('not-found', `Objet LFS ${pointer.oid} introuvable.`, 404);
+    const response = await this.send(
+      download.href,
+      { method: 'GET', headers: { ...download.header } },
+      `téléchargement ${pointer.oid.slice(0, 12)}`,
+    );
+    return new Uint8Array(await response.arrayBuffer());
+  }
+}
+
+/** Lit un fichier pointeur LFS ; null si le texte n'en est pas un. */
+export function parseLfsPointer(text: string): LfsPointer | null {
+  const oid = /^oid sha256:([0-9a-f]{64})$/m.exec(text)?.[1];
+  const size = /^size (\d+)$/m.exec(text)?.[1];
+  if (!text.startsWith('version https://git-lfs.github.com/spec/') || !oid || !size) return null;
+  return { oid, size: Number(size) };
 }

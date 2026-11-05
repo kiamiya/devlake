@@ -1,8 +1,6 @@
 # Notes
 
 - Point **un**
-- Point deux   
-
-
+- Point deux
 
 Fin.

@@ -41,3 +41,13 @@ describe('index du contexte', () => {
     expect(parseContextIndex({ version: 2, files: [] }).ok).toBe(false);
   });
 });
+
+describe('note d’un document', () => {
+  it('accepte une note et refuse une note trop longue', () => {
+    expect(parseContextIndex({ version: 1, files: [{ ...entry, note: 'À relire' }] }).ok).toBe(
+      true,
+    );
+    const long = parseContextIndex({ version: 1, files: [{ ...entry, note: 'x'.repeat(2001) }] });
+    expect(!long.ok && long.error).toContain('Note trop longue');
+  });
+});

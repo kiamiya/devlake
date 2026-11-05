@@ -26,7 +26,19 @@ export const IPC_CHANNELS = [
   'context:choose-files',
   'context:import',
   'context:list',
+  'context:preview',
+  'context:preview-staged',
+  'context:set-role',
+  'context:set-note',
+  'context:remove',
+  'context:decisions',
 ] as const;
+
+/**
+ * Canal réservé au preload : il convertit les fichiers déposés en chemins (webUtils).
+ * Absent de IPC_CHANNELS, il n'est pas accessible par l'invoke générique du renderer.
+ */
+export const DROPPED_FILES_CHANNEL = 'context:register-dropped';
 
 export type IpcChannel = (typeof IPC_CHANNELS)[number];
 
@@ -45,4 +57,6 @@ export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: IpcErrorP
 /** API exposée au renderer par le preload (`window.agentlake`). */
 export interface AgentLakeBridge {
   invoke(channel: IpcChannel, input?: unknown): Promise<IpcResult<unknown>>;
+  /** Enregistre des fichiers déposés pour un projet ; renvoie des identifiants opaques. */
+  dropFiles(projectId: string, files: readonly File[]): Promise<IpcResult<unknown>>;
 }

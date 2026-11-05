@@ -27,3 +27,13 @@ export async function invoke<C extends IpcChannel>(
   if (!result.ok) throw new IpcError(result.error);
   return result.data as IpcOutput<C>;
 }
+
+/** Fichiers déposés dans le cockpit : le preload résout leurs chemins, jamais le renderer. */
+export async function dropFiles(
+  projectId: string,
+  files: readonly File[],
+): Promise<IpcOutput<'context:choose-files'>> {
+  const result = await window.agentlake.dropFiles(projectId, files);
+  if (!result.ok) throw new IpcError(result.error);
+  return result.data as IpcOutput<'context:choose-files'>;
+}

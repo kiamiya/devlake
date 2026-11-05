@@ -708,8 +708,34 @@ export function githubEmulator(fake: FakeGitHub): HttpHandler[] {
         return json({ message: 'Authentification LFS requise' }, 401);
       }
       const [, owner = '', repo = ''] = match;
-      const body = (await request.json()) as { objects: { oid: string; size: number }[] };
+      const body = (await request.json()) as {
+        operation: 'upload' | 'download';
+        objects: { oid: string; size: number }[];
+      };
       const state = fake.state({ owner, repo });
+      if (body.operation === 'download') {
+        return json({
+          transfer: 'basic',
+          objects: body.objects.map((o) =>
+            state.lfs.has(o.oid)
+              ? {
+                  oid: o.oid,
+                  size: o.size,
+                  actions: {
+                    download: {
+                      href: `${LFS_STORAGE}/${owner}/${repo}/${o.oid}`,
+                      header: { authorization: 'RemoteAuth jeton' },
+                    },
+                  },
+                }
+              : {
+                  oid: o.oid,
+                  size: o.size,
+                  error: { code: 404, message: 'Object does not exist' },
+                },
+          ),
+        });
+      }
       return json({
         transfer: 'basic',
         objects: body.objects.map((o) =>
@@ -737,6 +763,10 @@ export function githubEmulator(fake: FakeGitHub): HttpHandler[] {
       const [pointer] = await fake.uploadLfsObjects(refOf(params), [data]);
       if (pointer?.oid !== param(params, 'oid')) return json({ message: 'oid incohérent' }, 422);
       return empty(200);
+    }),
+    http.get(`${LFS_STORAGE}/:owner/:repo/:oid`, ({ params }) => {
+      const data = fake.state(refOf(params)).lfs.get(param(params, 'oid'));
+      return data ? new HttpResponse(data, { status: 200 }) : json({ message: 'absent' }, 404);
     }),
     http.post(`${LFS_STORAGE}/verify/:owner/:repo`, async ({ params, request }) => {
       const body = (await request.json()) as { oid: string };

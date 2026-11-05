@@ -84,6 +84,8 @@ const ProjectPlanShape = z.object({
   milestones: z.array(MilestoneSchema),
   tasks: z.array(PlanTaskSchema).min(1, 'Le plan doit contenir au moins une tâche.'),
   profiles: z.array(RetainedProfileSchema).min(1, 'Le plan doit retenir au moins un profil.'),
+  /** Date de validation du plan par Kia (renseignée par la revue du plan, T10). */
+  validatedAt: z.iso.datetime({ message: 'Date ISO 8601 attendue.' }).optional(),
   proposedAgents: z
     .number()
     .int('Le nombre d’agents proposé doit être un entier.')
