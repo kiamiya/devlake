@@ -4,6 +4,7 @@ import { isGitHubError } from 'github';
 import {
   ALL_LABELS,
   isGameProject,
+  PROFILES_DIR,
   requiredChecksFor,
   type ProjectConfig,
   type ProjectType,
@@ -70,6 +71,8 @@ export interface BootstrapDeps {
   /** Tentatives avant escalade, reprises dans project.yml. */
   maxAttempts: number;
   callerTemplates: Readonly<Record<string, string>>;
+  /** Profils d'agents par défaut (`templates/profiles`), nom du fichier → contenu. */
+  profileTemplates: Readonly<Record<string, string>>;
 }
 
 const MAIN = 'main';
@@ -187,12 +190,19 @@ export async function bootstrapProject(
       if ((await github.getFile(ref, path, MAIN))?.content !== content)
         changes.push({ path, content });
     }
-    // project.yml n'est écrit que s'il manque : il peut avoir été ajusté depuis.
-    if (!(await github.getFile(ref, PROJECT_CONFIG_PATH, MAIN))) {
-      changes.push({
-        path: PROJECT_CONFIG_PATH,
-        content: projectYaml(projectConfigFor(input, deps.maxAttempts)),
-      });
+    // project.yml et les profils ne sont écrits que s'ils manquent : le projet peut les avoir
+    // ajustés depuis (modifier un profil le surcharge pour ce projet).
+    const ifMissing = new Map<string, () => string>([
+      [PROJECT_CONFIG_PATH, () => projectYaml(projectConfigFor(input, deps.maxAttempts))],
+      ...Object.entries(deps.profileTemplates)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, content]): [string, () => string] => [
+          `${PROFILES_DIR}/${name}`,
+          () => content,
+        ]),
+    ]);
+    for (const [path, content] of ifMissing) {
+      if (!(await github.getFile(ref, path, MAIN))) changes.push({ path, content: content() });
     }
     if (changes.length === 0) return 'unchanged';
     await github.commitFiles(ref, {
@@ -200,7 +210,7 @@ export async function bootstrapProject(
       message: 'chore: bootstrap AgentLake',
       changes,
     });
-    return changes.length === desired.size + 1 ? 'created' : 'updated';
+    return changes.length === desired.size + ifMissing.size ? 'created' : 'updated';
   });
 
   await run('branch-protection', async () => {

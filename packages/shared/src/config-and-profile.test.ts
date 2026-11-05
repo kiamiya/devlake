@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { parseAgentProfile } from './agent-profile.js';
+import { stringify } from 'yaml';
+import { loadAgentProfile, parseAgentProfile, placeholdersIn } from './agent-profile.js';
+import { PROFILE_IDS } from './ids.js';
 import type { ParseResult } from './common.js';
 import { parseProjectConfig } from './project-config.js';
 import { makeAgentProfile, makeProjectConfig } from './test-utils.js';
@@ -79,5 +84,72 @@ describe('AgentProfile', () => {
     ['profil inconnu', { id: 'designer' }, 'id : Profil inconnu.'],
   ])('refuse : %s', (_name, overrides, message) => {
     expect(errorOf(parseAgentProfile({ ...makeAgentProfile(), ...overrides }))).toContain(message);
+  });
+});
+
+describe('profils par défaut (templates/profiles)', () => {
+  const dir = fileURLToPath(new URL('../../../templates/profiles/', import.meta.url));
+  const load = (id: string) => loadAgentProfile(readFileSync(join(dir, `${id}.yml`), 'utf8'), id);
+
+  it.each(PROFILE_IDS)('%s passe le schéma et porte les règles communes', (id) => {
+    const loaded = load(id);
+    if (!loaded.ok) throw new Error(loaded.error);
+    const prompt = loaded.value.systemPrompt;
+    expect(prompt).toContain('outcome = blocked');
+    if (id !== 'reviewer') {
+      expect(prompt).toContain('Écris les tests');
+      expect(prompt).toContain('Ne modifie, ne désactive et ne supprime aucun test existant');
+    }
+    const usesBridge = id === 'unity' || id === 'unreal';
+    expect(Object.keys(loaded.value.mcpServers)).toEqual(usesBridge ? ['aura'] : []);
+    expect(loaded.value.allowedTools.includes('mcp__aura')).toBe(usesBridge);
+    if (usesBridge) expect(prompt).toContain('editor_checkout');
+  });
+
+  it('modèle par alias : Opus pour architecte et relecteur, Sonnet ailleurs', () => {
+    for (const id of PROFILE_IDS) {
+      const loaded = load(id);
+      expect(loaded.ok && loaded.value.model).toBe(
+        id === 'architect' || id === 'reviewer' ? 'opus' : 'sonnet',
+      );
+    }
+  });
+});
+
+describe('chargement d’un profil YAML', () => {
+  it('signale un YAML invalide, un profil invalide ou un autre identifiant', () => {
+    expect(errorOf(loadAgentProfile('model: [', 'qa'))).toContain(
+      '.agentlake/profiles/qa.yml n’est pas un YAML valide',
+    );
+    expect(errorOf(loadAgentProfile('id: qa\n', 'qa'))).toContain('est invalide');
+    expect(errorOf(loadAgentProfile(stringify(makeAgentProfile({ id: 'qa' })), 'docs'))).toContain(
+      'décrit le profil « qa »',
+    );
+  });
+
+  it('refuse une variable inconnue, un serveur MCP non HTTP ou mal nommé', () => {
+    const withServers = (servers: unknown) =>
+      parseAgentProfile({ ...makeAgentProfile(), mcpServers: servers });
+    expect(errorOf(withServers({ aura: { type: 'http', url: '${SECRET}' } }))).toContain(
+      'L’URL du serveur MCP cite une variable inconnue',
+    );
+    expect(
+      errorOf(
+        withServers({ aura: { type: 'http', url: 'https://x', headers: { A: '${GH_TOKEN}' } } }),
+      ),
+    ).toContain('Un en-tête du serveur MCP cite une variable inconnue');
+    expect(errorOf(withServers({ aura: { type: 'stdio', url: 'x' } }))).toContain(
+      'Seuls les serveurs MCP de type « http »',
+    );
+    expect(errorOf(withServers({ Aura: { type: 'http', url: 'x' } }))).toContain(
+      'Nom de serveur MCP attendu en minuscules',
+    );
+    expect(placeholdersIn('${A} et ${B}')).toEqual(['A', 'B']);
+  });
+
+  it('les serveurs MCP sont facultatifs', () => {
+    const { mcpServers: _omis, ...sans } = makeAgentProfile();
+    const parsed = parseAgentProfile(sans);
+    expect(parsed.ok && parsed.value.mcpServers).toEqual({});
   });
 });

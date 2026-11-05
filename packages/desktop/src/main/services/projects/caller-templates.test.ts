@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
-import { CALLER_TEMPLATES } from './caller-templates.js';
+import { loadAgentProfile, PROFILE_IDS } from 'shared';
+import { CALLER_TEMPLATES, PROFILE_TEMPLATES } from './caller-templates.js';
 import { DEVLAKE_REPOSITORY, renderCallers } from './files.js';
 
 describe('gabarits réels templates/caller', () => {
@@ -104,5 +105,17 @@ describe('gabarit d’appel du planificateur', () => {
       'devlake_ref',
     ]);
     expect(workflow.jobs.plan.with.devlake_ref).toBe('v1');
+  });
+});
+
+describe('profils par défaut intégrés au cockpit', () => {
+  it('embarque les onze profils, valides, copiés tels quels au bootstrap', () => {
+    expect(Object.keys(PROFILE_TEMPLATES).sort()).toEqual(
+      PROFILE_IDS.map((id) => `${id}.yml`).sort(),
+    );
+    for (const id of PROFILE_IDS) {
+      const loaded = loadAgentProfile(PROFILE_TEMPLATES[`${id}.yml`] ?? '', id);
+      expect(loaded.ok ? 'valide' : loaded.error).toBe('valide');
+    }
   });
 });

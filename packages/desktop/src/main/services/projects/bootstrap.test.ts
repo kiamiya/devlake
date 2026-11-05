@@ -19,6 +19,11 @@ const TEMPLATES = {
     'jobs:\n  a:\n    uses: __DEVLAKE_REPOSITORY__/.github/workflows/agent-task.yml@__DEVLAKE_REF__\n',
 };
 
+const PROFILES = {
+  'architect.yml': 'id: architect\n',
+  'reviewer.yml': 'id: reviewer\n',
+};
+
 /** Faux jeton de test, sans valeur réelle. */
 const CLAUDE_TOKEN = 'sk-ant-oat01-jeton-de-test'; // gitleaks:allow
 
@@ -29,7 +34,14 @@ async function setup(options: { claudeToken?: boolean } = {}) {
   const github = new FakeGitHub({ actor: 'kiamiya' });
   const vault = new MemoryVault();
   if (options.claudeToken ?? true) await vault.set('claude-oauth-token', CLAUDE_TOKEN);
-  const deps = { github, vault, workflowsRef: 'v1', maxAttempts: 3, callerTemplates: TEMPLATES };
+  const deps = {
+    github,
+    vault,
+    workflowsRef: 'v1',
+    maxAttempts: 3,
+    callerTemplates: TEMPLATES,
+    profileTemplates: PROFILES,
+  };
   return { github, vault, deps };
 }
 
@@ -149,6 +161,32 @@ describe('bootstrap d’un projet', () => {
     expect((await github.getFile(ref, '.agentlake/project.yml'))?.content).toContain(
       'ajusté à la main',
     );
+  });
+
+  it('copie les profils par défaut une fois, sans écraser un profil surchargé', async () => {
+    const { github, deps } = await setup();
+    await bootstrapProject(web, deps);
+    expect((await github.getFile(ref, '.agentlake/profiles/architect.yml'))?.content).toBe(
+      'id: architect\n',
+    );
+    await github.commitFiles(ref, {
+      branch: 'main',
+      message: 'surcharge',
+      changes: [{ path: '.agentlake/profiles/reviewer.yml', content: 'id: reviewer\nmodel: x\n' }],
+    });
+    const report = await bootstrapProject(web, {
+      ...deps,
+      profileTemplates: {
+        ...PROFILES,
+        'reviewer.yml': 'id: reviewer\nmodel: nouveau\n',
+        'qa.yml': 'id: qa\n',
+      },
+    });
+    expect(report.steps.find((s) => s.step === 'files')?.status).toBe('updated');
+    expect((await github.getFile(ref, '.agentlake/profiles/reviewer.yml'))?.content).toContain(
+      'model: x',
+    );
+    expect((await github.getFile(ref, '.agentlake/profiles/qa.yml'))?.content).toBe('id: qa\n');
   });
 
   it('met à jour les workflows d’appel quand la version épinglée change', async () => {
