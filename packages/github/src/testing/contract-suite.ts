@@ -30,6 +30,15 @@ export function describeGitHubContract(
       fake.seedRepository(ref);
     });
 
+    describe('compte', () => {
+      it('donne le compte du jeton et liste ses dépôts', async () => {
+        expect(await port.getAuthenticatedUser()).toEqual({ login: 'kiamiya' });
+        fake.seedRepository({ owner: 'kiamiya', repo: 'autre' });
+        fake.seedRepository({ owner: 'quelquun', repo: 'pas-a-moi' });
+        expect((await port.listRepositories()).map((r) => r.name)).toEqual(['autre', 'contrat']);
+      });
+    });
+
     describe('dépôts', () => {
       it('crée un dépôt et le relit', async () => {
         const created = await port.createRepository({ name: 'nouveau', private: false });

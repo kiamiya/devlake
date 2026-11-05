@@ -15,7 +15,14 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['packages/*/src/**/*.ts'],
-      exclude: ['**/*.test.ts', '**/src/testing/**', 'packages/desktop/src/renderer/**'],
+      exclude: [
+        '**/*.test.ts',
+        '**/src/testing/**',
+        'packages/desktop/src/renderer/**',
+        // Amorçage Electron et preload : couverts par les tests E2E Playwright.
+        'packages/desktop/src/main/index.ts',
+        'packages/desktop/src/preload/**',
+      ],
       reporter: ['text', 'html', 'json-summary'],
       thresholds: {
         lines: 80,

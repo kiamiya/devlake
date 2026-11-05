@@ -1,0 +1,49 @@
+@import 'tailwindcss';
+
+/* Jetons de thème au format shadcn/ui. */
+@theme {
+  --color-background: oklch(0.985 0 0);
+  --color-foreground: oklch(0.21 0.006 285.9);
+  --color-muted: oklch(0.967 0.001 286.4);
+  --color-muted-foreground: oklch(0.552 0.016 285.9);
+  --color-border: oklch(0.92 0.004 286.3);
+  --color-input: oklch(0.92 0.004 286.3);
+  --color-ring: oklch(0.705 0.015 286.1);
+  --color-primary: oklch(0.21 0.006 285.9);
+  --color-primary-foreground: oklch(0.985 0 0);
+  --color-secondary: oklch(0.967 0.001 286.4);
+  --color-secondary-foreground: oklch(0.21 0.006 285.9);
+  --color-destructive: oklch(0.577 0.245 27.3);
+  --color-success: oklch(0.627 0.17 149.2);
+  --color-warning: oklch(0.769 0.165 70.1);
+  --color-card: oklch(1 0 0);
+  --radius-md: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: oklch(0.141 0.005 285.8);
+    --color-foreground: oklch(0.985 0 0);
+    --color-muted: oklch(0.274 0.006 286);
+    --color-muted-foreground: oklch(0.705 0.015 286.1);
+    --color-border: oklch(0.274 0.006 286);
+    --color-input: oklch(0.274 0.006 286);
+    --color-primary: oklch(0.985 0 0);
+    --color-primary-foreground: oklch(0.21 0.006 285.9);
+    --color-secondary: oklch(0.274 0.006 286);
+    --color-secondary-foreground: oklch(0.985 0 0);
+    --color-card: oklch(0.21 0.006 285.9);
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: system-ui, sans-serif;
+}

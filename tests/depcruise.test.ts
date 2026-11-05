@@ -24,7 +24,10 @@ describe('règles de dependency-cruiser', () => {
     expect(violations).toEqual(
       expect.arrayContaining([
         'shared-dependances: packages/shared/src/index.js → packages/planner/src/index.js',
-        'electron-reserve-a-desktop: packages/github/src/index.js → electron',
+        // « electron » ou son chemin résolu dans node_modules, selon qu'il est installé.
+        expect.stringMatching(
+          /^electron-reserve-a-desktop: packages\/github\/src\/index\.js → (electron|.*node_modules\/electron\/.*)$/,
+        ),
         'renderer-sans-main: packages/desktop/src/renderer/view.js → packages/desktop/src/main/app.js',
       ]),
     );

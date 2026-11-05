@@ -11,14 +11,14 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "tsc -b tsconfig.build.json",
+    "build": "tsc -b tsconfig.build.json && npm run build:app -w desktop",
     "typecheck": "tsc -b tsconfig.build.json && tsc -p tsconfig.json && npm run typecheck --workspaces",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run --coverage",
     "test:integration": "vitest run -c vitest.integration.config.ts",
     "test:live": "vitest run -c vitest.live.config.ts",
-    "test:e2e": "node -e \"console.log('Aucun test E2E pour l’instant : la suite Playwright du cockpit arrive avec T03.')\"",
+    "test:e2e": "npm run test:e2e -w desktop",
     "depcruise": "depcruise packages/*/src --config .dependency-cruiser.cjs",
     "clean": "tsc -b tsconfig.build.json --clean",
     "prepare": "husky"

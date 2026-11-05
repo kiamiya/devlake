@@ -4,6 +4,7 @@ import { GitHubError } from './errors.js';
 import type { GitHubPort } from './port.js';
 import { decryptSecret, generateSecretKeyPair, type SecretKeyPair } from './secrets.js';
 import type {
+  AuthenticatedUser,
   BranchProtection,
   BranchProtectionInput,
   Capabilities,
@@ -189,6 +190,22 @@ export class FakeGitHub implements GitHubPort {
   async putEncryptedSecret(ref: RepoRef, name: string, encryptedValue: string): Promise<void> {
     const value = await decryptSecret(await this.publicKey(), encryptedValue);
     this.state(ref).secrets.set(name, value);
+  }
+
+  // Compte
+
+  getAuthenticatedUser(): Promise<AuthenticatedUser> {
+    return Promise.resolve({ login: this.actor });
+  }
+
+  listRepositories(): Promise<Repository[]> {
+    return Promise.resolve(
+      [...this.repos.values()]
+        .map((s) => s.repository)
+        .filter((r) => r.owner === this.actor)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(clone),
+    );
   }
 
   // Dépôts

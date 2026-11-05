@@ -167,6 +167,16 @@ export function githubEmulator(fake: FakeGitHub): HttpHandler[] {
   const R = `${API}/repos/:owner/:repo`;
 
   return [
+    // Compte
+    http.get(
+      `${API}/user`,
+      handle(async () => json(await fake.getAuthenticatedUser())),
+    ),
+    http.get(
+      `${API}/user/repos`,
+      handle(async ({ url }) => json(page((await fake.listRepositories()).map(repoJson), url))),
+    ),
+
     // Dépôts
     http.post(
       `${API}/user/repos`,
