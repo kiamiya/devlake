@@ -1,7 +1,9 @@
 import type { GitHubPort, PullRequest, RepoRef, WorkflowRun } from 'github';
 import {
+  CADRAGE_LABEL,
   ciChecksFor,
   DEFAULT_RUNNER_CAP,
+  mainProtectionProblems,
   loadAgentProfile,
   parseStateLabel,
   parseTaskIssueBody,
@@ -68,6 +70,8 @@ const prTask = (pr: PullRequest) => PR_MARKER.exec(pr.body)?.[1];
 
 export interface GlobalCap {
   cap: number;
+  /** Pause globale (clé `paused` de devlake-config). */
+  paused?: boolean;
   /** Explication si la valeur par défaut a été appliquée. */
   note?: string;
 }
@@ -121,13 +125,16 @@ async function readTasks(github: GitHubPort, ref: RepoRef, log: (l: string) => v
   return { views, bodies: new Map(issues.map((i) => [i.number, i.body])) };
 }
 
-/** PR d'agent, ouvertes et mergées, par tâche. */
+/**
+ * PR d'agent, ouvertes et mergées, par tâche. Une PR de fork n'en est jamais une, même si
+ * elle recopie le marqueur : elle ne livre, ne corrige ni ne relance aucune tâche.
+ */
 async function readAgentPullRequests(github: GitHubPort, ref: RepoRef) {
   const open = new Map<string, PullRequest>();
   const merged = new Map<string, number>();
   for (const pr of await github.listPullRequests(ref, { state: 'all' })) {
     const task = prTask(pr);
-    if (task === undefined) continue;
+    if (task === undefined || pr.fromFork) continue;
     if (pr.state === 'open') open.set(task, pr);
     if (pr.state === 'merged') merged.set(task, pr.number);
   }
@@ -205,6 +212,8 @@ async function readQuestionThreads(
   for (const view of views) {
     if (!view.open || (view.state !== 'awaiting-answer' && view.state !== 'escalated')) continue;
     const thread = readThread(await deps.github.listComments(ref, view.number), ref.owner);
+    // Aucune question bloquante dans le fil : état incohérent, corrigé par le rattrapage.
+    view.questionMissing = thread.pending === null;
     const label = `#${String(view.number)} ${view.task.id}`;
     if (thread.answer !== null && thread.pending !== null) {
       if (isGuardQuestion(thread.pending.question.id)) {
@@ -281,15 +290,20 @@ export async function runDispatch(ref: RepoRef, deps: DispatcherDeps): Promise<D
   const { github, log } = deps;
   const project = await readProject(github, ref);
   const limits = project.limits;
-  const [{ views, bodies }, prs, agentRuns, global, minutes, mainChecks] = await Promise.all([
-    readTasks(github, ref, log),
-    readAgentPullRequests(github, ref),
-    readAgentRuns(github, ref),
-    deps.globalCap(),
-    deps.minutesRemaining(),
-    readMainChecks(github, ref, project),
-  ]);
+  const [{ views, bodies }, prs, agentRuns, global, minutes, mainChecks, protection] =
+    await Promise.all([
+      readTasks(github, ref, log),
+      readAgentPullRequests(github, ref),
+      readAgentRuns(github, ref),
+      deps.globalCap(),
+      deps.minutesRemaining(),
+      readMainChecks(github, ref, project),
+      github.getBranchProtectionSummary(ref, MAIN),
+    ]);
   if (global.note) log(global.note);
+  // Garde-fou : sans la protection posée au bootstrap, aucun agent ne part.
+  const protectionProblems = mainProtectionProblems(protection, project.qualityProfile);
+  if (protectionProblems.length > 0) await alertUnprotectedMain(ref, deps, protectionProblems);
   if (minutes.note) log(minutes.note);
   const ctx: PassContext = { ref, deps, bodies, openPrs: prs.open, agentRuns };
   await readQuestionThreads(views, limits.answerReminderHours, ctx);
@@ -347,7 +361,11 @@ export async function runDispatch(ref: RepoRef, deps: DispatcherDeps): Promise<D
     estimateMinutes: (task) => costs.get(task.profile) ?? DEFAULT_ESTIMATE_MINUTES,
     mainChecks,
     paused: deps.paused === true,
+    globalPaused: global.paused === true,
+    mainProtection: protectionProblems,
   });
+  if (global.paused === true)
+    log('Pause globale (devlake-config) : aucun agent ne sera lancé, tous projets confondus.');
   if (deps.paused === true) log('Projet en pause (AGENTLAKE_PAUSED) : aucun agent ne sera lancé.');
   for (const line of plan.log) log(line);
 
@@ -358,10 +376,66 @@ export async function runDispatch(ref: RepoRef, deps: DispatcherDeps): Promise<D
   return { plan, applied };
 }
 
+/** Marqueur de l'alerte « main non protégée » sur l'issue Cadrage. */
+export const PROTECTION_ALERT_MARKER = '<!-- agentlake:protection-alert -->';
+/** Une alerte au plus par jour. */
+const PROTECTION_ALERT_INTERVAL_MS = 24 * 3_600_000;
+
+/**
+ * Alerte sur l'issue Cadrage quand `main` n'est plus protégée comme au bootstrap, au plus une
+ * fois par jour. Le jeton du job ne peut pas rétablir la protection : Kia relance le
+ * bootstrap depuis le cockpit.
+ */
+async function alertUnprotectedMain(
+  ref: RepoRef,
+  deps: DispatcherDeps,
+  problems: readonly string[],
+): Promise<void> {
+  deps.log(`Protection de main incomplète : ${problems.join(' ; ')}. Aucun agent ne sera lancé.`);
+  const [cadrage] = await deps.github.listIssues(ref, { labels: [CADRAGE_LABEL], state: 'all' });
+  if (cadrage === undefined) {
+    deps.log('Pas d’issue Cadrage pour l’alerte : journal seulement.');
+    return;
+  }
+  const comments = await deps.github.listComments(ref, cadrage.number);
+  const last = comments.filter((c) => c.body.includes(PROTECTION_ALERT_MARKER)).at(-1);
+  if (
+    last !== undefined &&
+    deps.now().getTime() - Date.parse(last.createdAt) < PROTECTION_ALERT_INTERVAL_MS
+  )
+    return;
+  await deps.github.createComment(
+    ref,
+    cadrage.number,
+    [
+      PROTECTION_ALERT_MARKER,
+      `@${ref.owner} **Protection de \`main\` incomplète** : ${problems.join(' ; ')}.`,
+      '',
+      'Aucun agent n’est lancé tant qu’elle n’est pas rétablie. Relance le bootstrap du projet depuis le cockpit (il repose la protection), ou rétablis-la dans les réglages du dépôt.',
+    ].join('\n'),
+  );
+}
+
 async function applyAction(action: PassAction, ctx: PassContext): Promise<boolean> {
   const { ref, deps } = ctx;
   const { github } = deps;
   switch (action.kind) {
+    case 'repair':
+      await setTaskState(github, ref, action.issue, action.to);
+      await github.createComment(
+        ref,
+        action.issue,
+        `**État corrigé** par le rattrapage : ${action.reason} ; la tâche repasse à l’état \`${action.to}\`.`,
+      );
+      return true;
+    case 'close-merged':
+      await github.createComment(
+        ref,
+        action.issue,
+        `**Issue fermée par le rattrapage** : la PR${action.prNumber === null ? '' : ` #${String(action.prNumber)}`} de la tâche ${action.taskId} est mergée, mais l’issue était restée ouverte.`,
+      );
+      await github.updateIssue(ref, action.issue, { state: 'closed' });
+      return true;
     case 'promote':
       await setTaskState(github, ref, action.issue, 'ready');
       return true;

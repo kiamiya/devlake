@@ -174,10 +174,86 @@ describe('idempotence', () => {
     expect(planPass(input(after)).actions).toEqual([]);
   });
 
-  it('une tâche « running » sans lancement du dispatcher est laissée telle quelle', () => {
-    const plan = planPass(input([view(1, 'running')]));
+  it('« running » lancée à la main, run en cours : laissée telle quelle', () => {
+    const plan = planPass(
+      input([view(1, 'running')], { runs: [{ issueNumber: 1, attempt: 1, completed: false }] }),
+    );
     expect(plan.actions).toEqual([]);
-    expect(plan.log[0]).toContain('running sans lancement du dispatcher');
+  });
+});
+
+describe('rattrapage', () => {
+  it('étiquette running sans run actif : remise en file, puis promue et relancée', () => {
+    const plan = planPass(input([view(1, 'running')]));
+    expect(plan.actions).toEqual([
+      expect.objectContaining({ kind: 'repair', to: 'queued' }),
+      expect.objectContaining({ kind: 'promote', from: 'queued' }),
+      expect.objectContaining({ kind: 'launch', from: 'ready', attempt: 1 }),
+    ]);
+    expect(plan.log[0]).toContain('étiquette running sans run d’agent actif');
+  });
+
+  it('PR mergée, issue restée ouverte : fermée (le résumé suivra une fois fermée)', () => {
+    const plan = planPass(
+      input([view(1, 'running', {}, { meta: { attempts: 1, launchedAt: NOW.toISOString() } })], {
+        mergedTaskIds: new Set(['T01']),
+        mergedPrs: new Map([['T01', 7]]),
+      }),
+    );
+    expect(plan.actions).toEqual([{ kind: 'close-merged', issue: 1, taskId: 'T01', prNumber: 7 }]);
+  });
+
+  it('en attente de réponse sans question : prête et relancée, une fois l’agent terminé', () => {
+    const waiting = view(
+      1,
+      'awaiting-answer',
+      {},
+      { meta: { attempts: 1, launchedAt: NOW.toISOString() }, questionMissing: true },
+    );
+    // Agent encore en cours (il poste peut-être sa question) : rien.
+    expect(
+      planPass(input([waiting], { runs: [{ issueNumber: 1, attempt: 1, completed: false }] }))
+        .actions,
+    ).toEqual([]);
+    expect(
+      planPass(input([waiting], { runs: [{ issueNumber: 1, attempt: 1, completed: true }] }))
+        .actions,
+    ).toEqual([
+      expect.objectContaining({ kind: 'repair', to: 'ready' }),
+      expect.objectContaining({ kind: 'launch', from: 'ready', attempt: 2, resume: 'none' }),
+    ]);
+    // Une question posée : l'attente est normale.
+    expect(planPass(input([{ ...waiting, questionMissing: false }])).actions).toEqual([]);
+  });
+
+  it('escaladée sans question : question d’escalade reposée, état inchangé', () => {
+    const plan = planPass(
+      input([
+        view(
+          1,
+          'escalated',
+          {},
+          { meta: { attempts: 3, launchedAt: NOW.toISOString() }, questionMissing: true },
+        ),
+      ]),
+    );
+    expect(plan.actions).toEqual([{ kind: 'escalate', issue: 1, taskId: 'T01', attempts: 3 }]);
+  });
+});
+
+describe('garde-fous', () => {
+  it('pause globale, protection de main incomplète : aucun lancement, raisons au journal', () => {
+    const ready = [view(1, 'ready')];
+    expect(planPass(input(ready, { globalPaused: true })).actions).toEqual([]);
+    expect(planPass(input(ready, { globalPaused: true })).log).toContainEqual(
+      expect.stringContaining('pause globale'),
+    );
+    const unprotected = planPass(input(ready, { mainProtection: ['main n’est plus protégée'] }));
+    expect(unprotected.actions).toEqual([]);
+    expect(unprotected.log).toContainEqual(
+      expect.stringContaining('protection de main incomplète (main n’est plus protégée)'),
+    );
+    expect(planPass(input(ready, { mainProtection: [] })).actions).toHaveLength(1);
   });
 });
 

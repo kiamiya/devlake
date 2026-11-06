@@ -53,7 +53,8 @@ export async function runTestsGuard(
   const pr = await github.getPullRequest(ref, prNumber);
   const analysis = analyzeTestChanges(await github.listPullRequestFiles(ref, prNumber));
   const reasons: string[] = [];
-  const issue = linkedIssue(pr.body);
+  // PR de fork : jamais reliée à une tâche (aucune reprise, aucun changement d'état).
+  const issue = pr.fromFork ? null : linkedIssue(pr.body);
 
   if (analysis.alteredTests.length > 0) {
     const list = analysis.alteredTests.map((t) => `${t.file} (${t.kind})`);

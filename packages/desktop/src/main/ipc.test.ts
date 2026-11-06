@@ -241,6 +241,8 @@ describe('IPC — jeton et statut', () => {
       data: [
         { id: 'github', state: 'absent' },
         { id: 'aura', state: 'absent' },
+        { id: 'tunnel', state: 'absent' },
+        { id: 'config', state: 'absent' },
       ],
     });
 

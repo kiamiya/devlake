@@ -39,8 +39,14 @@ describe('configuration globale', () => {
   it('aller-retour, et erreurs lisibles', () => {
     expect(parseGlobalConfig(renderGlobalConfig({ maxConcurrentAgents: 4 }))).toEqual({
       ok: true,
-      value: { maxConcurrentAgents: 4 },
+      value: { maxConcurrentAgents: 4, paused: false },
     });
+    // Pause globale : écrite par le cockpit, absente des anciennes configurations.
+    expect(parseGlobalConfig(renderGlobalConfig({ maxConcurrentAgents: 2, paused: true }))).toEqual(
+      { ok: true, value: { maxConcurrentAgents: 2, paused: true } },
+    );
+    const pause = parseGlobalConfig('maxConcurrentAgents: 2\npaused: oui\n');
+    expect(!pause.ok && pause.error).toContain('paused doit valoir true ou false.');
     expect(parseGlobalConfig('a: [')).toMatchObject({ ok: false });
     const invalid = parseGlobalConfig('maxConcurrentAgents: 1.5\n');
     expect(!invalid.ok && invalid.error).toContain('Le plafond global doit être un entier.');

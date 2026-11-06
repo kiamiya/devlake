@@ -15,7 +15,7 @@ export const IntegrationStateSchema = z.enum(['ok', 'degraded', 'absent']);
 export type IntegrationState = z.infer<typeof IntegrationStateSchema>;
 
 export const IntegrationStatusSchema = z.object({
-  id: z.enum(['github', 'aura']),
+  id: z.enum(['github', 'aura', 'tunnel', 'config']),
   label: z.string(),
   state: IntegrationStateSchema,
   detail: z.string(),

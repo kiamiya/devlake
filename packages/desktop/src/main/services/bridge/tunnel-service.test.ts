@@ -121,6 +121,33 @@ describe('tunnel du cockpit', () => {
     await expect(tunnel.open()).rejects.toThrow('Tailscale indisponible');
     expect(gateway.stop).toHaveBeenCalled();
     expect(tunnel.state()).toMatchObject({ open: false, error: 'Tailscale indisponible' });
+    expect(tunnel.integrationStatus()).toEqual({
+      id: 'tunnel',
+      label: 'Tunnel',
+      state: 'degraded',
+      detail: 'Ouverture en échec : Tailscale indisponible',
+    });
+  });
+
+  it('barre d’état : fermé, ouvert, puis DÉGRADÉ après l’interrupteur', async () => {
+    expect(tunnel.integrationStatus()).toMatchObject({
+      state: 'absent',
+      detail: 'Fermé : ouvert automatiquement quand une tâche de jeu en a besoin.',
+    });
+    repos.settings.update({
+      tunnel: { provider: 'tailscale', gatewayPort: 8764, autoExpose: false },
+    });
+    expect(tunnel.integrationStatus().detail).toBe('Fermé.');
+    await tunnel.open();
+    expect(tunnel.integrationStatus()).toMatchObject({
+      state: 'ok',
+      detail: 'Ouvert (tailscale) : https://poste.tailnet.ts.net',
+    });
+    await tunnel.kill();
+    expect(tunnel.integrationStatus()).toMatchObject({
+      state: 'degraded',
+      detail: expect.stringContaining('Interrupteur actionné') as unknown,
+    });
   });
 
   it('exposition automatique : ouvert si un pont tourne et qu’une tâche de jeu attend, fermé sinon', async () => {

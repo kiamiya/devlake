@@ -56,6 +56,21 @@ export function requiredChecksFor(profile: QualityProfile): string[] {
   return [...ciChecksFor(profile), ...PULL_REQUEST_CHECKS];
 }
 
+/**
+ * Écarts de la protection de `main` (vue d'un jeton en lecture) par rapport à celle posée au
+ * bootstrap ; vide si `main` est protégée avec tous les checks obligatoires du profil.
+ */
+export function mainProtectionProblems(
+  summary: { protected: boolean; requiredChecks: readonly string[] } | null,
+  profile: QualityProfile,
+): string[] {
+  if (summary === null) return ['branche main introuvable'];
+  if (!summary.protected) return ['main n’est plus protégée'];
+  const present = new Set(summary.requiredChecks);
+  const missing = requiredChecksFor(profile).filter((check) => !present.has(check));
+  return missing.length === 0 ? [] : [`checks obligatoires retirés : ${missing.join(', ')}`];
+}
+
 /** Types de projet qui passent par le pont Aura. */
 export function isGameProject(type: ProjectType): boolean {
   return type === 'unity' || type === 'unreal';

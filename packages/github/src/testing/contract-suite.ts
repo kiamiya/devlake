@@ -65,6 +65,11 @@ export function describeGitHubContract(
 
       it('protège main avec les checks obligatoires', async () => {
         expect(await port.getBranchProtection(ref, 'main')).toBeNull();
+        expect(await port.getBranchProtectionSummary(ref, 'main')).toEqual({
+          protected: false,
+          requiredChecks: [],
+        });
+        expect(await port.getBranchProtectionSummary(ref, 'inexistante')).toBeNull();
         await port.protectBranch(ref, 'main', {
           requiredChecks: ['lint', 'tests'],
           enforceAdmins: true,
@@ -74,6 +79,11 @@ export function describeGitHubContract(
           requiredChecks: ['lint', 'tests'],
           enforceAdmins: true,
           requirePullRequest: true,
+        });
+        // Vue d'un jeton en lecture (dispatcher) : protégée, avec ses checks.
+        expect(await port.getBranchProtectionSummary(ref, 'main')).toEqual({
+          protected: true,
+          requiredChecks: ['lint', 'tests'],
         });
       });
 
@@ -310,6 +320,7 @@ export function describeGitHubContract(
           base: 'main',
           state: 'open',
           autoMerge: false,
+          fromFork: false,
         });
         expect(pr.headSha).toBe(fake.state(ref).branches.get('task/T01')?.sha);
         expect(await port.getPullRequest(ref, pr.number)).toEqual(pr);

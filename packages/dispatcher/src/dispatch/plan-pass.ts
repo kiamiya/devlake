@@ -24,6 +24,8 @@ export interface TaskView {
   answered?: boolean;
   /** PR d'agent ouverte pour la tâche, avec les checks en échec de son dernier commit. */
   pr?: OpenPullRequest;
+  /** En attente de réponse (ou escaladée) sans aucune question posée dans le fil. */
+  questionMissing?: boolean;
 }
 
 export interface OpenPullRequest {
@@ -72,6 +74,10 @@ export interface PassInput {
   mainChecks?: { ready: boolean; missing: readonly string[] };
   /** Projet en pause (variable AGENTLAKE_PAUSED) : aucun lancement. */
   paused?: boolean;
+  /** Pause globale (clé `paused` de devlake-config) : aucun lancement, tous projets. */
+  globalPaused?: boolean;
+  /** Écarts de la protection de `main` : tant qu'il y en a, aucun lancement. */
+  mainProtection?: readonly string[];
 }
 
 export type ResumeKind = 'none' | 'ci-failure' | 'answer';
@@ -102,7 +108,11 @@ export type PassAction =
       /** La tâche passe par l'éditeur : verrou d'éditeur côté workflow. */
       needsEditor: boolean;
     }
-  | { kind: 'summarize'; issue: number; taskId: string; prNumber: number };
+  | { kind: 'summarize'; issue: number; taskId: string; prNumber: number }
+  /** Rattrapage : état incohérent corrigé (événement manqué, geste manuel). */
+  | { kind: 'repair'; issue: number; taskId: string; to: TaskState; reason: string }
+  /** Rattrapage : PR de la tâche mergée, issue restée ouverte. */
+  | { kind: 'close-merged'; issue: number; taskId: string; prNumber: number | null };
 
 export interface PassPlan {
   actions: PassAction[];
@@ -182,6 +192,54 @@ export function planPass(input: PassInput): PassPlan {
   const log: string[] = [];
   const byId = new Map(input.tasks.map((t) => [t.task.id, t]));
   const effective = new Map<number, TaskState | null>(input.tasks.map((t) => [t.number, t.state]));
+  /** Plus aucun run d'agent en cours pour l'issue. */
+  const noActiveRun = (view: TaskView) =>
+    !input.runs.some((r) => r.issueNumber === view.number && !r.completed);
+
+  // 0. Rattrapage : la passe planifiée corrige ce qu'un événement manqué a laissé incohérent.
+  for (const view of input.tasks) {
+    if (!view.open) continue;
+    const label = `#${String(view.number)} ${view.task.id}`;
+    if (input.mergedTaskIds.has(view.task.id)) {
+      actions.push({
+        kind: 'close-merged',
+        issue: view.number,
+        taskId: view.task.id,
+        prNumber: input.mergedPrs?.get(view.task.id) ?? null,
+      });
+      effective.set(view.number, null);
+      log.push(`${label} : PR mergée mais issue ouverte, fermée.`);
+      continue;
+    }
+    const repair = (to: TaskState, reason: string) => {
+      actions.push({ kind: 'repair', issue: view.number, taskId: view.task.id, to, reason });
+      effective.set(view.number, to);
+      log.push(`${label} : ${reason}, remise à l’état ${to}.`);
+    };
+    if (
+      view.state === 'running' &&
+      view.meta.attempts === 0 &&
+      view.pr === undefined &&
+      noActiveRun(view)
+    ) {
+      repair('queued', 'étiquette running sans run d’agent actif');
+    } else if (
+      view.state === 'awaiting-answer' &&
+      view.questionMissing === true &&
+      noActiveRun(view)
+    ) {
+      repair('ready', 'en attente de réponse sans question posée');
+    } else if (view.state === 'escalated' && view.questionMissing === true) {
+      // Question d'escalade perdue : reposée, l'état ne change pas.
+      actions.push({
+        kind: 'escalate',
+        issue: view.number,
+        taskId: view.task.id,
+        attempts: view.meta.attempts,
+      });
+      log.push(`${label} : escaladée sans question posée, question reposée.`);
+    }
+  }
 
   // 1. Tâches livrées (PR ouverte) : la CI de la PR décide. Un check en échec sur un
   //    commit pas encore traité renvoie la tâche en correction.
@@ -206,13 +264,9 @@ export function planPass(input: PassInput): PassPlan {
   // 2. Jobs morts : run terminé (ou jamais apparu) alors que l'issue est toujours « running »,
   //    sans PR livrée.
   for (const view of input.tasks) {
-    if (!view.open || view.state !== 'running' || view.pr !== undefined) continue;
-    if (view.meta.attempts === 0) {
-      log.push(
-        `#${String(view.number)} ${view.task.id} : running sans lancement du dispatcher, ignorée.`,
-      );
-      continue;
-    }
+    if (!view.open || effective.get(view.number) !== 'running' || view.pr !== undefined) continue;
+    // Lancée à la main (sans le dispatcher) et encore en cours : rien à décider.
+    if (view.meta.attempts === 0) continue;
     const reason = deadReason(view, input);
     if (reason === null) continue;
     actions.push({
@@ -288,8 +342,18 @@ export function planPass(input: PassInput): PassPlan {
       log.push(`${label} : ${String(view.meta.attempts)} tentatives, escaladée.`);
       continue;
     }
+    if (input.globalPaused === true) {
+      log.push(`${label} : pause globale, pas de lancement.`);
+      continue;
+    }
     if (input.paused === true) {
       log.push(`${label} : projet en pause, pas de lancement.`);
+      continue;
+    }
+    if ((input.mainProtection ?? []).length > 0) {
+      log.push(
+        `${label} : protection de main incomplète (${(input.mainProtection ?? []).join(' ; ')}), pas de lancement.`,
+      );
       continue;
     }
     if (input.mainChecks?.ready === false && !isBootstrapTask(view.task)) {

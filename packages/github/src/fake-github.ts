@@ -9,6 +9,7 @@ import type {
   AuthenticatedUser,
   BranchProtection,
   BranchProtectionInput,
+  BranchProtectionSummary,
   Capabilities,
   CheckRun,
   Comment,
@@ -86,6 +87,8 @@ export interface FakeGitHubOptions {
   actor?: string;
   /** Relations de dépendance natives disponibles (vrai par défaut). */
   issueDependencies?: boolean;
+  /** Horloge des dates de création (simulations à horloge simulée) ; l'horloge réelle sinon. */
+  now?: () => Date;
 }
 
 let nextId = 1000;
@@ -152,10 +155,12 @@ export class FakeGitHub implements GitHubPort {
   private readonly defaultIssueDependencies: boolean;
   private readonly repos = new Map<string, FakeRepoState>();
   private keyPair: SecretKeyPair | undefined;
+  private readonly now: () => Date;
 
   constructor(options: FakeGitHubOptions = {}) {
     this.actor = options.actor ?? 'kiamiya';
     this.defaultIssueDependencies = options.issueDependencies ?? true;
+    this.now = options.now ?? (() => new Date());
   }
 
   // Préparation et inspection
@@ -257,6 +262,48 @@ export class FakeGitHub implements GitHubPort {
     this.state(ref).pullFiles.set(prNumber, clone(files));
   }
 
+  /** PR ouverte par un compte tiers depuis son fork (la branche de tête est créée au passage). */
+  seedForkPullRequest(
+    ref: RepoRef,
+    input: { author: string; title: string; body: string; head: string },
+  ): PullRequest {
+    const state = this.state(ref);
+    const sha = randomBytes(20).toString('hex');
+    state.branches.set(input.head, {
+      ...(state.branches.get('main') ?? { files: new Map() }),
+      sha,
+    });
+    const pr: PullRequest = {
+      number: state.nextNumber++,
+      title: input.title,
+      body: input.body,
+      head: input.head,
+      base: 'main',
+      headSha: sha,
+      state: 'open',
+      autoMerge: false,
+      author: input.author,
+      fromFork: true,
+    };
+    state.pulls.set(pr.number, pr);
+    state.issues.set(pr.number, {
+      id: newId(),
+      number: pr.number,
+      title: pr.title,
+      body: pr.body,
+      state: 'open',
+      labels: [],
+      author: input.author,
+      isPullRequest: true,
+    });
+    return clone(pr);
+  }
+
+  /** Retire la protection d'une branche (geste manuel dans les réglages GitHub). */
+  unprotectBranch(ref: RepoRef, branch: string): void {
+    this.state(ref).protections.delete(branch);
+  }
+
   mergePullRequest(ref: RepoRef, prNumber: number): void {
     const pr = this.state(ref).pulls.get(prNumber);
     if (!pr) throw notFound(`PR #${String(prNumber)}`);
@@ -341,6 +388,18 @@ export class FakeGitHub implements GitHubPort {
 
   getBranchProtection(ref: RepoRef, branch: string): Promise<BranchProtection | null> {
     return this.run(() => clone(this.state(ref).protections.get(branch) ?? null));
+  }
+
+  getBranchProtectionSummary(
+    ref: RepoRef,
+    branch: string,
+  ): Promise<BranchProtectionSummary | null> {
+    return this.run(() => {
+      const state = this.state(ref);
+      if (!state.branches.has(branch)) return null;
+      const p = state.protections.get(branch);
+      return { protected: p !== undefined, requiredChecks: [...(p?.requiredChecks ?? [])] };
+    });
   }
 
   getCapabilities(ref: RepoRef): Promise<Capabilities> {
@@ -542,7 +601,7 @@ export class FakeGitHub implements GitHubPort {
         id: newId(),
         body,
         author: this.actor,
-        createdAt: new Date().toISOString(),
+        createdAt: this.now().toISOString(),
       };
       state.comments.set(issueNumber, [...(state.comments.get(issueNumber) ?? []), comment]);
       return clone(comment);
@@ -598,6 +657,7 @@ export class FakeGitHub implements GitHubPort {
         state: 'open',
         autoMerge: false,
         author: this.actor,
+        fromFork: false,
       };
       state.pulls.set(pr.number, pr);
       state.issues.set(pr.number, {

@@ -169,6 +169,20 @@ function SettingsForm({ initial }: { initial: Settings }) {
               }}
             />
           </div>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              id="globalPaused"
+              type="checkbox"
+              checked={form.globalPaused}
+              onChange={(e) => {
+                set('globalPaused', e.target.checked);
+              }}
+            />
+            <span>
+              Pause globale : aucun agent lancé, tous projets confondus (les agents en cours
+              finissent).
+            </span>
+          </label>
           <div className="flex flex-col gap-2">
             <Label htmlFor="maxAttempts">Tentatives avant escalade</Label>
             <Input

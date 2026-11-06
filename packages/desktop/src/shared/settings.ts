@@ -37,6 +37,8 @@ export const SettingsSchema = z.object({
     .int('Le plafond d’agents doit être un entier.')
     .min(1, 'Le plafond d’agents doit être au moins 1.')
     .max(50, 'Le plafond d’agents ne peut pas dépasser 50.'),
+  /** Pause globale : publiée dans devlake-config, aucun dispatcher ne lance d'agent. */
+  globalPaused: z.boolean(),
   /** Tentatives d'agent avant escalade. */
   maxAttempts: z
     .number()
@@ -83,6 +85,7 @@ export type Settings = z.infer<typeof SettingsSchema>;
 export const DEFAULT_SETTINGS: Settings = {
   githubAccount: 'kiamiya',
   maxConcurrentAgents: 3,
+  globalPaused: false,
   maxAttempts: 3,
   plannerModel: null,
   modelsByProfile: {},

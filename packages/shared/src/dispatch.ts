@@ -28,10 +28,15 @@ export const GlobalConfigSchema = z.object({
     .number()
     .int('Le plafond global doit être un entier.')
     .min(1, 'Le plafond global doit être au moins 1.'),
+  /**
+   * Pause globale : aucun dispatcher ne lance d'agent, tous projets confondus. S'ajoute à la
+   * pause d'un projet (variable AGENTLAKE_PAUSED).
+   */
+  paused: z.boolean({ error: 'paused doit valoir true ou false.' }).default(false),
 });
 export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;
 
-export function renderGlobalConfig(config: GlobalConfig): string {
+export function renderGlobalConfig(config: z.input<typeof GlobalConfigSchema>): string {
   return `# Configuration globale d'AgentLake, écrite par le cockpit.\n${stringify(GlobalConfigSchema.parse(config))}`;
 }
 
