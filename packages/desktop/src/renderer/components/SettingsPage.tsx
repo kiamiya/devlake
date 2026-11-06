@@ -241,6 +241,20 @@ function SettingsForm({ initial }: { initial: Settings }) {
               }}
             />
           </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="unrealEditorCmd">Chemin d’UnrealEditor-Cmd</Label>
+            <Input
+              id="unrealEditorCmd"
+              placeholder="C:\Program Files\Epic Games\UE_5.6\Engine\Binaries\Win64\UnrealEditor-Cmd.exe"
+              value={form.unrealEditorCmd ?? ''}
+              onChange={(e) => {
+                set('unrealEditorCmd', e.target.value.trim() === '' ? null : e.target.value);
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Tests d’automatisation Unreal lancés par la CI via le pont, sur le clone dédié.
+            </p>
+          </div>
           {(['unity', 'unreal'] as const).map((editor) => (
             <div key={editor} className="flex flex-col gap-2">
               <Label htmlFor={`aura-${editor}`}>

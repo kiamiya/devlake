@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   countRequiredTests,
   findDependencyCycle,
+  needsEditor,
   parseProjectPlan,
   type ProjectPlan,
 } from './plan.js';
@@ -65,6 +66,11 @@ describe('ProjectPlan — plans invalides', () => {
   ];
 
   const invalid: [string, unknown, string][] = [
+    [
+      'needsEditor non booléen',
+      { ...base, tasks: [bootstrap, { ...login, profile: 'unity', needsEditor: 'non' }, readme] },
+      'needsEditor doit valoir true ou false.',
+    ],
     [
       'cycle',
       {
@@ -182,6 +188,14 @@ describe('ProjectPlan — plans invalides', () => {
 });
 
 describe('outils du plan', () => {
+  it('besoin d’éditeur : profils de jeu, sauf code pur marqué needsEditor false', () => {
+    expect(needsEditor({ profile: 'unity' })).toBe(true);
+    expect(needsEditor({ profile: 'unreal', needsEditor: true })).toBe(true);
+    expect(needsEditor({ profile: 'unity', needsEditor: false })).toBe(false);
+    expect(needsEditor({ profile: 'backend' })).toBe(false);
+    expect(needsEditor({ profile: 'backend', needsEditor: true })).toBe(false);
+  });
+
   it('compte les tests exigés toutes catégories confondues', () => {
     expect(countRequiredTests({ unit: ['a', 'b'], e2e: ['c'] })).toBe(3);
     expect(countRequiredTests({})).toBe(0);

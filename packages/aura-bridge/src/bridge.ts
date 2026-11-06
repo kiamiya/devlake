@@ -22,6 +22,7 @@ import {
   verifyBridgeToken,
   type BridgePayload,
 } from 'shared/bridge-token';
+import { validateRequest, type AutomationRunner } from './automation/automation.js';
 import { EDITOR_CLOSED, type EditorState } from './editor-probe.js';
 import { EditorSyncError } from './editor-sync/git.js';
 import type { EditorSync } from './editor-sync/sync.js';
@@ -63,6 +64,8 @@ export interface BridgeOptions {
   probe?: () => Promise<EditorState>;
   /** Synchronisation du clone dédié : outils editor_checkout, editor_commit_push, editor_status. */
   editorSync?: EditorSync;
+  /** Tests d'automatisation lancés par la CI (`/automation`, Unreal). */
+  automation?: AutomationRunner;
 }
 
 /** Réponse de `/health`, signée avec le secret du pont. */
@@ -132,6 +135,39 @@ interface Session {
 }
 
 const MCP_PATH = '/mcp';
+const AUTOMATION_PATH = /^\/automation(?:\/([0-9a-f-]{36}))?$/;
+
+type Route =
+  | { kind: 'mcp' }
+  | { kind: 'health' }
+  | { kind: 'automation-start' }
+  | { kind: 'automation-get'; id: string };
+
+/** Route d'une requête, ou null (404). */
+function routeOf(method: string | undefined, pathname: string): Route | null {
+  if (pathname === MCP_PATH) return { kind: 'mcp' };
+  if (pathname === '/health' && method === 'GET') return { kind: 'health' };
+  const automation = AUTOMATION_PATH.exec(pathname);
+  if (automation) {
+    const id = automation[1];
+    if (id === undefined && method === 'POST') return { kind: 'automation-start' };
+    if (id !== undefined && method === 'GET') return { kind: 'automation-get', id };
+  }
+  return null;
+}
+
+const SCOPE_OF: Record<Route['kind'], BridgePayload['scope']> = {
+  mcp: 'mcp',
+  health: 'health',
+  'automation-start': 'ci',
+  'automation-get': 'ci',
+};
+const SCOPE_REFUSALS: Record<Route['kind'], string> = {
+  mcp: 'Ce jeton n’ouvre pas de session MCP.',
+  health: 'Ce jeton ouvre une session MCP, pas un contrôle de santé.',
+  'automation-start': 'Seul un jeton de CI lance des tests d’automatisation.',
+  'automation-get': 'Seul un jeton de CI lit des tests d’automatisation.',
+};
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
@@ -287,6 +323,89 @@ export class AuraBridge {
     this.sessions.clear();
   }
 
+  /** Réponse JSON signée avec le secret du pont (santé, tests d'automatisation). */
+  private sendSigned(res: ServerResponse, status: number, data: unknown): void {
+    const body = JSON.stringify(data);
+    res.writeHead(status, {
+      'content-type': 'application/json; charset=utf-8',
+      [BRIDGE_SIGNATURE_HEADER]: signBridgeResponse(body, this.options.secret),
+    });
+    res.end(body);
+  }
+
+  /** POST /automation : la CI lance les tests d'automatisation au commit de sa PR. */
+  private async startAutomation(
+    req: IncomingMessage,
+    res: ServerResponse,
+    payload: BridgePayload,
+    runner: AutomationRunner,
+  ): Promise<void> {
+    const body = (await readBody(req)) as Record<string, unknown> | undefined;
+    const field = (name: string) => {
+      const value = body?.[name];
+      return typeof value === 'string' ? value : '';
+    };
+    const request = {
+      repo: payload.repo,
+      runId: payload.runId,
+      branch: field('branch'),
+      sha: field('sha'),
+      filter: field('filter'),
+    };
+    const invalid = validateRequest(request);
+    if (invalid) {
+      this.refuse(res, 400, invalid, payload);
+      return;
+    }
+    const owner = { runId: payload.runId, repo: payload.repo, expiresAt: payload.exp * 1000 };
+    const lock = this.lock.acquire(owner, this.now().getTime());
+    if (!lock.ok || runner.busy) {
+      if (lock.ok) this.lock.release(payload.runId);
+      const holder = lock.ok ? 'une autre passe de tests' : `le run ${lock.holder.runId}`;
+      this.refuse(
+        res,
+        409,
+        `Éditeur ${this.options.editor} occupé par ${holder} : réessayer plus tard.`,
+        payload,
+      );
+      return;
+    }
+    const started = Date.now();
+    const job = runner.start(request, () => {
+      this.lock.release(payload.runId);
+      const done = runner.get(job.id);
+      this.audit({
+        repo: payload.repo,
+        runId: payload.runId,
+        tool: 'automation',
+        durationMs: Date.now() - started,
+        outcome: done?.state === 'error' ? 'error' : 'ok',
+        detail: done ? `${done.state} (${request.filter})` : null,
+      });
+    });
+    this.sendSigned(res, 202, job);
+  }
+
+  /** GET /automation/<id> : état de la passe ; chaque lecture garde le verrou à ce run. */
+  private getAutomation(
+    res: ServerResponse,
+    payload: BridgePayload,
+    runner: AutomationRunner,
+    id: string,
+  ): void {
+    const job = runner.get(id);
+    if (job?.repo !== payload.repo || job.runId !== payload.runId) {
+      sendJson(res, 404, { error: 'Passe de tests inconnue pour ce run.' });
+      return;
+    }
+    if (job.state === 'running')
+      this.lock.acquire(
+        { runId: payload.runId, repo: payload.repo, expiresAt: payload.exp * 1000 },
+        this.now().getTime(),
+      );
+    this.sendSigned(res, 200, job);
+  }
+
   /** Santé signée : pont actif, Aura joignable, éditeur ouvert, projet et branche. */
   private async sendHealth(res: ServerResponse, payload: BridgePayload): Promise<void> {
     const [aura, editor] = await Promise.all([this.auraAlive(), this.probeEditor()]);
@@ -300,12 +419,7 @@ export class AuraBridge {
       requestedBy: { repo: payload.repo, runId: payload.runId },
       at: this.now().toISOString(),
     };
-    const body = JSON.stringify(report);
-    res.writeHead(200, {
-      'content-type': 'application/json; charset=utf-8',
-      [BRIDGE_SIGNATURE_HEADER]: signBridgeResponse(body, this.options.secret),
-    });
-    res.end(body);
+    this.sendSigned(res, 200, report);
   }
 
   private async auraAlive(): Promise<boolean> {
@@ -363,8 +477,8 @@ export class AuraBridge {
 
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
-    const health = url.pathname === '/health' && req.method === 'GET';
-    if (url.pathname !== MCP_PATH && !health) {
+    const route = routeOf(req.method, url.pathname);
+    if (route === null) {
       sendJson(res, 404, { error: 'Introuvable.' });
       return;
     }
@@ -381,13 +495,13 @@ export class AuraBridge {
       this.refuse(res, 401, 'Jeton révoqué par l’interrupteur du cockpit.', payload);
       return;
     }
-    if (payload.scope !== (health ? 'health' : 'mcp')) {
+    if (payload.scope !== SCOPE_OF[route.kind]) {
       this.refuse(
         res,
         403,
-        health
-          ? 'Ce jeton ouvre une session MCP, pas un contrôle de santé.'
-          : 'Un jeton de santé n’ouvre pas de session MCP.',
+        route.kind === 'mcp' && payload.scope === 'health'
+          ? 'Un jeton de santé n’ouvre pas de session MCP.'
+          : SCOPE_REFUSALS[route.kind],
         payload,
       );
       return;
@@ -401,8 +515,20 @@ export class AuraBridge {
       );
       return;
     }
-    if (health) {
+    if (route.kind === 'health') {
       await this.sendHealth(res, payload);
+      return;
+    }
+    if (route.kind !== 'mcp') {
+      const runner = this.options.automation;
+      if (!runner) {
+        sendJson(res, 404, {
+          error: `Tests d’automatisation non disponibles sur le pont ${this.options.editor}.`,
+        });
+        return;
+      }
+      if (route.kind === 'automation-start') await this.startAutomation(req, res, payload, runner);
+      else this.getAutomation(res, payload, runner, route.id);
       return;
     }
     const lock = this.lock.acquire(

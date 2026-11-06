@@ -24,11 +24,15 @@ on:
         type: choice
         options: [none, answer, ci-failure]
         default: none
+      needs_editor:
+        description: La tâche passe par l'éditeur (une seule tâche d'éditeur à la fois par projet)
+        type: boolean
+        default: false
 
 permissions: {}
 
-# Pas de groupe de concurrence ici : le job appelé a déjà `agentlake-task-<issue>`
-# (le même groupe à deux niveaux bloquerait le job indéfiniment).
+# Pas de groupe de concurrence ici : le job appelé a déjà `agentlake-task-<issue>` ou
+# `agentlake-editor-<dépôt>` (le même groupe à deux niveaux bloquerait le job indéfiniment).
 
 jobs:
   agent:
@@ -45,5 +49,6 @@ jobs:
       profile: ${{ inputs.profile }}
       attempt: ${{ inputs.attempt }}
       resume_reason: ${{ inputs.resume_reason }}
+      needs_editor: ${{ inputs.needs_editor }}
       devlake_ref: __DEVLAKE_REF__
     secrets: inherit

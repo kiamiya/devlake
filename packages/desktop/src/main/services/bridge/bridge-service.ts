@@ -1,11 +1,13 @@
 import {
   auraCommandFrom,
   AuraBridge,
+  AutomationRunner,
   connectStdioUpstream,
   EditorSync,
   prepareEditorClone,
   probeEditor,
   type GitExec,
+  type ProcessRunner,
   type AuditEntry,
   type AuraCommand,
   type AuraUpstream,
@@ -42,6 +44,8 @@ export interface BridgeServiceDeps {
   github?: () => Promise<GitHubPort>;
   /** Exécution de git (tests). */
   git?: GitExec;
+  /** Lancement d'UnrealEditor-Cmd (tests). */
+  runProcess?: ProcessRunner;
 }
 
 export interface BridgeView extends BridgeStatus {
@@ -114,6 +118,18 @@ export class BridgeService {
         token: () => this.deps.vault.get('github-token'),
         ...(this.deps.git ? { git: this.deps.git } : {}),
       }),
+      // Unreal : tests d'automatisation de la CI sur le clone dédié (UnrealEditor-Cmd).
+      ...(editor === 'unreal'
+        ? {
+            automation: new AutomationRunner({
+              clonesRoot: () => this.deps.repos.settings.get().editorClonesDir,
+              editorCmd: () => this.deps.repos.settings.get().unrealEditorCmd,
+              token: () => this.deps.vault.get('github-token'),
+              ...(this.deps.git ? { git: this.deps.git } : {}),
+              ...(this.deps.runProcess ? { run: this.deps.runProcess } : {}),
+            }),
+          }
+        : {}),
       onAudit: (entry) => {
         const list = this.audits.get(editor) ?? [];
         list.push(entry);

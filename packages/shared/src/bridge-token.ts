@@ -17,8 +17,11 @@ export const BridgePayloadSchema = z.object({
   exp: z.number().int().positive(),
   /** Émission (secondes) : l'interrupteur du cockpit révoque les jetons émis avant lui. */
   iat: z.number().int().positive().optional(),
-  /** Usage : session MCP d'un agent, ou contrôle de santé par le dispatcher. */
-  scope: z.enum(['mcp', 'health']).default('mcp'),
+  /**
+   * Usage : session MCP d'un agent, contrôle de santé par le dispatcher, ou tests
+   * d'automatisation lancés par la CI (gabarit Unreal).
+   */
+  scope: z.enum(['mcp', 'health', 'ci']).default('mcp'),
 });
 export type BridgePayload = z.infer<typeof BridgePayloadSchema>;
 export type BridgePayloadInput = z.input<typeof BridgePayloadSchema>;

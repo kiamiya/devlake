@@ -419,6 +419,30 @@ describe('préparation et finalisation', () => {
     ]);
   });
 
+  it('tâche de jeu en code pur : ni pont, ni identifiants, consigne « Sans éditeur »', async () => {
+    const unityYaml = stringify(
+      makeAgentProfile({
+        id: 'unity',
+        mcpServers: { aura: { type: 'http', url: '${AURA_BRIDGE_URL}', headers: {} } },
+      }),
+    );
+    const read = (path: string) =>
+      Promise.resolve(path === '.agentlake/profiles/unity.yml' ? unityYaml : null);
+    await github.updateIssue(ref, issueNumber, {
+      body: renderTaskIssueBody({ ...task, profile: 'unity', needsEditor: false }),
+    });
+    const git = new FakeGit();
+    // Sans AURA_BRIDGE_URL : pas de refus, le pont n'est pas utilisé.
+    const prepared = await prepareAgent(
+      { ref, issueNumber, profileId: 'unity', attempt: 1, reason: 'none' },
+      { github, git, readFile: read, token: 'jeton' },
+    );
+    expect(prepared.mcpConfig).toBeNull();
+    expect(prepared.claudeArgs).not.toContain('--mcp-config');
+    expect(prepared.prompt).toContain('## Sans éditeur');
+    expect(git.calls.some((c) => c[0] === 'config')).toBe(false);
+  });
+
   it('agent sans pont : aucune configuration d’identifiants dans le dépôt du runner', async () => {
     const git = new FakeGit();
     await prepareAgent(

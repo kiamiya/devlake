@@ -57,8 +57,23 @@ export const PlanTaskSchema = z.object({
   dependencies: z.array(TaskIdSchema),
   epic: cleanLine('L’épopée').optional(),
   milestone: cleanLine('Le jalon').optional(),
+  /**
+   * Tâche de jeu (Unity, Unreal) qui a besoin de l'éditeur via le pont Aura. Vrai par défaut ;
+   * faux pour du code pur C# ou C++ testable sans éditeur : ni verrou d'éditeur, ni pont.
+   */
+  needsEditor: z.boolean({ error: 'needsEditor doit valoir true ou false.' }).optional(),
 });
 export type PlanTask = z.infer<typeof PlanTaskSchema>;
+
+/** Profils de jeu, qui passent par l'éditeur et le pont Aura. */
+export const EDITOR_PROFILES = ['unity', 'unreal'] as const;
+
+/** La tâche a-t-elle besoin de l'éditeur (pont Aura, verrou d'éditeur) ? */
+export function needsEditor(task: Pick<PlanTask, 'profile' | 'needsEditor'>): boolean {
+  return (
+    (EDITOR_PROFILES as readonly string[]).includes(task.profile) && task.needsEditor !== false
+  );
+}
 
 const EpicSchema = z.object({
   id: cleanLine('L’identifiant d’épopée'),

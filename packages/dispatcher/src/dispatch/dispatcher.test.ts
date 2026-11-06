@@ -87,6 +87,7 @@ describe('passe sur GitHub', () => {
           profile: 'backend',
           attempt: '1',
           resume_reason: 'none',
+          needs_editor: 'false',
         },
       },
     ]);

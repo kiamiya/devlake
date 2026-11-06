@@ -103,6 +103,10 @@ describe('émission et réponses signées', () => {
     expect(issuedAt(parsed({ iat: 1_700_000_000 }))).toBe(1_700_000_000);
     expect(issuedAt(parsed({}))).toBe(payload.exp - BRIDGE_TOKEN_TTL_SECONDS);
     expect(issuedAt(parsed({ scope: 'health' }))).toBe(payload.exp - HEALTH_TOKEN_TTL_SECONDS);
+    // Jeton de CI (tests d'automatisation Unreal) : même durée de vie qu'un jeton d'agent.
+    expect(parsed({ scope: 'ci' }).scope).toBe('ci');
+    expect(issuedAt(parsed({ scope: 'ci' }))).toBe(payload.exp - BRIDGE_TOKEN_TTL_SECONDS);
+    expect(() => signBridgeToken({ ...payload, scope: 'autre' as 'ci' }, SECRET)).toThrow();
   });
 
   it('réponse signée : vérifiée telle quelle, refusée si modifiée ou avec un autre secret', () => {

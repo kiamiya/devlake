@@ -234,6 +234,25 @@ describe('pont Aura', () => {
     expect(kinds(plan)).toEqual(['wait-editor:T01', 'launch:T02']);
   });
 
+  it('code pur C#/C++ (needsEditor false) : part sans le pont ni le verrou d’éditeur', () => {
+    const plan = planPass(
+      input(
+        [
+          view(1, 'ready', { profile: 'unity', needsEditor: false }),
+          view(2, 'ready', { profile: 'unity' }),
+        ],
+        { bridgeHealthy: false },
+      ),
+    );
+    expect(kinds(plan)).toEqual(['launch:T01', 'wait-editor:T02']);
+    expect(plan.actions[0]).toMatchObject({ kind: 'launch', needsEditor: false });
+  });
+
+  it('tâche d’éditeur lancée : signalée au workflow (groupe de concurrence éditeur)', () => {
+    const plan = planPass(input([view(1, 'ready', { profile: 'unity' })], { bridgeHealthy: true }));
+    expect(plan.actions[0]).toMatchObject({ kind: 'launch', needsEditor: true });
+  });
+
   it('déjà en attente de l’éditeur : pas de nouvelle action tant que le pont est absent', () => {
     expect(
       planPass(input([view(1, 'waiting-editor', { profile: 'unreal' })], { bridgeHealthy: false }))

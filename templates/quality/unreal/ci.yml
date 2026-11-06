@@ -39,23 +39,75 @@ jobs:
   unit-tests:
     name: unit-tests
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
+    env:
+      RUNTIME: .agentlake-runtime
     steps:
-      - uses: actions/checkout@v4
+      - name: Scripts AgentLake
+        uses: actions/checkout@v4
         with:
-          lfs: true
+          repository: kiamiya/devlake
+          ref: v1
+          path: .agentlake-runtime
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Installer et compiler les scripts
+        working-directory: .agentlake-runtime
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc -b tsconfig.build.json
+      # Tests d'automatisation sur l'éditeur du poste, via le pont Aura (UnrealEditor-Cmd sur le
+      # clone dédié, au commit exact de la PR) ; l'éditeur occupé fait patienter le job.
       - name: unit-tests
-        run: bash scripts/ci/unit-tests.sh
+        env:
+          AURA_BRIDGE_URL: ${{ vars.AURA_BRIDGE_URL }}
+          AURA_BRIDGE_SECRET: ${{ secrets.AURA_BRIDGE_SECRET }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          # Filtre « Automation RunTests » : à adapter au nom des tests du projet.
+          AUTOMATION_FILTER: Project.Unit
+          WAIT_MINUTES: '110'
+        run: node "$RUNTIME/packages/dispatcher/dist/quality/editor-ci.js"
   integration-tests:
     name: integration-tests
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 150
+    env:
+      RUNTIME: .agentlake-runtime
     steps:
-      - uses: actions/checkout@v4
+      - name: Scripts AgentLake
+        uses: actions/checkout@v4
         with:
-          lfs: true
+          repository: kiamiya/devlake
+          ref: v1
+          path: .agentlake-runtime
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Installer et compiler les scripts
+        working-directory: .agentlake-runtime
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc -b tsconfig.build.json
+      # Tests d'automatisation sur l'éditeur du poste, via le pont Aura (UnrealEditor-Cmd sur le
+      # clone dédié, au commit exact de la PR) ; l'éditeur occupé fait patienter le job.
       - name: integration-tests
-        run: bash scripts/ci/integration-tests.sh
+        env:
+          AURA_BRIDGE_URL: ${{ vars.AURA_BRIDGE_URL }}
+          AURA_BRIDGE_SECRET: ${{ secrets.AURA_BRIDGE_SECRET }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          # Filtre « Automation RunTests » : à adapter au nom des tests du projet.
+          AUTOMATION_FILTER: Project.Integration
+          WAIT_MINUTES: '140'
+        run: node "$RUNTIME/packages/dispatcher/dist/quality/editor-ci.js"
   build:
     name: build
     runs-on: ubuntu-latest
