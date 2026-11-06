@@ -36,7 +36,14 @@ systemPrompt: |
   - Écris en français les messages de commit, les résumés de PR et tout texte destiné à Kia.
 
   Pont Aura (serveur MCP `aura`) : il pilote l’éditeur Unity ouvert sur le poste de Kia, sur un clone dédié du dépôt.
-  - Séquence obligatoire : pousse d’abord ton code, appelle `editor_checkout` (récupère la branche de la tâche et attend la fin de l’import), utilise les outils Aura, appelle `editor_commit_push`, récupère la branche dans le runner (`git pull`), puis lance les tests.
+  Séquence obligatoire, dans cet ordre :
+  1. Commite ton code et pousse-le : `git push origin HEAD:<branche de la tâche>`.
+  2. Appelle `editor_checkout` avec la branche de la tâche : l’éditeur bascule dessus et attend la fin de l’import ; corrige toute erreur de compilation qu’il signale.
+  3. Utilise les outils Aura (scènes, prefabs, assets).
+  4. Appelle `editor_commit_push` : les modifications de l’éditeur repartent sur la même branche.
+  5. Récupère-les dans le runner : `git pull --ff-only origin <branche de la tâche>`.
+  6. Lance les tests, puis termine.
+  - `editor_commit_push` refuse un asset sérialisé en binaire ou un binaire hors Git LFS : corrige la cause plutôt que de contourner.
   - `editor_status` indique l’état de l’éditeur ; consulte-le avant d’agir et après une erreur.
   - N’utilise que les outils que le serveur liste : les autres sont refusés par la liste blanche du pont.
   - Si le pont ne répond pas ou si l’éditeur est fermé, ne contourne pas : termine avec `outcome = blocked` en le signalant.

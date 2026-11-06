@@ -23,6 +23,8 @@ import {
   type BridgePayload,
 } from 'shared/bridge-token';
 import { EDITOR_CLOSED, type EditorState } from './editor-probe.js';
+import { EditorSyncError } from './editor-sync/git.js';
+import type { EditorSync } from './editor-sync/sync.js';
 import { EditorLock, IDLE_RELEASE_MS } from './editor-lock.js';
 import type { AuraUpstream } from './upstream.js';
 
@@ -59,6 +61,8 @@ export interface BridgeOptions {
   idleMs?: number;
   /** État de l'éditeur sur le poste (clone dédié ouvert, projet, branche). */
   probe?: () => Promise<EditorState>;
+  /** Synchronisation du clone dédié : outils editor_checkout, editor_commit_push, editor_status. */
+  editorSync?: EditorSync;
 }
 
 /** Réponse de `/health`, signée avec le secret du pont. */
@@ -75,6 +79,41 @@ export interface HealthReport {
   requestedBy: { repo: string; runId: string };
   at: string;
 }
+
+/** Outils ajoutés par le pont (synchronisation de l'éditeur), toujours proposés aux agents. */
+export const BRIDGE_TOOLS = [
+  {
+    name: 'editor_checkout',
+    description:
+      'Bascule le clone ouvert dans l’éditeur sur la branche de la tâche (déjà poussée), puis attend la fin de l’import ou de la compilation. Refusé si l’éditeur a des modifications non poussées.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        branch: { type: 'string', description: 'Branche de la tâche, ex. task/T04-saut.' },
+      },
+      required: ['branch'],
+    },
+  },
+  {
+    name: 'editor_commit_push',
+    description:
+      'Commite les scènes, prefabs, .meta et assets modifiés dans l’éditeur et les pousse sur la branche de la tâche. Refusé sur main, pour un asset sérialisé en binaire ou un binaire hors Git LFS.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        message: { type: 'string', description: 'Message de commit (Conventional Commits).' },
+      },
+      required: ['message'],
+    },
+  },
+  {
+    name: 'editor_status',
+    description:
+      'État du clone de l’éditeur : branche, fichiers modifiés, commits non poussés, erreurs de compilation, avertissements de sérialisation.',
+    inputSchema: { type: 'object' as const, properties: {} },
+  },
+];
+const BRIDGE_TOOL_NAMES = new Set(BRIDGE_TOOLS.map((t) => t.name));
 
 /** Délai maximal de réponse d'Aura pour la santé. */
 const AURA_PROBE_MS = 3_000;
@@ -193,6 +232,46 @@ export class AuraBridge {
     }
     await this.upstream?.close();
     this.upstream = null;
+  }
+
+  /** Outils du pont : la synchronisation du clone, résultat en JSON, erreurs lisibles par l'agent. */
+  private async callBridgeTool(
+    sync: EditorSync,
+    tool: string,
+    args: Record<string, unknown>,
+    payload: BridgePayload,
+    started: number,
+  ) {
+    const audit = (outcome: AuditEntry['outcome'], detail: string | null) => {
+      this.audit({
+        repo: payload.repo,
+        runId: payload.runId,
+        tool,
+        durationMs: Date.now() - started,
+        outcome,
+        detail,
+      });
+    };
+    try {
+      const result =
+        tool === 'editor_checkout'
+          ? await sync.checkout(payload.repo, typeof args.branch === 'string' ? args.branch : '')
+          : tool === 'editor_commit_push'
+            ? await sync.commitPush(
+                payload.repo,
+                typeof args.message === 'string' ? args.message : '',
+              )
+            : await sync.status(payload.repo);
+      audit('ok', null);
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+    } catch (error) {
+      if (!(error instanceof EditorSyncError)) {
+        audit('error', error instanceof Error ? error.message : String(error));
+        throw error;
+      }
+      audit('refused', error.message);
+      return { content: [{ type: 'text' as const, text: error.message }], isError: true };
+    }
   }
 
   /** Jetons émis avant cette date (secondes) refusés : posée par l'interrupteur du cockpit. */
@@ -385,13 +464,18 @@ export class AuraBridge {
       if (!this.upstream) throw new McpError(ErrorCode.InternalError, 'Pont arrêté.');
       return this.upstream;
     };
+    const sync = this.options.editorSync;
     server.setRequestHandler(ListToolsRequestSchema, async () => {
       const permitted = allowed();
-      return { tools: (await upstream().listTools()).filter((t) => permitted.has(t.name)) };
+      const aura = (await upstream().listTools()).filter((t) => permitted.has(t.name));
+      return { tools: sync ? [...BRIDGE_TOOLS, ...aura] : aura };
     });
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const tool = request.params.name;
       const started = Date.now();
+      if (sync && BRIDGE_TOOL_NAMES.has(tool)) {
+        return this.callBridgeTool(sync, tool, request.params.arguments ?? {}, payload, started);
+      }
       if (!allowed().has(tool)) {
         const message = `Outil « ${tool} » non autorisé pour le profil ${payload.profile}.`;
         this.audit({

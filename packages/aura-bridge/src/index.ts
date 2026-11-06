@@ -8,3 +8,6 @@ export * from './editor-probe.js';
 export * from './upstream.js';
 export * from './tunnel/gateway.js';
 export * from './tunnel/providers.js';
+export * from './editor-sync/editor-log.js';
+export * from './editor-sync/git.js';
+export * from './editor-sync/sync.js';

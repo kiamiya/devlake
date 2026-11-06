@@ -395,6 +395,7 @@ describe('préparation et finalisation', () => {
     ).rejects.toThrow('Le profil « unity » a besoin de AURA_BRIDGE_URL');
     expect((await github.getIssue(ref, issueNumber)).labels).toEqual([stateLabel('ready')]);
 
+    const git = new FakeGit();
     const prepared = await prepareAgent(
       {
         ref,
@@ -404,10 +405,27 @@ describe('préparation et finalisation', () => {
         reason: 'none',
         profileEnv: { AURA_BRIDGE_URL: 'https://pont' },
       },
-      { github, git: new FakeGit(), readFile: read, token: 'jeton' },
+      { github, git, readFile: read, token: 'jeton' },
     );
     expect(prepared.mcpConfig?.secrets).toEqual([]);
     expect(prepared.claudeArgs).toContain("--mcp-config 'agentlake-mcp.json'");
+    // Agent de jeu : push et pull possibles en cours de session (jeton du job, dépôt du runner).
+    const config = git.calls.find((c) => c[0] === 'config');
+    expect(config).toEqual([
+      'config',
+      '--local',
+      'http.https://github.com/.extraheader',
+      `AUTHORIZATION: basic ${Buffer.from('x-access-token:jeton').toString('base64')}`,
+    ]);
+  });
+
+  it('agent sans pont : aucune configuration d’identifiants dans le dépôt du runner', async () => {
+    const git = new FakeGit();
+    await prepareAgent(
+      { ref, issueNumber, profileId: 'frontend', attempt: 1, reason: 'none' },
+      { github, git, readFile, token: 'jeton' },
+    );
+    expect(git.calls.some((c) => c[0] === 'config')).toBe(false);
   });
 
   const finalizeInput = (overrides: Partial<FinalizeInput> = {}): FinalizeInput => ({

@@ -3,7 +3,7 @@ import { ciChecksFor, parseTaskIssueBody, ProjectConfigSchema, type TaskIssue } 
 import { parse } from 'yaml';
 import { appendDecision } from '../questions/decisions.js';
 import { DECISIONS_PATH, readProjectContext, taskBranch, type ReadFile } from './context.js';
-import { checkoutTaskBranch, type Git } from './git.js';
+import { authHeader, checkoutTaskBranch, type Git } from './git.js';
 import {
   buildMcpConfig,
   claudeArgs,
@@ -74,6 +74,14 @@ export async function prepareAgent(input: PrepareInput, deps: PrepareDeps): Prom
   await setTaskState(deps.github, input.ref, input.issueNumber, 'running');
   const branch = taskBranch(task.id, task.title);
   const branchState = await checkoutTaskBranch(deps.git, branch, deps.token);
+  // Agent de jeu : il pousse son code avant editor_checkout et récupère ensuite ce que
+  // l'éditeur a poussé, en cours de session. Le jeton du job est configuré pour ce seul dépôt
+  // du runner (éphémère), jamais commité.
+  if (Object.keys(profile.mcpServers).length > 0) {
+    const setting = authHeader(deps.token)[1] ?? '';
+    const split = setting.indexOf('=');
+    await deps.git.run(['config', '--local', setting.slice(0, split), setting.slice(split + 1)]);
+  }
 
   const resume = await gatherResume(deps.github, input.ref, {
     issueNumber: input.issueNumber,
