@@ -33,6 +33,13 @@ export const GlobalConfigSchema = z.object({
    * pause d'un projet (variable AGENTLAKE_PAUSED).
    */
   paused: z.boolean({ error: 'paused doit valoir true ou false.' }).default(false),
+  /**
+   * Projets AgentLake du cockpit (« owner/repo ») : chaque dispatcher y compte les agents en
+   * cours pour appliquer C_global au total, tous projets confondus.
+   */
+  projects: z
+    .array(z.string().regex(/^[^/\s]+\/[^/\s]+$/, 'Projet attendu au format owner/repo.'))
+    .default([]),
 });
 export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;
 

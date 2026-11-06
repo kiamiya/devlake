@@ -1,10 +1,5 @@
 import { isGitHubError, type GitHubPort } from 'github';
-import {
-  GLOBAL_CONFIG_PATH,
-  GLOBAL_CONFIG_REPOSITORY,
-  renderGlobalConfig,
-  type GlobalConfig,
-} from 'shared';
+import { GLOBAL_CONFIG_PATH, GLOBAL_CONFIG_REPOSITORY, renderGlobalConfig } from 'shared';
 
 export class GlobalConfigSyncError extends Error {
   constructor(cause: unknown) {
@@ -22,7 +17,7 @@ export class GlobalConfigSyncError extends Error {
  */
 export async function publishGlobalConfig(
   github: GitHubPort,
-  config: GlobalConfig,
+  config: Parameters<typeof renderGlobalConfig>[0],
 ): Promise<'created' | 'updated' | 'unchanged'> {
   const owner = (await github.getAuthenticatedUser()).login;
   const ref = { owner, repo: GLOBAL_CONFIG_REPOSITORY };
@@ -42,7 +37,7 @@ export async function publishGlobalConfig(
   if ((await github.getFile(ref, GLOBAL_CONFIG_PATH))?.content === content) return 'unchanged';
   await github.commitFiles(ref, {
     branch: 'main',
-    message: `chore: plafond global de ${String(config.maxConcurrentAgents)} agents`,
+    message: `chore: configuration globale (plafond de ${String(config.maxConcurrentAgents)} agents${config.paused === true ? ', pause globale' : ''}, ${String(config.projects?.length ?? 0)} projet(s))`,
     changes: [{ path: GLOBAL_CONFIG_PATH, content }],
   });
   return created ? 'created' : 'updated';

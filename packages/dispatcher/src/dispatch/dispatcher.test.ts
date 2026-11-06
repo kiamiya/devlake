@@ -188,21 +188,21 @@ describe('adaptateurs', () => {
   it('plafond global lu dans devlake-config, sinon valeur par défaut expliquée', async () => {
     const config = new FakeGitHub({ actor: 'kiamiya' });
     const repo = { owner: 'kiamiya', repo: 'devlake-config' };
-    expect(await readGlobalCap(null, 'kiamiya')).toMatchObject({
+    expect(await readGlobalCap(null, ref)).toMatchObject({
       cap: 3,
       note: expect.stringContaining('AGENTLAKE_CONFIG_TOKEN absent') as unknown,
     });
-    expect((await readGlobalCap(config, 'kiamiya')).note).toContain(
+    expect((await readGlobalCap(config, ref)).note).toContain(
       'lecture de kiamiya/devlake-config impossible',
     );
     config.seedRepository(repo, { private: true });
-    expect((await readGlobalCap(config, 'kiamiya')).note).toContain('config.yml absent');
+    expect((await readGlobalCap(config, ref)).note).toContain('config.yml absent');
     await config.commitFiles(repo, {
       branch: 'main',
       message: 'c',
       changes: [{ path: 'config.yml', content: renderGlobalConfig({ maxConcurrentAgents: 5 }) }],
     });
-    expect(await readGlobalCap(config, 'kiamiya')).toEqual({ cap: 5, paused: false });
+    expect(await readGlobalCap(config, ref)).toEqual({ cap: 5, paused: false, otherAgents: 0 });
     await config.commitFiles(repo, {
       branch: 'main',
       message: 'c',
@@ -213,15 +213,60 @@ describe('adaptateurs', () => {
         },
       ],
     });
-    expect(await readGlobalCap(config, 'kiamiya')).toEqual({ cap: 5, paused: true });
+    expect(await readGlobalCap(config, ref)).toEqual({ cap: 5, paused: true, otherAgents: 0 });
     await config.commitFiles(repo, {
       branch: 'main',
       message: 'c',
       changes: [{ path: 'config.yml', content: 'maxConcurrentAgents: 0\n' }],
     });
-    expect((await readGlobalCap(config, 'kiamiya')).note).toContain(
+    expect((await readGlobalCap(config, ref)).note).toContain(
       'Le plafond global doit être au moins 1.',
     );
+  });
+
+  it('C_global au total : agents en cours des autres projets comptés, projet illisible signalé', async () => {
+    const config = new FakeGitHub({ actor: 'kiamiya' });
+    const repo = { owner: 'kiamiya', repo: 'devlake-config' };
+    config.seedRepository(repo, { private: true });
+    const site = { owner: 'kiamiya', repo: 'site' };
+    config.seedRepository(site);
+    const run = (id: number, status: 'in_progress' | 'queued' | 'completed', target = site) => {
+      config.seedWorkflowRun(target, {
+        id,
+        name: 'AgentLake — agent',
+        title: `AgentLake — agent, issue #${String(id)}, tentative 1`,
+        workflow: 'agentlake-agent-task.yml',
+        status,
+        conclusion: null,
+        headBranch: 'main',
+        event: 'workflow_dispatch',
+        createdAt: '2026-11-06T08:00:00Z',
+        url: 'https://github.com/x',
+      });
+    };
+    run(1, 'in_progress');
+    run(2, 'queued');
+    run(3, 'completed');
+    // Les runs du projet courant sont comptés par la passe elle-même, pas ici.
+    config.seedRepository(ref);
+    run(4, 'in_progress', ref);
+    await config.commitFiles(repo, {
+      branch: 'main',
+      message: 'c',
+      changes: [
+        {
+          path: 'config.yml',
+          content: renderGlobalConfig({
+            maxConcurrentAgents: 3,
+            projects: ['kiamiya/site', 'kiamiya/jeu', 'kiamiya/disparu'],
+          }),
+        },
+      ],
+    });
+    const global = await readGlobalCap(config, ref);
+    expect(global).toMatchObject({ cap: 3, otherAgents: 2 });
+    expect(global.note).toContain('agents de kiamiya/disparu non comptés');
+    expect(global.note).toContain('AGENTLAKE_CONFIG_TOKEN doit pouvoir lire les Actions');
   });
 
   it('minutes : illimitées en public, lues en privé avec le jeton de facturation', async () => {

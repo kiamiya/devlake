@@ -42,7 +42,7 @@ docs/
 tests/e2e, tests/fixtures
 ```
 
-Règles de dépendances (vérifiées par dependency-cruiser) : `shared` ne dépend de rien ; `github` → shared ; `planner`, `dispatcher` → shared, github ; `aura-bridge` → shared ; `desktop` → shared, github, aura-bridge ; seul `desktop` importe Electron ; le renderer n'importe jamais le main.
+Règles de dépendances (vérifiées par dependency-cruiser) : `shared` ne dépend de rien ; `github` → shared ; `planner`, `dispatcher` → shared, github ; `aura-bridge` → shared ; `desktop` → shared, github, aura-bridge ; seul `desktop` importe Electron ; le renderer n'importe jamais le main. Exception de test (T22) : `desktop/src/main/testing/` (monde simulé des E2E) peut aussi dépendre de `dispatcher` et `planner`, et le cockpit ne le charge que par import dynamique, en mode E2E.
 
 Sécurité du cockpit : `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, CSP stricte ; jeton GitHub uniquement dans `safeStorage`.
 

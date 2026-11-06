@@ -1,0 +1,94 @@
+{
+  "name": "inventaire",
+  "description": "Projet web large (4 tâches parallèles après le bootstrap), sans question : sert au scénario multi-projets sous plafond global.",
+  "brief": "briefs/inventaire.md",
+  "clarification": [],
+  "answers": {},
+  "plan": {
+    "summary": "Outil web d'inventaire : articles, mouvements de stock, alertes de rupture, export CSV.",
+    "assumptions": ["Deux utilisateurs, sans gestion fine des droits"],
+    "epics": [{ "id": "E1", "title": "Stock" }],
+    "milestones": [{ "id": "J1", "title": "Première version" }],
+    "tasks": [
+      {
+        "id": "T00",
+        "title": "Bootstrap du dépôt",
+        "description": "Structure du projet web, conventions, CI complète du profil web.",
+        "kind": "code",
+        "profile": "architect",
+        "complexity": "M",
+        "acceptanceCriteria": ["La CI tourne et passe sur main"],
+        "requiredTests": { "unit": ["Test trivial du socle"] },
+        "codeZones": ["/"],
+        "exclusiveResources": [],
+        "dependencies": []
+      },
+      {
+        "id": "T01",
+        "title": "Fiches articles",
+        "description": "Créer, modifier et lister les articles.",
+        "kind": "code",
+        "profile": "backend",
+        "complexity": "S",
+        "acceptanceCriteria": ["Un article a une référence unique"],
+        "requiredTests": { "unit": ["Unicité de la référence"] },
+        "codeZones": ["src/articles/"],
+        "exclusiveResources": [],
+        "dependencies": ["T00"],
+        "epic": "E1"
+      },
+      {
+        "id": "T02",
+        "title": "Mouvements de stock",
+        "description": "Entrées et sorties, avec date et auteur.",
+        "kind": "code",
+        "profile": "backend",
+        "complexity": "S",
+        "acceptanceCriteria": ["Une sortie ne rend jamais une quantité négative"],
+        "requiredTests": { "unit": ["Sortie supérieure au stock refusée"] },
+        "codeZones": ["src/mouvements/"],
+        "exclusiveResources": [],
+        "dependencies": ["T00"],
+        "epic": "E1"
+      },
+      {
+        "id": "T03",
+        "title": "Alertes de rupture",
+        "description": "Alerte quand la quantité passe sous le seuil.",
+        "kind": "code",
+        "profile": "frontend",
+        "complexity": "S",
+        "acceptanceCriteria": ["L'alerte apparaît dès le passage sous le seuil"],
+        "requiredTests": { "unit": ["Seuil franchi"] },
+        "codeZones": ["src/web/alertes/"],
+        "exclusiveResources": [],
+        "dependencies": ["T00"],
+        "epic": "E1"
+      },
+      {
+        "id": "T04",
+        "title": "Export CSV",
+        "description": "Export du stock du jour au format CSV.",
+        "kind": "code",
+        "profile": "backend",
+        "complexity": "S",
+        "acceptanceCriteria": ["Le CSV contient une ligne par article"],
+        "requiredTests": { "unit": ["Échappement des virgules"] },
+        "codeZones": ["src/export/"],
+        "exclusiveResources": [],
+        "dependencies": ["T00"],
+        "epic": "E1"
+      }
+    ],
+    "profiles": [
+      { "profile": "architect", "justification": "Bootstrap du dépôt et de la CI." },
+      { "profile": "backend", "justification": "Articles, mouvements, export." },
+      { "profile": "frontend", "justification": "Alertes à l'écran." }
+    ]
+  },
+  "agents": {},
+  "agentAnswers": {},
+  "expected": {
+    "launches": { "T00": 1, "T01": 1, "T02": 1, "T03": 1, "T04": 1 }
+  }
+}

@@ -1,0 +1,97 @@
+name: AgentLake — @live nocturne
+
+# Tests @live (T22) sur les dépôts bac à sable de Kia : port GitHub réel, agent, tâche Unity,
+# planificateur réel sur les briefs de référence. Rapport dans le résumé du job et en artefact ;
+# en cas d'échec, une issue « agentlake:nightly » est ouverte (ou complétée, sans doublon).
+#
+# Configuration (dépôt devlake) :
+#   secrets   AGENTLAKE_SANDBOX_TOKEN (accès aux bacs à sable), CLAUDE_CODE_OAUTH_TOKEN
+#   variables AGENTLAKE_SANDBOX_REPO, AGENTLAKE_UNITY_SANDBOX_REPO, AGENTLAKE_LIVE_MODEL
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: agentlake-nightly-live
+  cancel-in-progress: false
+
+jobs:
+  live:
+    name: Tests @live sur le bac à sable
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Installer et compiler
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc -b tsconfig.build.json
+          npm install --global @anthropic-ai/claude-code
+
+      - name: Tests @live
+        id: live
+        env:
+          GITHUB_TOKEN: ${{ secrets.AGENTLAKE_SANDBOX_TOKEN }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          AGENTLAKE_SANDBOX_REPO: ${{ vars.AGENTLAKE_SANDBOX_REPO }}
+          AGENTLAKE_UNITY_SANDBOX_REPO: ${{ vars.AGENTLAKE_UNITY_SANDBOX_REPO }}
+          AGENTLAKE_LIVE_MODEL: ${{ vars.AGENTLAKE_LIVE_MODEL }}
+        # Le résultat est jugé par le rapport (des tests tous sautés comptent comme un échec).
+        run: |
+          set +e
+          npx vitest run -c vitest.live.config.ts --reporter=default --reporter=json --outputFile=live-report.json
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Rapport
+        id: report
+        if: always()
+        run: |
+          set +e
+          node scripts/nightly-report.ts live-report.json > report.md
+          echo "ok=$?" >> "$GITHUB_OUTPUT"
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Rapport en artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-report
+          path: |
+            live-report.json
+            report.md
+          if-no-files-found: warn
+
+      - name: Issue d’échec (ouverte ou complétée)
+        if: always() && steps.report.outputs.ok != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          printf '\n[Run du %s](%s)\n' "$(date -u +%F)" "$RUN_URL" >> report.md
+          number=$(gh issue list --repo "$GITHUB_REPOSITORY" --label agentlake:nightly --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body-file report.md
+          else
+            gh label create agentlake:nightly --repo "$GITHUB_REPOSITORY" --color B60205 --description 'Échec du @live nocturne' --force
+            gh issue create --repo "$GITHUB_REPOSITORY" --title 'Échec des tests @live nocturnes' --label agentlake:nightly --body-file report.md
+          fi
+
+      - name: Résultat
+        if: always() && steps.report.outputs.ok != '0'
+        run: exit 1

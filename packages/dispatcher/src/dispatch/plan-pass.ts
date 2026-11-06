@@ -47,6 +47,8 @@ export interface PassLimits {
   projectCap: number | null;
   /** C_global (dépôt devlake-config). */
   globalCap: number;
+  /** Agents en cours dans les autres projets (C_global au total) ; 0 si inconnu. */
+  otherAgents?: number;
   /** C_runners : jobs simultanés permis par GitHub. */
   runnerCap: number;
   maxAttempts: number;
@@ -320,11 +322,13 @@ export function planPass(input: PassInput): PassPlan {
     );
 
   const { projectCap, globalCap, runnerCap } = input.limits;
-  const cap = Math.min(projectCap ?? Number.POSITIVE_INFINITY, globalCap, runnerCap);
+  const others = input.limits.otherAgents ?? 0;
+  // C_global s'applique au total : les agents des autres projets occupent leur part.
+  const cap = Math.min(projectCap ?? Number.POSITIVE_INFINITY, globalCap - others, runnerCap);
   let capacity = Math.max(0, cap - agents);
   let minutes = input.minutesRemaining;
   log.push(
-    `Capacité : min(projet ${projectCap === null ? '—' : String(projectCap)}, global ${String(globalCap)}, runners ${String(runnerCap)}) − ${String(agents)} en cours = ${String(capacity)}.`,
+    `Capacité : min(projet ${projectCap === null ? '—' : String(projectCap)}, global ${String(globalCap)}${others > 0 ? ` − ${String(others)} ailleurs` : ''}, runners ${String(runnerCap)}) − ${String(agents)} en cours = ${String(capacity)}.`,
   );
 
   for (const view of candidates) {

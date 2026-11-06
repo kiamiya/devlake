@@ -63,11 +63,31 @@ export class CockpitService {
     )
       return settings;
     if ((await this.deps.vault.get('github-token')) === null) return settings;
+    await this.syncGlobalConfig();
+    return settings;
+  }
+
+  /** Configuration globale attendue : réglages et projets connus du cockpit. */
+  private desiredGlobalConfig() {
+    const settings = this.deps.repos.settings.get();
+    return {
+      maxConcurrentAgents: settings.maxConcurrentAgents,
+      paused: settings.globalPaused,
+      projects: this.deps.repos.projects
+        .list()
+        .map((p) => p.id)
+        .sort(),
+    };
+  }
+
+  /**
+   * Publie la configuration globale (plafond, pause, projets) dans devlake-config ; les
+   * dispatchers y comptent les agents de tous les projets. Sans jeton : rien.
+   */
+  async syncGlobalConfig(): Promise<void> {
+    if ((await this.deps.vault.get('github-token')) === null) return;
     try {
-      await publishGlobalConfig(await this.githubPort(), {
-        maxConcurrentAgents: settings.maxConcurrentAgents,
-        paused: settings.globalPaused,
-      });
+      await publishGlobalConfig(await this.githubPort(), this.desiredGlobalConfig());
       this.configCheck = { state: 'ok' };
     } catch (error) {
       this.configCheck = {
@@ -76,7 +96,6 @@ export class CockpitService {
       };
       throw new GlobalConfigSyncError(error);
     }
-    return settings;
   }
 
   /**
@@ -117,6 +136,12 @@ export class CockpitService {
         failed(
           `${GLOBAL_CONFIG_REPOSITORY} diffère des réglages (plafond ${String(parsed.value.maxConcurrentAgents)}, pause ${parsed.value.paused ? 'active' : 'inactive'}) : enregistrer à nouveau les réglages.`,
         );
+        return;
+      }
+      // Liste des projets périmée (projet ajouté ailleurs) : republiée sans rien demander.
+      const projects = this.desiredGlobalConfig().projects;
+      if ([...parsed.value.projects].sort().join() !== projects.join()) {
+        await this.syncGlobalConfig();
         return;
       }
       this.configCheck = { state: 'ok' };

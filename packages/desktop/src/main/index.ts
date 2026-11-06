@@ -57,8 +57,15 @@ async function githubFactory(): Promise<(token: string) => GitHubPort> {
     const fake = new FakeGitHub({ actor: 'kiamiya' });
     const names = (process.env.AGENTLAKE_FAKE_PROJECTS ?? '').split(',').filter(Boolean);
     await seedFakeProjects(fake, names);
-    // Pas de GitHub Actions en E2E : une réponse valide relance la tâche comme le dispatcher.
-    simulateDispatcher(fake);
+    const world = process.env.AGENTLAKE_WORLD;
+    if (world) {
+      // Monde simulé (T22) : vrai dispatcher et vrai planificateur, chargés à la demande.
+      const { startWorld } = await import('./testing/start-world.js');
+      await startWorld(fake, world);
+    } else {
+      // Pas de GitHub Actions en E2E : une réponse valide relance la tâche comme le dispatcher.
+      simulateDispatcher(fake);
+    }
     return () => fake;
   }
   return (token) => new OctokitGitHub({ token });
@@ -150,7 +157,11 @@ async function start(): Promise<void> {
     clearInterval(exposure);
     void tunnel.close().finally(() => bridge.stopAll());
   });
-  const projects = new ProjectsService(repos, () => service.githubPort());
+  const projects = new ProjectsService(
+    repos,
+    () => service.githubPort(),
+    () => service.syncGlobalConfig(),
+  );
   const creation = new ProjectCreationService({
     repos,
     vault,

@@ -29,6 +29,8 @@ export class ProjectsService {
   constructor(
     private readonly repos: Repositories,
     private readonly github: () => Promise<GitHubPort>,
+    /** Projet ajouté : la liste des projets de devlake-config est republiée. */
+    private readonly onProjectAdded: () => Promise<void> = () => Promise.resolve(),
   ) {}
 
   private summary(project: ProjectRow): ProjectSummary {
@@ -66,7 +68,10 @@ export class ProjectsService {
     const github = await this.github();
     if (!(await github.getFile(ref, PROJECT_CONFIG_PATH)))
       throw new NotAProjectError(projectId(ref.owner, ref.repo));
+    const known = this.repos.projects.list().some((p) => p.id === projectId(ref.owner, ref.repo));
     await rebuildFromGitHub(ref, github, this.repos);
+    // C_global compté sur tous les projets : un échec de publication ne bloque pas l'ouverture.
+    if (!known) await this.onProjectAdded().catch(() => undefined);
     return this.summary(this.project(projectId(ref.owner, ref.repo)));
   }
 
