@@ -12,3 +12,4 @@ out/
 playwright-report/
 test-results/
 .generated/
+release/

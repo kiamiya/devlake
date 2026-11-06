@@ -47,6 +47,8 @@ const WRITE_ALLOWED: Record<string, string[]> = {
   '.github/workflows/agent-task.yml#agent': ['contents', 'issues', 'pull-requests', 'id-token'],
   // @live nocturne : issue d'échec dans devlake.
   '.github/workflows/nightly-live.yml#live': ['issues'],
+  // Release : installeurs attachés, tag majeur déplacé (sur tag seulement).
+  '.github/workflows/release.yml#release': ['contents'],
   'templates/caller/agentlake-agent-task.yml#agent': [
     'contents',
     'issues',
