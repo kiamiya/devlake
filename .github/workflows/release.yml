@@ -1,0 +1,171 @@
+name: AgentLake — release
+
+# Release (T23) sur tag vX.Y.Z : installeurs du cockpit (NSIS Windows, dmg macOS) installés et
+# testés (test de fumée) sur une machine propre, attachés à la release ; le tag majeur (v1) est
+# déplacé sur ce commit pour que les projets reçoivent les workflows réutilisables corrigés.
+# Sur une PR qui touche le packaging : installeurs et test de fumée seulement, rien de publié.
+# Signature facultative (secrets ci-dessous) : voir docs/technique/publication.md.
+
+on:
+  push:
+    tags: ['v*.*.*']
+  pull_request:
+    paths:
+      - packages/desktop/electron-builder.yml
+      - packages/desktop/scripts/package-app.ts
+      - packages/desktop/e2e-packaged/**
+      - packages/desktop/playwright.packaged.config.ts
+      - .github/workflows/release.yml
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  installer:
+    name: Installeur (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Installer et compiler
+        run: |
+          npm ci
+          npx tsc -b tsconfig.build.json
+
+      - name: Version
+        id: version
+        shell: bash
+        env:
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [[ "$REF" == refs/tags/* ]]; then
+            if [[ ! "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Tag attendu au format vX.Y.Z : $REF_NAME"
+              exit 1
+            fi
+            echo "value=${REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=0.0.0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Installeur
+        shell: bash
+        working-directory: packages/desktop
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+          TARGET: ${{ runner.os == 'Windows' && 'win' || 'mac' }}
+          # Signature facultative : sans certificat, l'installeur n'est pas signé.
+          CSC_LINK: ${{ runner.os == 'Windows' && secrets.WIN_CSC_LINK || secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ runner.os == 'Windows' && secrets.WIN_CSC_KEY_PASSWORD || secrets.MAC_CSC_KEY_PASSWORD }}
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          # Notarisation Apple (facultative).
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/package-app.ts "--$TARGET" --version "$VERSION"
+
+      - name: Installation silencieuse (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: packages/desktop
+        run: |
+          $setup = Get-ChildItem release -Filter 'AgentLake-*-setup.exe' | Select-Object -First 1
+          $dir = Join-Path $env:RUNNER_TEMP 'AgentLake'
+          Start-Process -FilePath $setup.FullName -ArgumentList '/S', "/D=$dir" -Wait
+          if (-not (Test-Path "$dir\AgentLake.exe")) { throw "Installation absente de $dir" }
+          "AGENTLAKE_APP_PATH=$dir\AgentLake.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Installation depuis le dmg (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        working-directory: packages/desktop
+        run: |
+          arch=$(uname -m)
+          if [ "$arch" = x86_64 ]; then arch=x64; fi
+          dmg=$(find release -maxdepth 1 -name "AgentLake-*-$arch.dmg" | head -1)
+          mount=$(hdiutil attach "$dmg" -nobrowse -noverify | tail -1 | awk -F'\t' '{print $NF}')
+          cp -R "$mount/AgentLake.app" "$RUNNER_TEMP/"
+          hdiutil detach "$mount"
+          echo "AGENTLAKE_APP_PATH=$RUNNER_TEMP/AgentLake.app/Contents/MacOS/AgentLake" >> "$GITHUB_ENV"
+
+      - name: Test de fumée de l'application installée
+        working-directory: packages/desktop
+        run: npx playwright test -c playwright.packaged.config.ts
+
+      - name: Rapport Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fumee-${{ matrix.os }}
+          path: |
+            packages/desktop/playwright-report
+            packages/desktop/test-results
+          retention-days: 7
+
+      - name: Installeurs en artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: installeur-${{ matrix.os }}
+          path: |
+            packages/desktop/release/*.exe
+            packages/desktop/release/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Release ${{ github.ref_name }}
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: installer
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: installeur-*
+          merge-multiple: true
+          path: installeurs
+
+      - name: Release avec les installeurs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" installeurs/* --repo "$GITHUB_REPOSITORY" \
+            --title "AgentLake $TAG" --generate-notes --verify-tag
+
+      # Les workflows d'appel des projets sont épinglés sur le tag majeur (v1) : il suit la
+      # dernière version de cette majeure. Changer de majeure : réglage du cockpit + bootstrap.
+      - name: Tag majeur sur cette version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          major="${TAG%%.*}"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$major" > /dev/null 2>&1; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$major" -f sha="$SHA" -F force=true
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$major" -f sha="$SHA"
+          fi
+          echo "Tag $major → $SHA ($TAG)" >> "$GITHUB_STEP_SUMMARY"

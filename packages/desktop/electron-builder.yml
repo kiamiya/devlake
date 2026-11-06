@@ -1,0 +1,45 @@
+# Installeurs du cockpit AgentLake (T23) : NSIS sous Windows, dmg sous macOS.
+# Produits par .github/workflows/release.yml sur tag vX.Y.Z ; signature facultative (voir
+# docs/technique/publication.md) : sans certificat, les installeurs ne sont pas signés.
+appId: com.kiamiya.agentlake
+productName: AgentLake
+copyright: Copyright © Kiamiya
+
+directories:
+  output: release
+  buildResources: build
+
+# Le code est compilé par electron-vite dans out/ ; les paquets du monorepo y sont intégrés.
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+
+# Module natif : rebâti pour Electron, et sorti de l'archive asar pour être chargé.
+npmRebuild: true
+asarUnpack:
+  - '**/node_modules/better-sqlite3/**'
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: AgentLake-${version}-setup.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: AgentLake
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  category: public.app-category.developer-tools
+  artifactName: AgentLake-${version}-${arch}.${ext}
+
+# La publication est faite par le workflow (gh release), jamais par electron-builder.
+publish: null

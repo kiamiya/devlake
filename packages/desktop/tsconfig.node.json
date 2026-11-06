@@ -4,5 +4,13 @@
     "noEmit": true,
     "types": ["node", "vite/client"]
   },
-  "include": ["src/main", "src/preload", "src/shared", "e2e", "scripts", "*.config.ts"]
+  "include": [
+    "src/main",
+    "src/preload",
+    "src/shared",
+    "e2e",
+    "e2e-packaged",
+    "scripts",
+    "*.config.ts"
+  ]
 }
