@@ -19,6 +19,7 @@ import {
   type PlannerLaunchService,
 } from './services/planner/planner-launch.js';
 import { PlanError, type PlanService } from './services/plan/plan-service.js';
+import { AdhocTaskError, type AdhocTaskService } from './services/tasks/adhoc-service.js';
 import { DashboardError, type DashboardService } from './services/dashboard/dashboard-service.js';
 import { BridgeConfigError, type BridgeService } from './services/bridge/bridge-service.js';
 import type { TunnelService } from './services/bridge/tunnel-service.js';
@@ -53,6 +54,7 @@ export function serviceHandlers(services: {
   dashboard: DashboardService;
   bridge: BridgeService;
   tunnel: TunnelService;
+  adhoc: AdhocTaskService;
 }): Record<IpcChannel, Handler> {
   const {
     cockpit: service,
@@ -65,6 +67,7 @@ export function serviceHandlers(services: {
     dashboard,
     bridge,
     tunnel,
+    adhoc,
   } = services;
   const input = <C extends IpcChannel>(_channel: C, value: unknown) =>
     value as z.output<(typeof IPC_CONTRACT)[C]['input']>;
@@ -129,6 +132,7 @@ export function serviceHandlers(services: {
       const { projectId, version } = input('plan:validate', value);
       return plan.validate(projectId, version);
     },
+    'tasks:create': (value) => adhoc.create(input('tasks:create', value)),
     'projects:bootstrap': (value) =>
       creation.rebootstrap(input('projects:bootstrap', value).projectId),
     'questions:list': (value) => Promise.resolve(questions.list(input('questions:list', value))),
@@ -190,6 +194,7 @@ export function toIpcError(error: unknown): IpcErrorPayload {
     [UnknownDocumentError, 'UNKNOWN_DOCUMENT'],
     [PlannerModelMissingError, 'PLANNER_MODEL_MISSING'],
     [PlanError, 'PLAN_ERROR'],
+    [AdhocTaskError, 'ADHOC_TASK_ERROR'],
     [GlobalConfigSyncError, 'GLOBAL_CONFIG_SYNC_FAILED'],
     [QuestionNotFoundError, 'QUESTION_NOT_FOUND'],
     [EmptyAnswerError, 'EMPTY_ANSWER'],

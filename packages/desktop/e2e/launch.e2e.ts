@@ -464,6 +464,34 @@ test.describe('cockpit', () => {
     await app.close();
   });
 
+  test('nouvelle tâche hors plan : depuis l’Accueil, dépendance, prioritaire, issue créée', async () => {
+    const { app, page } = await launch(userData);
+    await saveToken(page);
+    await page.keyboard.press('Control+1');
+    await page.getByRole('button', { name: 'Ouvrir un dépôt existant' }).click();
+    await page.getByRole('button', { name: 'Ouvrir outil' }).click();
+    await expect(page.getByRole('tab', { name: /outil/, selected: true })).toBeVisible();
+    await page.getByRole('tab', { name: 'Accueil' }).click();
+    await expect(page.getByRole('heading', { name: 'Accueil', level: 1 })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Nouvelle tâche', exact: true }).click();
+    const form = page.getByRole('form', { name: 'Nouvelle tâche' });
+    await expect(form.getByLabel('Projet')).toHaveValue('kiamiya/outil');
+    await form.getByLabel('Titre').fill('Exporter en CSV');
+    await form.getByLabel('Description').fill('Export du stock du jour.');
+    await form.getByLabel('Critères d’acceptation (un par ligne)').fill('Une ligne par article');
+    // Une tâche de code sans test est refusée, comme dans le plan.
+    await form.getByRole('button', { name: 'Créer la tâche' }).click();
+    await expect(form.getByRole('alert')).toContainText('au moins un test');
+
+    await form.getByLabel(/Tests exigés/).fill('Échappement des virgules');
+    await form.getByLabel('T50 — Socle').check();
+    await form.getByLabel('Prioritaire : lancée avant les tâches du plan').check();
+    await form.getByRole('button', { name: 'Créer la tâche' }).click();
+    await expect(form.getByRole('status')).toContainText('Tâche T500 créée');
+    await app.close();
+  });
+
   test('tableau de bord : avancement, kanban, journal de 10 000 lignes, pause et relance', async () => {
     const { app, page } = await launch(userData);
     await saveToken(page);

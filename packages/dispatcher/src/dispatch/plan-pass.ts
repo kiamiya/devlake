@@ -316,9 +316,12 @@ export function planPass(input: PassInput): PassPlan {
           ((state === 'awaiting-answer' || state === 'escalated') && t.answered === true))
       );
     })
+    // Tâches prioritaires d'abord (ad hoc), puis chemin critique, puis ordre des issues.
     .sort(
       (a, b) =>
-        (heights.get(b.task.id) ?? 0) - (heights.get(a.task.id) ?? 0) || a.number - b.number,
+        Number(b.task.priority === true) - Number(a.task.priority === true) ||
+        (heights.get(b.task.id) ?? 0) - (heights.get(a.task.id) ?? 0) ||
+        a.number - b.number,
     );
 
   const { projectCap, globalCap, runnerCap } = input.limits;

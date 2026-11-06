@@ -40,3 +40,14 @@ Section **Plan** → **Revue du plan** : arborescence, graphe des dépendances, 
 Le cycle d'une tâche : en file → prête (dépendances mergées) → en cours (agent lancé) → PR avec CI, garde des tests et relecture → merge automatique → issue fermée et résumée. Une CI en échec renvoie l'agent corriger ; après 3 échecs (réglable), la tâche est escaladée et une question t'est posée.
 
 Seule la tâche de bootstrap (architecte) part tant que les checks obligatoires de la CI ne sont pas verts sur `main`.
+
+## 6. Ajouter une tâche hors plan
+
+Pour une demande qui n'est pas dans le plan (correctif, petite évolution), ou pour lancer du travail sur plusieurs projets à la fois : **Nouvelle tâche**, dans **Exécution** (projet ouvert) ou sur l'**Accueil** (choix du projet).
+
+- Titre, description, type (code, documentation, configuration), profil d'agent, taille S/M/L.
+- Critères d'acceptation et tests exigés, un par ligne : une tâche de code doit exiger au moins un test, comme dans le plan.
+- Dépendances facultatives sur les tâches existantes du projet.
+- **Prioritaire** : la tâche passe avant celles du plan dès qu'une place se libère.
+
+La tâche reçoit un identifiant à partir de `T500` (hors de la plage des plans), devient une issue comme les autres, et le dispatcher est déclenché aussitôt : elle part dans les plafonds (projet, global, runners), avec la même porte qualité.

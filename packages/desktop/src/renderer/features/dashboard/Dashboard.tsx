@@ -8,6 +8,7 @@ import { Card, CardTitle, Input } from '../../components/ui/primitives.js';
 import { useDashboard, useRelaunch, useSetPaused } from '../../hooks/dashboard.js';
 import { depths } from '../plan-review/profiles.js';
 import { formatMinutes } from '../runs/RunsView.js';
+import { AdhocTaskForm } from '../tasks/AdhocTaskForm.js';
 
 type Task = DashboardView['tasks'][number];
 type Progress = DashboardView['progress']['overall'];
@@ -197,13 +198,35 @@ export function StateGraph({ tasks }: { tasks: readonly Task[] }) {
 /** Contenu du tableau de bord, sans chargement (testable tel quel). */
 export function DashboardContent({ dashboard }: { dashboard: DashboardView }) {
   const setPaused = useSetPaused(dashboard.projectId);
+  const [adding, setAdding] = useState(false);
   const { progress, consumption } = dashboard;
   return (
     <div className="flex flex-col gap-6">
+      {adding && (
+        <Card>
+          <CardTitle>Nouvelle tâche</CardTitle>
+          <AdhocTaskForm
+            projectId={dashboard.projectId}
+            onClose={() => {
+              setAdding(false);
+            }}
+          />
+        </Card>
+      )}
       <Card>
         <div className="flex items-center justify-between gap-4">
           <CardTitle>Avancement</CardTitle>
           <div className="flex items-center gap-2 text-sm">
+            {!adding && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setAdding(true);
+                }}
+              >
+                Nouvelle tâche
+              </Button>
+            )}
             {dashboard.paused && (
               <span role="status" className="font-medium text-warning">
                 Projet en pause : aucun agent ne sera lancé.

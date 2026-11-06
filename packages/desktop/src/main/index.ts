@@ -1,3 +1,4 @@
+import { AdhocTaskService } from './services/tasks/adhoc-service.js';
 import {
   app,
   BrowserWindow,
@@ -207,6 +208,7 @@ async function start(): Promise<void> {
       dashboard: new DashboardService({ repos, github: () => service.githubPort() }),
       bridge,
       tunnel,
+      adhoc: new AdhocTaskService(repos, () => service.githubPort()),
     }),
     isTrustedUrl,
   );
