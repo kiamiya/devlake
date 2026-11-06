@@ -42,7 +42,8 @@ function sync(
     token: () => Promise.resolve('jeton'),
     git,
     logPath: () => Promise.resolve(logPath),
-    wait: { timeoutMs: 50, quietMs: 10, pollMs: 1 },
+    // Délai large : une machine chargée (suite complète) ne doit pas faire échouer l'attente.
+    wait: { timeoutMs: 2_000, quietMs: 10, pollMs: 1 },
   });
 }
 
@@ -104,12 +105,16 @@ describe('refus de la synchronisation', () => {
     const git = fakeGit({ 'rev-list': '0\n', 'rev-parse HEAD': 'abc123\n' });
     const editor = sync(git.git, clone, log);
     const pending = editor.checkout('kiamiya/jeu', 'task/T01-saut');
-    setTimeout(() => {
+    // L'éditeur réimporte après la bascule : on écrit dans son journal une fois le checkout
+    // fait (sinon, sur une machine chargée, l'écriture précéderait la position lue).
+    const refreshed = setInterval(() => {
+      if (!git.calls.some((c) => c[0] === 'checkout')) return;
+      clearInterval(refreshed);
       appendFileSync(
         log,
         'Assets/Scripts/Saut.cs(3,1): error CS1002: ; expected\nRefresh completed in 1.2 s\n',
       );
-    }, 5);
+    }, 1);
     expect(await pending).toEqual({
       branch: 'task/T01-saut',
       sha: 'abc123',

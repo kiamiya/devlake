@@ -51,8 +51,13 @@ describe('ponts Aura du cockpit', () => {
       repos,
       vault,
       portOverride: 0,
-      connectUpstream: (command) => {
-        commands.push(`${command.command} ${command.args.join(' ')}`);
+      connectUpstream: (spec, name) => {
+        commands.push(
+          spec.kind === 'stdio'
+            ? `${name}: ${[spec.command, ...spec.args].join(' ')}`
+            : `${name}: ${spec.url}`,
+        );
+        if (name === 'casse') return Promise.reject(new Error('serveur arrêté'));
         const upstream = fakeUpstream();
         upstreams.push(upstream);
         return Promise.resolve(upstream);
@@ -95,7 +100,8 @@ describe('ponts Aura du cockpit', () => {
     const started = await service.start('unity');
     expect(started).toMatchObject({ editor: 'unity', running: true, configured: true });
     expect(started.port).toBeGreaterThan(0);
-    expect(commands).toEqual(['aura-unity --mcp']);
+    expect(commands).toEqual(['aura: aura-unity --mcp']);
+    expect(started.servers).toEqual([{ name: 'aura', connected: true, error: null }]);
     // Déjà démarré : rien de plus.
     await service.start('unity');
     expect(commands).toHaveLength(1);
@@ -104,15 +110,16 @@ describe('ponts Aura du cockpit', () => {
       detail: expect.stringContaining('unity sur 127.0.0.1:') as unknown,
     });
 
-    service.setAllowedTools('unity', ['scene_list', 'scene_list', 'outil_hors_aura']);
+    // Noms sans préfixe (anciennes listes blanches) : rattachés à Aura.
+    service.setAllowedTools('unity', ['scene_list', 'aura__scene_list', 'outil_hors_aura']);
     expect(await service.tools('unity')).toEqual([
-      { name: 'scene_list', description: 'Liste les scènes', allowed: true },
-      { name: 'run_script', description: '', allowed: false },
-      { name: 'outil_hors_aura', description: '', allowed: true },
+      { name: 'aura__scene_list', description: '[aura] Liste les scènes', allowed: true },
+      { name: 'aura__run_script', description: '[aura]', allowed: false },
+      { name: 'aura__outil_hors_aura', description: '', allowed: true },
     ]);
     expect(repos.settings.get().auraBridge.unity.allowedTools).toEqual([
-      'outil_hors_aura',
-      'scene_list',
+      'aura__outil_hors_aura',
+      'aura__scene_list',
     ]);
     expect(service.audit('unity')).toEqual([]);
 
@@ -120,9 +127,63 @@ describe('ponts Aura du cockpit', () => {
     expect(stopped.running).toBe(false);
     expect(upstreams[0]?.closed).toBe(true);
     expect(await service.tools('unity')).toEqual([
-      { name: 'outil_hors_aura', description: '', allowed: true },
-      { name: 'scene_list', description: '', allowed: true },
+      { name: 'aura__outil_hors_aura', description: '', allowed: true },
+      { name: 'aura__scene_list', description: '', allowed: true },
     ]);
+  });
+
+  it('plusieurs serveurs MCP : Aura, un serveur HTTP de l’éditeur, un serveur injoignable signalé', async () => {
+    // Ancienne liste blanche, sans préfixe : lue comme outils d'Aura.
+    repos.settings.update({
+      auraMcp: { unity: AURA_BLOCK, unreal: null },
+      auraBridge: {
+        unity: { port: 8765, allowedTools: ['scene_list'] },
+        unreal: { port: 8766, allowedTools: [] },
+      },
+      extraMcp: {
+        unity: [
+          { name: 'unity', config: JSON.stringify({ url: 'http://127.0.0.1:6400/mcp' }) },
+          { name: 'casse', config: JSON.stringify({ command: 'introuvable' }) },
+        ],
+        unreal: [],
+      },
+    });
+    const started = await service.start('unity');
+    expect(commands).toEqual([
+      'aura: aura-unity --mcp',
+      'unity: http://127.0.0.1:6400/mcp',
+      'casse: introuvable',
+    ]);
+    expect(started.allowedTools).toEqual(['aura__scene_list']);
+    expect(started.servers).toEqual([
+      { name: 'aura', connected: true, error: null },
+      { name: 'unity', connected: true, error: null },
+      { name: 'casse', connected: false, error: 'serveur arrêté' },
+    ]);
+    expect((await service.tools('unity')).map((t) => t.name)).toEqual([
+      'aura__scene_list',
+      'aura__run_script',
+      'unity__scene_list',
+      'unity__run_script',
+    ]);
+    expect(service.integrationStatus()).toMatchObject({
+      state: 'degraded',
+      detail: expect.stringContaining('unity/casse : serveur arrêté') as unknown,
+    });
+  });
+
+  it('configuration d’un serveur invalide : refus explicite au démarrage', async () => {
+    repos.settings.update({
+      extraMcp: {
+        unity: [],
+        unreal: [
+          { name: 'unreal', config: JSON.stringify({ url: 'https://ailleurs.example/mcp' }) },
+        ],
+      },
+    });
+    await expect(service.start('unreal')).rejects.toThrow(
+      'Serveur MCP « unreal » (unreal) : Le serveur MCP doit tourner sur le poste',
+    );
   });
 });
 

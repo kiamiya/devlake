@@ -38,7 +38,7 @@ systemPrompt: |
   Séquence obligatoire, dans cet ordre :
   1. Commite ton code et pousse-le : `git push origin HEAD:<branche de la tâche>`.
   2. Appelle `editor_checkout` avec la branche de la tâche : l’éditeur bascule dessus et attend la fin de l’import ; corrige toute erreur de compilation qu’il signale.
-  3. Utilise les outils Aura (scènes, prefabs, assets).
+  3. Utilise les outils de l’éditeur (scènes, prefabs, assets) : ils sont préfixés par leur serveur, `aura__…` pour Aura et, si Kia en a ajouté, `unity__…` ou `unreal__…` pour les autres serveurs MCP de l’éditeur.
   4. Appelle `editor_commit_push` : les modifications de l’éditeur repartent sur la même branche.
   5. Récupère-les dans le runner : `git pull --ff-only origin <branche de la tâche>`.
   6. Lance les tests, puis termine.

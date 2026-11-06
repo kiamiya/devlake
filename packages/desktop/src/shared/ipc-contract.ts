@@ -236,6 +236,9 @@ export const BridgeViewSchema = z.object({
   configured: z.boolean(),
   allowedTools: z.array(z.string()),
   configuredPort: z.number(),
+  servers: z.array(
+    z.object({ name: z.string(), connected: z.boolean(), error: z.string().nullable() }),
+  ),
 });
 export type BridgeViewData = z.infer<typeof BridgeViewSchema>;
 

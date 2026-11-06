@@ -1,18 +1,23 @@
 import {
-  auraCommandFrom,
   AuraBridge,
+  AuraConfigError,
   AutomationRunner,
-  connectStdioUpstream,
+  connectMcpServer,
+  connectMultiUpstream,
   EditorSync,
+  mcpServerFrom,
   prepareEditorClone,
   probeEditor,
+  qualifyToolName,
   type GitExec,
   type ProcessRunner,
   type AuditEntry,
-  type AuraCommand,
   type AuraUpstream,
   type BridgeStatus,
   type Editor,
+  type McpServerSpec,
+  type MultiUpstream,
+  type NamedMcpServer,
 } from 'aura-bridge';
 import type { GitHubPort } from 'github';
 import { ProjectConfigSchema } from 'shared';
@@ -36,8 +41,8 @@ export class BridgeConfigError extends Error {
 export interface BridgeServiceDeps {
   repos: Repositories;
   vault: SecretVault;
-  /** Lancement du serveur MCP d'Aura ; stdio en vrai, doublure en test. */
-  connectUpstream?: (command: AuraCommand) => Promise<AuraUpstream>;
+  /** Connexion à un serveur MCP du poste (stdio ou HTTP) ; doublure en test. */
+  connectUpstream?: (spec: McpServerSpec, name: string) => Promise<AuraUpstream>;
   /** Port imposé (tests : 0 = port libre). */
   portOverride?: number;
   /** GitHub (type des projets, pour préparer le clone de l'éditeur). */
@@ -49,15 +54,28 @@ export interface BridgeServiceDeps {
 }
 
 export interface BridgeView extends BridgeStatus {
-  /** Configuration MCP d'Aura collée dans les réglages. */
+  /** Au moins un serveur MCP (Aura ou autre) configuré dans les réglages. */
   configured: boolean;
+  /** Outils autorisés, préfixés par leur serveur (`aura__scene_list`). */
   allowedTools: string[];
   configuredPort: number;
+  /** Serveurs MCP du pont : connecté, ou raison de l'échec (pont arrêté : non connecté). */
+  servers: { name: string; connected: boolean; error: string | null }[];
+}
+
+/** Serveurs MCP configurés pour un éditeur : Aura (`aura`), puis les autres, dans l'ordre. */
+export function configuredServers(
+  settings: ReturnType<Repositories['settings']['get']>,
+  editor: Editor,
+): { name: string; config: string }[] {
+  const aura = settings.auraMcp[editor];
+  return [...(aura === null ? [] : [{ name: 'aura', config: aura }]), ...settings.extraMcp[editor]];
 }
 
 /** Ponts Aura du cockpit : un par éditeur, démarrés et arrêtés à la demande de Kia. */
 export class BridgeService {
   private readonly bridges = new Map<Editor, AuraBridge>();
+  private readonly upstreams = new Map<Editor, MultiUpstream>();
   private readonly audits = new Map<Editor, AuditEntry[]>(EDITORS.map((e) => [e, []]));
 
   constructor(private readonly deps: BridgeServiceDeps) {}
@@ -72,12 +90,32 @@ export class BridgeService {
       activeRun: null,
       lastCall: null,
     };
+    const upstream = status.running ? this.upstreams.get(editor) : undefined;
     return {
       ...status,
-      configured: settings.auraMcp[editor] !== null,
-      allowedTools: settings.auraBridge[editor].allowedTools,
+      configured: configuredServers(settings, editor).length > 0,
+      allowedTools: this.allowed(editor),
       configuredPort: settings.auraBridge[editor].port,
+      servers: configuredServers(settings, editor).map(({ name }) => {
+        const error = upstream?.failures.get(name) ?? null;
+        return {
+          name,
+          connected: upstream !== undefined && error === null && upstream.servers.includes(name),
+          error,
+        };
+      }),
     };
+  }
+
+  /** Liste blanche, outils préfixés par leur serveur (anciennes entrées rattachées à Aura). */
+  private allowed(editor: Editor): string[] {
+    return [
+      ...new Set(
+        this.deps.repos.settings
+          .get()
+          .auraBridge[editor].allowedTools.map((t) => qualifyToolName(t)),
+      ),
+    ];
   }
 
   list(): BridgeView[] {
@@ -87,12 +125,21 @@ export class BridgeService {
   async start(editor: Editor): Promise<BridgeView> {
     if (this.bridges.get(editor)?.status().running) return this.view(editor);
     const settings = this.deps.repos.settings.get();
-    const block = settings.auraMcp[editor];
-    if (block === null)
+    const configured = configuredServers(settings, editor);
+    if (configured.length === 0)
       throw new BridgeConfigError(
-        `Configuration MCP d’Aura (${editor}) absente : la coller dans les réglages.`,
+        `Aucun serveur MCP pour ${editor} (Aura ou autre) : coller sa configuration dans les réglages.`,
       );
-    const command = auraCommandFrom(JSON.parse(block) as unknown);
+    const servers: NamedMcpServer[] = configured.map(({ name, config }) => {
+      try {
+        return { name, spec: mcpServerFrom(JSON.parse(config) as unknown) };
+      } catch (error) {
+        throw new BridgeConfigError(
+          `Serveur MCP « ${name} » (${editor}) : ${error instanceof AuraConfigError ? error.message : String(error)}`,
+        );
+      }
+    });
+    const connect = this.deps.connectUpstream ?? ((spec: McpServerSpec) => connectMcpServer(spec));
     const secret = await this.deps.vault.get('aura-bridge-secret');
     if (secret === null)
       throw new BridgeConfigError(
@@ -103,8 +150,18 @@ export class BridgeService {
       port: this.deps.portOverride ?? settings.auraBridge[editor].port,
       secret,
       // Relu à chaque appel : une liste blanche modifiée s'applique sans redémarrer.
-      allowedTools: (profile) => this.deps.repos.settings.get().auraBridge[profile].allowedTools,
-      connectUpstream: () => (this.deps.connectUpstream ?? connectStdioUpstream)(command),
+      allowedTools: (profile) => this.allowed(profile),
+      // Aura et les autres serveurs du poste, outils préfixés par leur nom.
+      connectUpstream: async () => {
+        const multi = await connectMultiUpstream(
+          servers.map((server) => ({
+            name: server.name,
+            connect: () => connect(server.spec, server.name),
+          })),
+        );
+        this.upstreams.set(editor, multi);
+        return multi;
+      },
       // Clone dédié ouvert dans l'éditeur : dossier des clones des réglages (T19).
       probe: () => probeEditor(this.deps.repos.settings.get().editorClonesDir, editor),
       editorSync: new EditorSync({
@@ -145,6 +202,7 @@ export class BridgeService {
   async stop(editor: Editor): Promise<BridgeView> {
     await this.bridges.get(editor)?.stop();
     this.bridges.delete(editor);
+    this.upstreams.delete(editor);
     return this.view(editor);
   }
 
@@ -202,7 +260,7 @@ export class BridgeService {
 
   /** Outils d'Aura (pont démarré) avec leur état dans la liste blanche. */
   async tools(editor: Editor): Promise<{ name: string; description: string; allowed: boolean }[]> {
-    const allowed = new Set(this.deps.repos.settings.get().auraBridge[editor].allowedTools);
+    const allowed = new Set(this.allowed(editor));
     const bridge = this.bridges.get(editor);
     const upstream = bridge ? await bridge.upstreamTools() : [];
     const known = new Set(upstream.map((t) => t.name));
@@ -220,7 +278,10 @@ export class BridgeService {
     this.deps.repos.settings.update({
       auraBridge: {
         ...current,
-        [editor]: { ...current[editor], allowedTools: [...new Set(tools)].sort() },
+        [editor]: {
+          ...current[editor],
+          allowedTools: [...new Set(tools.map((t) => qualifyToolName(t)))].sort(),
+        },
       },
     });
     return this.view(editor);
@@ -236,15 +297,24 @@ export class BridgeService {
     const running = this.list().filter((b) => b.running);
     const base = { id: 'aura', label: 'Pont Aura' } as const;
     if (running.length === 0) return { ...base, state: 'absent', detail: 'Aucun pont démarré.' };
+    // Un serveur MCP injoignable : ses outils manquent aux agents.
+    const down = running.flatMap((b) =>
+      b.servers
+        .filter((s) => !s.connected)
+        .map((s) => `${b.editor}/${s.name} : ${s.error ?? 'non connecté'}`),
+    );
     return {
       ...base,
-      state: 'ok',
-      detail: running
-        .map(
-          (b) =>
-            `${b.editor} sur 127.0.0.1:${String(b.port)}${b.activeRun ? ` (run ${b.activeRun.runId})` : ''}`,
-        )
-        .join(' · '),
+      state: down.length > 0 ? 'degraded' : 'ok',
+      detail: [
+        running
+          .map(
+            (b) =>
+              `${b.editor} sur 127.0.0.1:${String(b.port)} (${b.servers.map((s) => s.name).join(', ')})${b.activeRun ? ` (run ${b.activeRun.runId})` : ''}`,
+          )
+          .join(' · '),
+        ...(down.length > 0 ? [`Serveurs MCP injoignables : ${down.join(' ; ')}`] : []),
+      ].join('. '),
     };
   }
 }

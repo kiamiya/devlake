@@ -14,6 +14,37 @@ const AuraMcpBlockSchema = z
   }, 'Le bloc collé depuis Aura doit être un objet JSON valide.')
   .nullable();
 
+/**
+ * Autre serveur MCP du poste relayé par le pont d'un éditeur (Unity MCP, Unreal MCP…) : nom
+ * (préfixe de ses outils) et bloc de configuration collé (commande stdio ou URL locale).
+ */
+const ExtraMcpServerSchema = z.object({
+  name: z
+    .string()
+    .regex(
+      /^[a-z][a-z0-9-]{0,30}$/,
+      'Nom du serveur : minuscules, chiffres et tirets, commençant par une lettre.',
+    )
+    .refine((name) => name !== 'aura', 'Le nom « aura » est réservé au serveur d’Aura.'),
+  config: z.string().refine((text) => {
+    try {
+      const value: unknown = JSON.parse(text);
+      return typeof value === 'object' && value !== null && !Array.isArray(value);
+    } catch {
+      return false;
+    }
+  }, 'La configuration du serveur MCP doit être un objet JSON valide.'),
+});
+export type ExtraMcpServer = z.infer<typeof ExtraMcpServerSchema>;
+
+const ExtraMcpListSchema = z
+  .array(ExtraMcpServerSchema)
+  .max(8, 'Au plus 8 serveurs MCP par éditeur.')
+  .refine(
+    (servers) => new Set(servers.map((s) => s.name)).size === servers.length,
+    'Deux serveurs MCP portent le même nom.',
+  );
+
 /** Réglages d'un pont Aura (un par éditeur). */
 const BridgeSettingsSchema = z.object({
   /** Port local du pont (127.0.0.1). */
@@ -65,6 +96,8 @@ export const SettingsSchema = z.object({
     .regex(/^[A-Za-z0-9._-]+$/, 'Version invalide : lettres, chiffres, « . », « _ » ou « - ».'),
   /** Configurations MCP d'Aura, collées telles quelles. */
   auraMcp: z.object({ unity: AuraMcpBlockSchema, unreal: AuraMcpBlockSchema }),
+  /** Autres serveurs MCP relayés par le pont de chaque éditeur (outils préfixés par leur nom). */
+  extraMcp: z.object({ unity: ExtraMcpListSchema, unreal: ExtraMcpListSchema }),
   /** Ponts Aura : port et liste blanche d'outils, par éditeur. */
   auraBridge: z.object({ unity: BridgeSettingsSchema, unreal: BridgeSettingsSchema }),
   /** Tunnel HTTPS vers la passerelle des ponts. */
@@ -94,6 +127,7 @@ export const DEFAULT_SETTINGS: Settings = {
   workflowsVersion: 'v1',
   maxImportMegabytes: 50,
   auraMcp: { unity: null, unreal: null },
+  extraMcp: { unity: [], unreal: [] },
   // Liste blanche vide par défaut : aucun outil Aura n'est ouvert tant que Kia ne l'a pas choisi.
   auraBridge: {
     unity: { port: 8765, allowedTools: [] },

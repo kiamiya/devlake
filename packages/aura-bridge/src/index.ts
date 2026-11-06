@@ -6,6 +6,7 @@ export * from './automation/automation.js';
 export * from './bridge.js';
 export * from './editor-lock.js';
 export * from './editor-probe.js';
+export * from './mcp-servers.js';
 export * from './upstream.js';
 export * from './tunnel/gateway.js';
 export * from './tunnel/providers.js';
