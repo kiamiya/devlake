@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { invoke } from '../lib/ipc.js';
 
-export type Editor = 'unity' | 'unreal';
+import type { EditorId } from 'shared';
+
+export type Editor = EditorId;
 
 const KEY = ['bridge'] as const;
 /** Rafraîchissement de l'état des ponts et du journal d'audit. */
@@ -73,6 +75,7 @@ export function useTunnelAction() {
 
 export function usePrepareClone() {
   return useMutation({
-    mutationFn: (projectId: string) => invoke('bridge:prepare-clone', { projectId }),
+    mutationFn: (input: { projectId: string; target: 'engine' | 'blender' }) =>
+      invoke('bridge:prepare-clone', input),
   });
 }

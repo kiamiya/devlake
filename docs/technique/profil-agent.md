@@ -18,4 +18,4 @@ Un profil d'agent décrit un rôle (prompt système, outils, modèle, durée est
 
 ## Profil de jeu
 
-Un profil qui pilote un éditeur ajoute son id à `EDITOR_PROFILES` (`packages/shared/src/plan.ts`) : le dispatcher vérifie alors le pont avant de lancer la tâche, et le workflow l'exécute dans le groupe de concurrence `agentlake-editor-<dépôt>`.
+Un profil qui pilote un éditeur porte le nom de cet éditeur dans `EDITORS` (`packages/shared/src/ids.ts` : `unity`, `unreal`, `blender`) : le dispatcher vérifie alors le pont de l'éditeur avant de lancer la tâche, et le workflow l'exécute dans le groupe de concurrence de l'éditeur (`agentlake-editor-<dépôt>` pour le moteur, `agentlake-editor-<dépôt>-blender` pour Blender). Ajouter un éditeur demande aussi son pont (port, chemin de la passerelle, sonde, chemins synchronisés) et sa variable d'URL (`bridgeUrlVariable`).

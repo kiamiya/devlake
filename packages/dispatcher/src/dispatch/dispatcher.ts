@@ -15,6 +15,8 @@ import {
   TASK_LABEL,
   writeDispatchMeta,
   type DispatchMeta,
+  type EditorId,
+  type TaskIssue,
   type ProfileId,
   type ProjectConfig,
   type TaskState,
@@ -82,7 +84,7 @@ export interface DispatcherDeps {
   github: GitHubPort;
   globalCap: () => Promise<GlobalCap>;
   /** Santé du pont Aura (GET /health). */
-  bridgeHealthy: (editor: 'unity' | 'unreal') => Promise<boolean>;
+  bridgeHealthy: (editor: EditorId) => Promise<boolean>;
   /** Minutes Actions restantes ; null = non limité. */
   minutesRemaining: () => Promise<{ minutes: number | null; note?: string }>;
   now: () => Date;
@@ -325,18 +327,29 @@ export async function runDispatch(ref: RepoRef, deps: DispatcherDeps): Promise<D
     };
   }
 
-  const gameWaiting = views.some(
-    (v) => v.open && isGameTask(v.task) && WAITING_STATES.includes(v.state),
-  );
-  // Éditeur du projet : celui du type de projet, à défaut celui de la première tâche de jeu.
-  const editor =
+  // Moteur du projet : celui du type de projet, à défaut celui de la première tâche de jeu.
+  const engine: EditorId =
     project.type === 'unity' || project.type === 'unreal'
       ? project.type
-      : (views.find((v) => v.task.profile === 'unity' || v.task.profile === 'unreal')?.task
-          .profile ?? 'unity');
-  const bridgeHealthy = gameWaiting
-    ? await deps.bridgeHealthy(editor === 'unreal' ? 'unreal' : 'unity')
-    : null;
+      : ((views.find((v) => v.task.profile === 'unity' || v.task.profile === 'unreal')?.task
+          .profile as EditorId | undefined) ?? 'unity');
+  // Tâches Artiste 3D : pont Blender ; les autres tâches d'éditeur : pont du moteur.
+  const taskEditor = (task: TaskIssue): EditorId | null =>
+    !isGameTask(task) ? null : task.profile === 'blender' ? 'blender' : engine;
+  const waitingEditors = new Set(
+    views
+      .filter((v) => v.open && WAITING_STATES.includes(v.state))
+      .map((v) => taskEditor(v.task))
+      .filter((e): e is EditorId => e !== null),
+  );
+  const bridgeHealthy =
+    waitingEditors.size === 0
+      ? null
+      : Object.fromEntries(
+          await Promise.all(
+            [...waitingEditors].map(async (e) => [e, await deps.bridgeHealthy(e)] as const),
+          ),
+        );
   const costs =
     minutes.minutes === null
       ? new Map<ProfileId, number>()
@@ -360,6 +373,7 @@ export async function runDispatch(ref: RepoRef, deps: DispatcherDeps): Promise<D
       maxAttempts: limits.maxAttempts,
     },
     bridgeHealthy,
+    taskEditor,
     minutesRemaining: minutes.minutes,
     estimateMinutes: (task) => costs.get(task.profile) ?? DEFAULT_ESTIMATE_MINUTES,
     mainChecks,
@@ -570,6 +584,9 @@ async function launch(
         resume_reason: action.resume,
         // Tâche d'éditeur : groupe de concurrence agentlake-editor-<dépôt> dans le workflow.
         needs_editor: String(action.needsEditor),
+        // Blender : son propre groupe (en parallèle du moteur). Entrée absente des workflows
+        // d'appel posés avant Blender : envoyée pour Blender seulement.
+        ...(action.editor === 'blender' ? { editor: 'blender' } : {}),
       },
     });
     return true;
@@ -577,7 +594,7 @@ async function launch(
     await github.updateIssue(ref, action.issue, { body });
     await setTaskState(github, ref, action.issue, action.from);
     log(
-      `#${String(action.issue)} ${action.taskId} : lancement en échec, état ${stateLabel(action.from)} restauré (${error instanceof Error ? error.message : String(error)}).`,
+      `#${String(action.issue)} ${action.taskId} : lancement en échec, état ${stateLabel(action.from)} restauré (${error instanceof Error ? error.message : String(error)}).${action.editor === 'blender' ? ' Projet bootstrappé avant la prise en charge de Blender : relancer le bootstrap depuis le cockpit.' : ''}`,
     );
     return false;
   }

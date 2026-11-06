@@ -1,6 +1,7 @@
 import type { GitHubPort, RepoRef } from 'github';
 import {
   DEFAULT_GLOBAL_CAP,
+  type EditorId,
   GLOBAL_CONFIG_PATH,
   GLOBAL_CONFIG_REPOSITORY,
   parseGlobalConfig,
@@ -133,7 +134,7 @@ export interface HealthCheckInput {
   secret: string | null;
   repo: string;
   runId: string;
-  editor: 'unity' | 'unreal';
+  editor: EditorId;
 }
 
 /** Âge maximal d'une réponse de santé acceptée (anti-rejeu). */

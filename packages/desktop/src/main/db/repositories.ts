@@ -78,7 +78,14 @@ export class SettingsRepository {
     for (const row of this.db.select().from(settings).all()) {
       stored[row.key] = JSON.parse(row.value) as unknown;
     }
-    const merged = { ...DEFAULT_SETTINGS, ...stored };
+    const merged: Record<string, unknown> = { ...DEFAULT_SETTINGS, ...stored };
+    // Réglages par éditeur : un éditeur ajouté depuis (Blender) prend ses valeurs par défaut,
+    // sans invalider ce qui est déjà enregistré pour les autres.
+    for (const key of ['auraMcp', 'extraMcp', 'auraBridge'] as const) {
+      const value = stored[key];
+      if (typeof value === 'object' && value !== null && !Array.isArray(value))
+        merged[key] = { ...DEFAULT_SETTINGS[key], ...value };
+    }
     const parsed = SettingsSchema.safeParse(merged);
     // Une valeur devenue invalide (ancienne version) retombe sur les valeurs par défaut.
     return parsed.success ? parsed.data : DEFAULT_SETTINGS;

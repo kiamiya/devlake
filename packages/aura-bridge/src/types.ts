@@ -1,5 +1,7 @@
-/** Éditeur servi par un pont Aura. */
-export type Editor = 'unity' | 'unreal';
+import type { EditorId } from 'shared';
+
+/** Éditeur servi par un pont : Unity, Unreal (Aura) ou Blender. */
+export type Editor = EditorId;
 
 /** Serveur MCP du poste : lancé en stdio (commande) ou joint en HTTP (URL locale). */
 export type McpServerSpec =

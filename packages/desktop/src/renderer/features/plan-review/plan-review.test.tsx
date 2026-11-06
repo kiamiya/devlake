@@ -47,7 +47,7 @@ describe('arborescence', () => {
       { id: 'B', dependencies: ['A'] },
     ]);
     expect(cyclic.size).toBe(2);
-    expect(Object.keys(PROFILE_COLORS)).toHaveLength(11);
+    expect(Object.keys(PROFILE_COLORS)).toHaveLength(12);
   });
 });
 

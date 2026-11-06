@@ -265,6 +265,35 @@ describe('rattrapage', () => {
   });
 });
 
+describe('pont Blender (agents Artiste 3D)', () => {
+  it('santé par éditeur : Blender attend son pont, Unity part sur le sien, en parallèle', () => {
+    const tasks = [
+      view(1, 'ready', { profile: 'unity' }),
+      view(2, 'ready', { profile: 'blender', exclusiveResources: ['blender-editor'] }),
+    ];
+    const waiting = planPass(input(tasks, { bridgeHealthy: { unity: true, blender: false } }));
+    expect(kinds(waiting)).toEqual(['launch:T01', 'wait-editor:T02']);
+    expect(waiting.actions[0]).toMatchObject({ editor: 'unity', needsEditor: true });
+
+    const both = planPass(input(tasks, { bridgeHealthy: { unity: true, blender: true } }));
+    expect(kinds(both)).toEqual(['launch:T01', 'launch:T02']);
+    expect(both.actions[1]).toMatchObject({ editor: 'blender', needsEditor: true });
+  });
+
+  it('éditeur d’une tâche fourni par le dispatcher (moteur du projet) ; tâche sans éditeur', () => {
+    const plan = planPass(
+      input([view(1, 'ready', { profile: 'unity' }), view(2, 'ready')], {
+        bridgeHealthy: { unreal: true },
+        taskEditor: (task) => (task.profile === 'unity' ? 'unreal' : null),
+      }),
+    );
+    expect(plan.actions).toEqual([
+      expect.objectContaining({ kind: 'launch', taskId: 'T01', editor: 'unreal' }),
+      expect.objectContaining({ kind: 'launch', taskId: 'T02', editor: null, needsEditor: false }),
+    ]);
+  });
+});
+
 describe('garde-fous', () => {
   it('pause globale, protection de main incomplète : aucun lancement, raisons au journal', () => {
     const ready = [view(1, 'ready')];

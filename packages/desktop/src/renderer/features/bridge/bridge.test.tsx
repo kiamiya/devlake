@@ -252,6 +252,16 @@ describe('clone de l’éditeur dans le cockpit', () => {
       'Clone créé : D:/Clones/kiamiya__jeu. Ouvre ce dossier dans Unity.',
     );
     expect(status.textContent).toContain('Sérialisation des assets non forcée en texte.');
-    expect(invoke).toHaveBeenCalledWith('bridge:prepare-clone', { projectId: 'kiamiya/jeu' });
+    expect(invoke).toHaveBeenCalledWith('bridge:prepare-clone', {
+      projectId: 'kiamiya/jeu',
+      target: 'engine',
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Préparer le clone Blender' }));
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('bridge:prepare-clone', {
+        projectId: 'kiamiya/jeu',
+        target: 'blender',
+      });
+    });
   });
 });

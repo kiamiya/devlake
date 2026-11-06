@@ -15,6 +15,8 @@ import type { BridgeService } from './bridge-service.js';
 
 /** Variable de dépôt lue par l'agent et le dispatcher : URL publique du pont de l'éditeur. */
 export const BRIDGE_URL_VARIABLE = 'AURA_BRIDGE_URL';
+/** Variable de dépôt du pont Blender (agents Artiste 3D des projets de jeu). */
+export const BLENDER_URL_VARIABLE = 'BLENDER_BRIDGE_URL';
 
 /** États d'une tâche de jeu qui justifient d'exposer le pont. */
 const NEEDS_BRIDGE = ['ready', 'running', 'waiting-editor', 'fixing'].map((s) =>
@@ -174,6 +176,10 @@ export class TunnelService {
       const projectUrl = `${url}/${project.editor}`;
       await github.setRepositoryVariable(project.ref, BRIDGE_URL_VARIABLE, projectUrl);
       this.projects.push({ id: project.id, editor: project.editor, url: projectUrl });
+      // Agents Artiste 3D du projet : pont Blender, même tunnel.
+      const blenderUrl = `${url}/blender`;
+      await github.setRepositoryVariable(project.ref, BLENDER_URL_VARIABLE, blenderUrl);
+      this.projects.push({ id: project.id, editor: 'blender', url: blenderUrl });
     }
   }
 }

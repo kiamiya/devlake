@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { cleanLine, cleanText, safeParseWith, type ParseResult } from './common.js';
-import { ProfileIdSchema, TaskIdSchema, type TaskId } from './ids.js';
+import { EDITORS, ProfileIdSchema, TaskIdSchema, type EditorId, type TaskId } from './ids.js';
 
 export const TEST_CATEGORIES = ['unit', 'integration', 'contract', 'e2e', 'regression'] as const;
 export type TestCategory = (typeof TEST_CATEGORIES)[number];
@@ -69,14 +69,17 @@ export const PlanTaskSchema = z.object({
 });
 export type PlanTask = z.infer<typeof PlanTaskSchema>;
 
-/** Profils de jeu, qui passent par l'éditeur et le pont Aura. */
-export const EDITOR_PROFILES = ['unity', 'unreal'] as const;
+/** Profils qui passent par un éditeur du poste (pont) : Unity, Unreal, Blender. */
+export const EDITOR_PROFILES = EDITORS;
 
-/** La tâche a-t-elle besoin de l'éditeur (pont Aura, verrou d'éditeur) ? */
+/** Éditeur du profil de la tâche, ou null (profil sans éditeur). */
+export function editorOf(task: Pick<PlanTask, 'profile'>): EditorId | null {
+  return (EDITORS as readonly string[]).includes(task.profile) ? (task.profile as EditorId) : null;
+}
+
+/** La tâche a-t-elle besoin de son éditeur (pont, verrou d'éditeur) ? */
 export function needsEditor(task: Pick<PlanTask, 'profile' | 'needsEditor'>): boolean {
-  return (
-    (EDITOR_PROFILES as readonly string[]).includes(task.profile) && task.needsEditor !== false
-  );
+  return editorOf(task) !== null && task.needsEditor !== false;
 }
 
 const EpicSchema = z.object({

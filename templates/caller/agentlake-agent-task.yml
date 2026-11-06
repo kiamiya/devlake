@@ -28,6 +28,10 @@ on:
         description: La tâche passe par l'éditeur (une seule tâche d'éditeur à la fois par projet)
         type: boolean
         default: false
+      editor:
+        description: Éditeur de la tâche quand ce n'est pas le moteur du projet (blender)
+        type: string
+        default: ''
 
 permissions: {}
 
@@ -50,5 +54,6 @@ jobs:
       attempt: ${{ inputs.attempt }}
       resume_reason: ${{ inputs.resume_reason }}
       needs_editor: ${{ inputs.needs_editor }}
+      editor: ${{ inputs.editor }}
       devlake_ref: __DEVLAKE_REF__
     secrets: inherit

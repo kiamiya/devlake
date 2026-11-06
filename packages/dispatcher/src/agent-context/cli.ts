@@ -8,7 +8,7 @@ import { OctokitGitHub, type GitHubPort } from 'github';
 import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { formatZodError } from 'shared';
+import { EDITORS, formatZodError, type EditorId } from 'shared';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { finalizeAgent, type FinalizeResult } from './finalize.js';
@@ -100,7 +100,7 @@ export function withBridgeToken(env: NodeJS.ProcessEnv, now: Date): NodeJS.Proce
   if (
     secret === '' ||
     (env.AURA_BRIDGE_TOKEN ?? '') !== '' ||
-    (profile !== 'unity' && profile !== 'unreal') ||
+    !(EDITORS as readonly string[]).includes(profile ?? '') ||
     repo === undefined ||
     runId === undefined
   )
@@ -109,7 +109,7 @@ export function withBridgeToken(env: NodeJS.ProcessEnv, now: Date): NodeJS.Proce
     {
       repo,
       runId,
-      profile,
+      profile: profile as EditorId,
       iat: Math.floor(now.getTime() / 1000),
       exp: Math.floor(now.getTime() / 1000) + BRIDGE_TOKEN_TTL_SECONDS,
     },

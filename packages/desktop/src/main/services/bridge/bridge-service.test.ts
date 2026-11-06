@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDatabase } from '../../db/database.js';
+import { settings as settingsTable } from '../../db/schema.js';
 import { createRepositories, type Repositories } from '../../db/repositories.js';
 import { MemoryVault } from '../../vault.js';
 import { BridgeConfigError, BridgeService } from './bridge-service.js';
@@ -69,7 +70,7 @@ describe('ponts Aura du cockpit', () => {
     await service.stopAll();
   });
 
-  it('état initial : deux ponts arrêtés, non configurés, liste blanche vide', () => {
+  it('état initial : trois ponts arrêtés (Unity, Unreal, Blender), non configurés', () => {
     expect(service.list()).toEqual([
       expect.objectContaining({
         editor: 'unity',
@@ -84,19 +85,25 @@ describe('ponts Aura du cockpit', () => {
         configured: false,
         configuredPort: 8766,
       }),
+      expect.objectContaining({
+        editor: 'blender',
+        running: false,
+        configured: false,
+        configuredPort: 8767,
+      }),
     ]);
     expect(service.integrationStatus()).toMatchObject({ id: 'aura', state: 'absent' });
   });
 
   it('refuse de démarrer sans configuration Aura ou sans secret', async () => {
     await expect(service.start('unity')).rejects.toThrow(BridgeConfigError);
-    repos.settings.update({ auraMcp: { unity: AURA_BLOCK, unreal: null } });
+    repos.settings.update({ auraMcp: { unity: AURA_BLOCK, unreal: null, blender: null } });
     await vault.clear('aura-bridge-secret');
     await expect(service.start('unity')).rejects.toThrow('Secret du pont absent');
   });
 
   it('démarre avec la commande d’Aura, liste ses outils, applique la liste blanche, s’arrête', async () => {
-    repos.settings.update({ auraMcp: { unity: AURA_BLOCK, unreal: null } });
+    repos.settings.update({ auraMcp: { unity: AURA_BLOCK, unreal: null, blender: null } });
     const started = await service.start('unity');
     expect(started).toMatchObject({ editor: 'unity', running: true, configured: true });
     expect(started.port).toBeGreaterThan(0);
@@ -135,10 +142,11 @@ describe('ponts Aura du cockpit', () => {
   it('plusieurs serveurs MCP : Aura, un serveur HTTP de l’éditeur, un serveur injoignable signalé', async () => {
     // Ancienne liste blanche, sans préfixe : lue comme outils d'Aura.
     repos.settings.update({
-      auraMcp: { unity: AURA_BLOCK, unreal: null },
+      auraMcp: { unity: AURA_BLOCK, unreal: null, blender: null },
       auraBridge: {
         unity: { port: 8765, allowedTools: ['scene_list'] },
         unreal: { port: 8766, allowedTools: [] },
+        blender: { port: 8767, allowedTools: [] },
       },
       extraMcp: {
         unity: [
@@ -146,6 +154,7 @@ describe('ponts Aura du cockpit', () => {
           { name: 'casse', config: JSON.stringify({ command: 'introuvable' }) },
         ],
         unreal: [],
+        blender: [],
       },
     });
     const started = await service.start('unity');
@@ -179,11 +188,52 @@ describe('ponts Aura du cockpit', () => {
         unreal: [
           { name: 'unreal', config: JSON.stringify({ url: 'https://ailleurs.example/mcp' }) },
         ],
+        blender: [],
       },
     });
     await expect(service.start('unreal')).rejects.toThrow(
       'Serveur MCP « unreal » (unreal) : Le serveur MCP doit tourner sur le poste',
     );
+  });
+
+  it('pont Blender : serveur principal « blender », outils blender__…, liste blanche à part', async () => {
+    repos.settings.update({
+      auraMcp: {
+        unity: null,
+        unreal: null,
+        blender: JSON.stringify({ command: 'uvx', args: ['blender-mcp'] }),
+      },
+    });
+    const started = await service.start('blender');
+    expect(started).toMatchObject({ editor: 'blender', running: true, configured: true });
+    expect(started.servers).toEqual([{ name: 'blender', connected: true, error: null }]);
+    expect(commands).toEqual(['blender: uvx blender-mcp']);
+    // Nom sans préfixe : rattaché au serveur principal du pont Blender.
+    service.setAllowedTools('blender', ['scene_list']);
+    expect(repos.settings.get().auraBridge.blender.allowedTools).toEqual(['blender__scene_list']);
+    expect((await service.tools('blender')).map((t) => t.name)).toEqual([
+      'blender__scene_list',
+      'blender__run_script',
+    ]);
+    expect(repos.settings.get().auraBridge.unity.allowedTools).toEqual([]);
+  });
+
+  it('réglages enregistrés avant Blender : complétés sans perdre ceux des moteurs', () => {
+    const db = openDatabase(':memory:').db;
+    const old = createRepositories(db);
+    // Ancienne forme : pas de clé « blender » (cockpit 1.1.0).
+    db.insert(settingsTable)
+      .values({
+        key: 'auraBridge',
+        value: JSON.stringify({
+          unity: { port: 9000, allowedTools: ['scene_list'] },
+          unreal: { port: 8766, allowedTools: [] },
+        }),
+      })
+      .run();
+    const settings = old.settings.get();
+    expect(settings.auraBridge.unity).toEqual({ port: 9000, allowedTools: ['scene_list'] });
+    expect(settings.auraBridge.blender).toEqual({ port: 8767, allowedTools: [] });
   });
 });
 
@@ -244,6 +294,11 @@ describe('clone dédié de l’éditeur', () => {
       ]);
       expect(clone[1]).toContain('extraheader=AUTHORIZATION: basic');
       expect(calls).toContainEqual(['lfs', 'install', '--local']);
+      // Clone Blender : à part, pour travailler en parallèle du moteur.
+      expect(await service.prepareClone('kiamiya/jeu', undefined, 'blender')).toMatchObject({
+        dir: join(clonesRoot, 'kiamiya__jeu__blender'),
+        editor: 'blender',
+      });
       await expect(new BridgeService({ repos, vault }).prepareClone('kiamiya/jeu')).rejects.toThrow(
         'GitHub indisponible',
       );

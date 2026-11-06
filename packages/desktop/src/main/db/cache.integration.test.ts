@@ -131,11 +131,11 @@ describe('repositories Drizzle (base en mémoire)', () => {
 
     expect(repos.settings.get()).toEqual(DEFAULT_SETTINGS);
     repos.settings.update({ maxConcurrentAgents: 6 });
-    repos.settings.update({ auraMcp: { unity: '{"mcpServers":{}}', unreal: null } });
+    repos.settings.update({ auraMcp: { unity: '{"mcpServers":{}}', unreal: null, blender: null } });
     expect(repos.settings.get()).toEqual({
       ...DEFAULT_SETTINGS,
       maxConcurrentAgents: 6,
-      auraMcp: { unity: '{"mcpServers":{}}', unreal: null },
+      auraMcp: { unity: '{"mcpServers":{}}', unreal: null, blender: null },
     });
     expect(() => repos.settings.update({ maxAttempts: 0 })).toThrow();
   });

@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { BLENDER_CLONE_SUFFIX } from './editor-sync/sync.js';
 import type { Editor } from './types.js';
 
 /** État de l'éditeur vu depuis le poste : clone dédié ouvert, projet et branche courants. */
@@ -53,6 +54,9 @@ export async function originRepository(clone: string): Promise<string | null> {
   return match ? `${match[1] ?? ''}/${match[2] ?? ''}` : null;
 }
 
+/** Processus Blender (l'exécutable, pas un serveur MCP qui porte « blender » dans son nom). */
+const BLENDER_PROCESS = /(^|[\\/"\s])blender(\.exe|\.app)?("|\s|$)/i;
+
 /** L'éditeur est-il ouvert sur ce clone ? Unity : verrou `Temp/UnityLockfile` ; Unreal : processus. */
 async function isOpen(
   clone: string,
@@ -60,6 +64,7 @@ async function isOpen(
   processes: () => Promise<string[]>,
 ): Promise<boolean> {
   if (editor === 'unity') return exists(join(clone, 'Temp', 'UnityLockfile'));
+  if (editor === 'blender') return (await processes()).some((line) => BLENDER_PROCESS.test(line));
   const entries = await readdir(clone).catch(() => [] as string[]);
   const project = entries.find((e) => e.endsWith('.uproject'));
   if (project === undefined) return false;
@@ -78,13 +83,23 @@ export async function probeEditor(
   clonesRoot: string | null,
   editor: Editor,
   deps: ProbeDeps = { listProcesses: systemProcesses },
+  /** Dépôt demandé (Blender : son clone, parmi ceux de plusieurs projets). */
+  repo?: string,
 ): Promise<EditorState> {
   if (clonesRoot === null) return EDITOR_CLOSED;
   const entries = await readdir(clonesRoot, { withFileTypes: true }).catch(() => []);
   let processes: string[] | null = null;
   const lazyProcesses = async () => (processes ??= await deps.listProcesses());
+  const blenderClone = (name: string) => name.endsWith(BLENDER_CLONE_SUFFIX);
   for (const entry of entries
     .filter((e) => e.isDirectory())
+    // Clones Blender pour Blender, clones du moteur pour Unity et Unreal.
+    .filter((e) => blenderClone(e.name) === (editor === 'blender'))
+    .filter(
+      (e) =>
+        repo === undefined ||
+        e.name === `${repo.replace('/', '__')}${editor === 'blender' ? BLENDER_CLONE_SUFFIX : ''}`,
+    )
     .sort((a, b) => a.name.localeCompare(b.name))) {
     const clone = join(clonesRoot, entry.name);
     if (!(await exists(join(clone, '.git')))) continue;

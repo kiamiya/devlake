@@ -14,7 +14,11 @@ import {
   type Editor,
 } from '../../hooks/bridge.js';
 
-const EDITOR_LABELS: Record<Editor, string> = { unity: 'Unity', unreal: 'Unreal' };
+const EDITOR_LABELS: Record<Editor, string> = {
+  unity: 'Unity',
+  unreal: 'Unreal',
+  blender: 'Blender',
+};
 const OUTCOME_LABELS: Record<AuditEntryView['outcome'], string> = {
   ok: 'réussi',
   error: 'erreur',

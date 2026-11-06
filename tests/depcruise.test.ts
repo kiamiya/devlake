@@ -18,25 +18,30 @@ async function violationsOf(): Promise<string[]> {
 }
 
 describe('règles de dependency-cruiser', () => {
-  it('signale les imports interdits et laisse passer les autorisés', async () => {
-    const violations = await violationsOf();
+  // Analyse du dépôt de fixtures : plusieurs secondes quand la suite complète charge la machine.
+  it(
+    'signale les imports interdits et laisse passer les autorisés',
+    { timeout: 30_000 },
+    async () => {
+      const violations = await violationsOf();
 
-    expect(violations).toEqual(
-      expect.arrayContaining([
-        'shared-dependances: packages/shared/src/index.js → packages/planner/src/index.js',
-        // « electron » ou son chemin résolu dans node_modules, selon qu'il est installé.
-        expect.stringMatching(
-          /^electron-reserve-a-desktop: packages\/github\/src\/index\.js → (electron|.*node_modules\/electron\/.*)$/,
-        ),
-        'renderer-sans-main: packages/desktop/src/renderer/view.js → packages/desktop/src/main/app.js',
-        // Exception de test (T22) : seul testing/ voit dispatcher, chargé à la demande.
-        'desktop-dependances: packages/desktop/src/main/leak.js → packages/dispatcher/src/index.js',
-        'monde-simule-a-la-demande: packages/desktop/src/main/eager.js → packages/desktop/src/main/testing/world.js',
-      ]),
-    );
-    expect(violations.filter((v) => v.includes('main/testing/world.js →'))).toEqual([]);
-    expect(violations.filter((v) => v.includes('main/lazy.js'))).toEqual([]);
-    expect(violations.filter((v) => v.startsWith('planner-'))).toEqual([]);
-    expect(violations.filter((v) => v.startsWith('dispatcher-'))).toEqual([]);
-  });
+      expect(violations).toEqual(
+        expect.arrayContaining([
+          'shared-dependances: packages/shared/src/index.js → packages/planner/src/index.js',
+          // « electron » ou son chemin résolu dans node_modules, selon qu'il est installé.
+          expect.stringMatching(
+            /^electron-reserve-a-desktop: packages\/github\/src\/index\.js → (electron|.*node_modules\/electron\/.*)$/,
+          ),
+          'renderer-sans-main: packages/desktop/src/renderer/view.js → packages/desktop/src/main/app.js',
+          // Exception de test (T22) : seul testing/ voit dispatcher, chargé à la demande.
+          'desktop-dependances: packages/desktop/src/main/leak.js → packages/dispatcher/src/index.js',
+          'monde-simule-a-la-demande: packages/desktop/src/main/eager.js → packages/desktop/src/main/testing/world.js',
+        ]),
+      );
+      expect(violations.filter((v) => v.includes('main/testing/world.js →'))).toEqual([]);
+      expect(violations.filter((v) => v.includes('main/lazy.js'))).toEqual([]);
+      expect(violations.filter((v) => v.startsWith('planner-'))).toEqual([]);
+      expect(violations.filter((v) => v.startsWith('dispatcher-'))).toEqual([]);
+    },
+  );
 });

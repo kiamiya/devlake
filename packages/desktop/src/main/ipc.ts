@@ -155,8 +155,10 @@ export function serviceHandlers(services: {
     'tunnel:open': () => tunnel.open(),
     'tunnel:close': () => tunnel.close(),
     'tunnel:kill': () => tunnel.kill(),
-    'bridge:prepare-clone': (value) =>
-      bridge.prepareClone(input('bridge:prepare-clone', value).projectId),
+    'bridge:prepare-clone': (value) => {
+      const { projectId, target } = input('bridge:prepare-clone', value);
+      return bridge.prepareClone(projectId, undefined, target);
+    },
     'bridge:list': () => Promise.resolve(bridge.list()),
     'bridge:start': (value) => bridge.start(input('bridge:start', value).editor),
     'bridge:stop': (value) => bridge.stop(input('bridge:stop', value).editor),

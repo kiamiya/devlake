@@ -45,7 +45,7 @@ const COMMON_LFS = [
   'ttf',
   'otf',
 ];
-const GAME_LFS = ['fbx', 'obj', 'blend', 'tga', 'exr', 'hdr', 'tif', 'tiff'];
+const GAME_LFS = ['fbx', 'glb', 'obj', 'blend', 'tga', 'exr', 'hdr', 'tif', 'tiff'];
 const UNREAL_LFS = ['uasset', 'umap'];
 const UNITY_LFS = ['unitypackage', 'cubemap', 'aif'];
 

@@ -27,6 +27,10 @@ on:
         description: La tâche passe par l'éditeur (pont Aura) ; une seule à la fois par projet
         type: boolean
         default: false
+      editor:
+        description: Éditeur de la tâche quand ce n'est pas le moteur du projet (blender)
+        type: string
+        default: ''
       devlake_ref:
         description: Version de devlake qui fournit les scripts (même version que ce workflow)
         type: string
@@ -64,6 +68,10 @@ on:
         description: La tâche passe par l'éditeur
         type: boolean
         default: false
+      editor:
+        description: Éditeur de la tâche quand ce n'est pas le moteur du projet (blender)
+        type: string
+        default: ''
       devlake_ref:
         description: Version de devlake qui fournit les scripts
         type: string
@@ -82,7 +90,7 @@ jobs:
     timeout-minutes: ${{ inputs.timeout_minutes }}
     # Tâche d'éditeur : un seul éditeur par projet, donc une seule tâche de jeu à la fois.
     concurrency:
-      group: ${{ inputs.needs_editor && format('agentlake-editor-{0}', github.repository) || format('agentlake-task-{0}', inputs.issue_number) }}
+      group: ${{ inputs.needs_editor && format('agentlake-editor-{0}{1}', github.repository, inputs.editor == 'blender' && '-blender' || '') || format('agentlake-task-{0}', inputs.issue_number) }}
       cancel-in-progress: false
     permissions:
       contents: write
@@ -141,6 +149,8 @@ jobs:
           # Pont Aura (profils Unity et Unreal) : URL du tunnel, variable du projet ; le jeton
           # AURA_BRIDGE_TOKEN est signé ici avec le secret, puis masqué dans les journaux.
           AURA_BRIDGE_URL: ${{ vars.AURA_BRIDGE_URL }}
+          # Pont Blender (profil Artiste 3D), même tunnel et même secret.
+          BLENDER_BRIDGE_URL: ${{ vars.BLENDER_BRIDGE_URL }}
           AURA_BRIDGE_SECRET: ${{ secrets.AURA_BRIDGE_SECRET }}
         run: node "$RUNTIME/packages/dispatcher/dist/agent-context/cli.js" prepare
 

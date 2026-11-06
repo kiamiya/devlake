@@ -72,6 +72,38 @@ describe('sonde de l’éditeur', () => {
     ).toMatchObject({ open: false });
   });
 
+  it('Blender : processus Blender, clone Blender du dépôt demandé ; clones du moteur ignorés', async () => {
+    const { root, clone } = clones();
+    clone('kiamiya__jeu', 'https://github.com/kiamiya/jeu', 'main');
+    const autre = clone('kiamiya__autre__blender', 'https://github.com/kiamiya/autre', 'main');
+    const jeu = clone(
+      'kiamiya__jeu__blender',
+      'https://github.com/kiamiya/jeu',
+      'task/T07-tonneau',
+    );
+    // Le serveur MCP « blender-mcp » ne compte pas : c'est l'exécutable de Blender qu'on cherche.
+    const running = (lines: string[]) => ({ listProcesses: () => Promise.resolve(lines) });
+    expect(
+      await probeEditor(root, 'blender', running(['uvx blender-mcp']), 'kiamiya/jeu'),
+    ).toMatchObject({ open: false });
+    const blender = running(['"C:\\Program Files\\Blender Foundation\\Blender 4.2\\blender.exe"']);
+    expect(await probeEditor(root, 'blender', blender, 'kiamiya/jeu')).toEqual({
+      open: true,
+      repo: 'kiamiya/jeu',
+      branch: 'task/T07-tonneau',
+      clone: jeu,
+    });
+    // Sans dépôt demandé : le premier clone Blender, jamais celui du moteur.
+    expect(await probeEditor(root, 'blender', blender)).toMatchObject({ clone: autre });
+    expect(
+      await probeEditor(root, 'blender', running(['/usr/bin/blender']), 'kiamiya/jeu'),
+    ).toMatchObject({ open: true });
+    // Unity ne voit pas les clones Blender.
+    mkdirSync(join(jeu, 'Temp'));
+    writeFileSync(join(jeu, 'Temp', 'UnityLockfile'), '');
+    expect(await probeEditor(root, 'unity')).toMatchObject({ open: false });
+  });
+
   it('sans dossier des clones, ou HEAD détaché, ou remote absent', async () => {
     expect(await probeEditor(null, 'unity')).toMatchObject({ open: false });
     expect(await probeEditor(join(tmpdir(), 'inexistant-agentlake'), 'unity')).toMatchObject({

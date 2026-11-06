@@ -33,9 +33,10 @@ Projet : kiamiya/projet (unity)
 
 ## Jeu Unity
 
-- Les tâches qui touchent scènes, prefabs ou assets passent par l'éditeur via le pont Aura : profil \`unity\`, ressource exclusive \`editor-unity\` (un seul éditeur à la fois).
+- Les tâches qui touchent scènes, prefabs ou assets passent par l'éditeur via le pont Aura : profil \`unity\`, ressource exclusive \`unity-editor\` (un seul éditeur à la fois).
 - Tests : Unity Test Framework en EditMode et PlayMode, scènes de test automatisées, build joueur (GameCI).
 - Séparer le gameplay en C# testable des tâches d'assemblage dans l'éditeur.
+- Assets 3D (modèles, rigs, animations) : tâches du profil \`blender\` (Artiste 3D), ressource exclusive \`blender-editor\`, en parallèle des tâches Unity. Livrables : \`Art/<asset>/<asset>.blend\` et son export FBX dans \`Assets/Art/<asset>/\` ; la tâche Unity qui intègre l'asset en dépend.
 
 
 ## Documents du projet
@@ -59,7 +60,7 @@ _Aucune consigne particulière._
 - Chaque tâche de type \`code\` exige au moins un test ; catégories de tests : unit, e2e.
 - Profils possibles : architect, unity. Retiens seulement les profils utiles, chacun avec une justification ; chaque tâche utilise un profil retenu.
 - Ressources exclusives : une même ressource (éditeur, migrations…) n'est utilisée que par une tâche à la fois.
-- Jeux (profils \`unity\`, \`unreal\`) : une tâche qui touche scènes, prefabs, niveaux ou Blueprints a besoin de l'éditeur (ressource exclusive \`unity-editor\` ou \`unreal-editor\`). Une tâche de code pur C# ou C++ testable sans éditeur porte \`"needsEditor": false\` et pas de ressource d'éditeur : elle avance en parallèle, sans le pont.
+- Jeux (profils \`unity\`, \`unreal\`, et \`blender\` pour les assets 3D) : une tâche qui touche scènes, prefabs, niveaux ou Blueprints a besoin de l'éditeur (ressource exclusive \`unity-editor\` ou \`unreal-editor\`). Une tâche de code pur C# ou C++ testable sans éditeur porte \`"needsEditor": false\` et pas de ressource d'éditeur : elle avance en parallèle, sans le pont.
 - Découpe par zones de code pour limiter les conflits entre tâches parallèles.
 - Épopées et jalons facultatifs ; une tâche ne renvoie qu'à une épopée ou un jalon défini.
 - Ne fixe pas le nombre d'agents : il est calculé à partir du graphe.

@@ -14,7 +14,11 @@ export function profilePath(id: string): string {
  * Variables qu'un profil peut citer en `${NOM}` dans sa configuration MCP ;
  * elles sont remplacées au lancement de l'agent, jamais écrites dans le dépôt.
  */
-export const PROFILE_ENV_VARIABLES = ['AURA_BRIDGE_URL', 'AURA_BRIDGE_TOKEN'] as const;
+export const PROFILE_ENV_VARIABLES = [
+  'AURA_BRIDGE_URL',
+  'AURA_BRIDGE_TOKEN',
+  'BLENDER_BRIDGE_URL',
+] as const;
 export type ProfileEnvVariable = (typeof PROFILE_ENV_VARIABLES)[number];
 
 /** Noms des variables `${NOM}` citées dans un texte. */

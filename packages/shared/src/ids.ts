@@ -11,9 +11,25 @@ export const PROFILE_IDS = [
   'qa',
   'unity',
   'unreal',
+  'blender',
   'reviewer',
   'docs',
 ] as const;
+/**
+ * Éditeurs du poste reliés aux agents par un pont : Unity et Unreal (Aura), Blender (3D).
+ * Chacun a son pont, son verrou et son clone dédié ; le profil d'agent du même nom l'utilise.
+ */
+export const EDITORS = ['unity', 'unreal', 'blender'] as const;
+export type EditorId = (typeof EDITORS)[number];
+export const EditorIdSchema = z.enum(EDITORS, {
+  error: `Éditeur inconnu. Valeurs possibles : ${EDITORS.join(', ')}.`,
+});
+
+/** Variable de dépôt qui porte l'URL publique du pont d'un éditeur. */
+export function bridgeUrlVariable(editor: EditorId): 'AURA_BRIDGE_URL' | 'BLENDER_BRIDGE_URL' {
+  return editor === 'blender' ? 'BLENDER_BRIDGE_URL' : 'AURA_BRIDGE_URL';
+}
+
 export const ProfileIdSchema = z.enum(PROFILE_IDS, {
   error: `Profil inconnu. Valeurs possibles : ${PROFILE_IDS.join(', ')}.`,
 });

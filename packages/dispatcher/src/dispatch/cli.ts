@@ -37,6 +37,7 @@ export const DispatchEnvSchema = z.object({
   AGENTLAKE_CONFIG_TOKEN: optional,
   AGENTLAKE_BILLING_TOKEN: optional,
   AURA_BRIDGE_URL: optional,
+  BLENDER_BRIDGE_URL: optional,
   AGENTLAKE_PAUSED: optional,
   AURA_BRIDGE_SECRET: optional,
   GITHUB_RUN_ID: optional,
@@ -87,7 +88,7 @@ export async function runDispatchCli(
     bridgeHealthy: (editor) =>
       checkBridgeHealth(
         {
-          url: e.AURA_BRIDGE_URL,
+          url: editor === 'blender' ? e.BLENDER_BRIDGE_URL : e.AURA_BRIDGE_URL,
           secret: e.AURA_BRIDGE_SECRET,
           repo: `${ref.owner}/${ref.repo}`,
           runId: e.GITHUB_RUN_ID ?? 'dispatcher',

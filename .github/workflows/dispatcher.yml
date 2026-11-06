@@ -70,6 +70,7 @@ jobs:
           AGENTLAKE_BILLING_TOKEN: ${{ secrets.AGENTLAKE_BILLING_TOKEN }}
           # Pont Aura : URL du tunnel, variable du projet.
           AURA_BRIDGE_URL: ${{ vars.AURA_BRIDGE_URL }}
+          BLENDER_BRIDGE_URL: ${{ vars.BLENDER_BRIDGE_URL }}
           AURA_BRIDGE_SECRET: ${{ secrets.AURA_BRIDGE_SECRET }}
           # Pause du projet, posée par le cockpit : aucun nouveau lancement.
           AGENTLAKE_PAUSED: ${{ vars.AGENTLAKE_PAUSED }}
