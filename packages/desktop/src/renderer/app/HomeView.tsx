@@ -7,6 +7,7 @@ import { ActivityIndicator, QuestionsBadge } from '../features/tabs/TabBar.js';
 import { useDiscoverProjects, useOpenProject } from '../hooks/projects.js';
 import { QuestionsInbox } from '../features/questions/QuestionsInbox.js';
 import { NewProjectWizard } from './NewProjectWizard.js';
+import { AdhocTaskForm } from '../features/tasks/AdhocTaskForm.js';
 
 function ExistingRepositories() {
   const [shown, setShown] = useState(false);
@@ -73,6 +74,7 @@ function ExistingRepositories() {
 export function HomeView({ projects }: { projects: readonly ProjectSummary[] }) {
   const openTab = useTabs((s) => s.open);
   const [creating, setCreating] = useState(false);
+  const [addingTask, setAddingTask] = useState(false);
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6">
       <h1 className="text-xl font-semibold">Accueil</h1>
@@ -124,6 +126,33 @@ export function HomeView({ projects }: { projects: readonly ProjectSummary[] }) 
           <ExistingRepositories />
         </div>
       </Card>
+      {projects.length > 0 && (
+        <Card>
+          <CardTitle>Nouvelle tâche</CardTitle>
+          <CardDescription>
+            Une tâche hors plan, dans n’importe quel projet : le dispatcher la lance dès qu’une
+            place se libère sous les plafonds.
+          </CardDescription>
+          {addingTask ? (
+            <AdhocTaskForm
+              projects={projects.map((p) => p.id)}
+              onClose={() => {
+                setAddingTask(false);
+              }}
+            />
+          ) : (
+            <div>
+              <Button
+                onClick={() => {
+                  setAddingTask(true);
+                }}
+              >
+                Nouvelle tâche
+              </Button>
+            </div>
+          )}
+        </Card>
+      )}
       <Card>
         <CardTitle>Questions</CardTitle>
         <CardDescription>

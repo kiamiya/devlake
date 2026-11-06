@@ -1,3 +1,4 @@
+import { AdhocTaskService } from './services/tasks/adhoc-service.js';
 import { FakeGitHub, GitHubError } from 'github';
 import { describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS, isIpcChannel } from '../shared/channels.js';
@@ -94,6 +95,7 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
       }),
       bridge: bridges,
       tunnel: new TunnelService({ repos, github: () => service.githubPort(), bridges }),
+      adhoc: new AdhocTaskService(repos, () => service.githubPort()),
     }),
     vault,
     repos,

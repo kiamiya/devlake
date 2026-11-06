@@ -153,6 +153,26 @@ export const AnswerInputSchema = z.object({
   attachments: z.array(z.string()).default([]),
 });
 
+/**
+ * Tâche ad hoc saisie dans le cockpit (hors plan). Les listes sont des textes, une entrée par
+ * ligne ; le service les découpe et valide la tâche comme une tâche du plan.
+ */
+export const AdhocTaskInputSchema = z.object({
+  projectId: z.string(),
+  title: z.string().trim().min(1, 'Titre obligatoire.').max(200, 'Titre trop long.'),
+  description: z.string().trim().min(1, 'Description obligatoire.').max(20_000),
+  kind: z.enum(['code', 'docs', 'config']),
+  profile: ProfileIdSchema,
+  complexity: z.enum(['S', 'M', 'L']),
+  acceptanceCriteria: z.string().max(10_000),
+  tests: z.string().max(10_000),
+  testCategory: z.enum(['unit', 'integration', 'contract', 'e2e', 'regression']),
+  codeZones: z.string().max(5_000).default(''),
+  dependencies: z.array(z.string()).default([]),
+  priority: z.boolean().default(false),
+});
+export type AdhocTaskInput = z.infer<typeof AdhocTaskInputSchema>;
+
 const ProgressSchema = z.object({
   doneWeight: z.number(),
   totalWeight: z.number(),
@@ -345,6 +365,16 @@ export const IPC_CONTRACT = {
       cap: z.number().int().min(1, 'Le plafond doit être au moins 1.').nullable(),
     }),
     output: ProjectConfigSchema,
+  },
+  'tasks:create': {
+    input: AdhocTaskInputSchema,
+    output: z.object({
+      taskId: z.string(),
+      issueNumber: z.number(),
+      url: z.string(),
+      dispatched: z.boolean(),
+      warnings: z.array(z.string()),
+    }),
   },
   'plan:validate': {
     input: z.object({ projectId: z.string(), version: z.number().int().min(1) }),

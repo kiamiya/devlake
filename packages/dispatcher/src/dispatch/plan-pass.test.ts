@@ -136,6 +136,19 @@ describe('priorité au chemin critique', () => {
     expect(kinds(plan)).toEqual(['launch:T02']);
   });
 
+  it('tâche prioritaire (ad hoc) : passe avant le chemin critique', () => {
+    const tasks = [
+      view(1, 'ready'),
+      view(2, 'ready'),
+      view(3, 'queued', { dependencies: ['T02'] }),
+      view(500, 'ready', { priority: true, adhoc: true }),
+    ];
+    const plan = planPass(
+      input(tasks, { limits: { projectCap: 1, globalCap: 3, runnerCap: 20, maxAttempts: 3 } }),
+    );
+    expect(kinds(plan)).toEqual(['launch:T500']);
+  });
+
   it('un cycle (plan corrompu) ne bloque pas le calcul', () => {
     const tasks = [
       view(1, 'queued', { dependencies: ['T02'] }),

@@ -62,6 +62,10 @@ export const PlanTaskSchema = z.object({
    * faux pour du code pur C# ou C++ testable sans éditeur : ni verrou d'éditeur, ni pont.
    */
   needsEditor: z.boolean({ error: 'needsEditor doit valoir true ou false.' }).optional(),
+  /** Tâche prioritaire (tâche ad hoc du cockpit) : lancée avant celles du plan. */
+  priority: z.boolean({ error: 'priority doit valoir true ou false.' }).optional(),
+  /** Tâche ajoutée hors plan depuis le cockpit (tâche ad hoc). */
+  adhoc: z.boolean({ error: 'adhoc doit valoir true ou false.' }).optional(),
 });
 export type PlanTask = z.infer<typeof PlanTaskSchema>;
 

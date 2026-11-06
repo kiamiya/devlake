@@ -38,6 +38,7 @@ export const IPC_CHANNELS = [
   'plan:save',
   'plan:set-cap',
   'plan:validate',
+  'tasks:create',
   'questions:list',
   'questions:sync',
   'questions:answer',
