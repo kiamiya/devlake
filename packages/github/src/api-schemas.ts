@@ -49,6 +49,17 @@ export const BranchProtectionApi = z.object({
   required_pull_request_reviews: z.object({}).loose().nullish(),
 });
 
+/** `GET /branches/{branch}` : résumé de protection lisible avec `contents: read`. */
+export const BranchApi = z.object({
+  protected: z.boolean(),
+  protection: z
+    .object({
+      required_status_checks: z.object({ contexts: z.array(z.string()) }).nullish(),
+    })
+    .loose()
+    .nullish(),
+});
+
 export const ContentApi = z.object({
   type: z.literal('file'),
   path: z.string(),
@@ -120,8 +131,12 @@ export const PullRequestApi = z
     body: z.string().nullable(),
     state: z.enum(['open', 'closed']),
     merged_at: z.string().nullable(),
-    head: z.object({ ref: z.string(), sha: z.string() }),
-    base: z.object({ ref: z.string() }),
+    head: z.object({
+      ref: z.string(),
+      sha: z.string(),
+      repo: z.object({ full_name: z.string() }).nullish(),
+    }),
+    base: z.object({ ref: z.string(), repo: z.object({ full_name: z.string() }).nullish() }),
     auto_merge: z.unknown().nullable(),
     user: user.nullable(),
   })
@@ -136,6 +151,10 @@ export const PullRequestApi = z
     state: p.merged_at !== null ? 'merged' : p.state,
     autoMerge: p.auto_merge !== null,
     author: p.user?.login ?? '',
+    // Dépôt de tête supprimé (null) : traité comme un fork.
+    fromFork:
+      p.head.repo == null ||
+      (p.base.repo != null && p.head.repo.full_name !== p.base.repo.full_name),
   }));
 
 export function toPullRequest(pr: z.infer<typeof PullRequestApi>): PullRequest {

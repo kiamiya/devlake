@@ -8,6 +8,7 @@ import {
 import type { GitHubPort } from 'github';
 import { ProjectConfigSchema, stateLabel, TASK_LABEL } from 'shared';
 import { parse } from 'yaml';
+import type { IntegrationStatus } from '../../../shared/ipc-contract.js';
 import type { Repositories } from '../../db/repositories.js';
 import { PROJECT_CONFIG_PATH } from '../../db/rebuild.js';
 import type { BridgeService } from './bridge-service.js';
@@ -66,6 +67,29 @@ export class TunnelService {
       autoExpose: settings.autoExpose,
       projects: this.projects,
       error: this.error,
+    };
+  }
+
+  /** État du tunnel pour la barre d'état : fermé, ouvert, ou DÉGRADÉ avec sa raison. */
+  integrationStatus(): IntegrationStatus {
+    const base = { id: 'tunnel', label: 'Tunnel' } as const;
+    const settings = this.deps.repos.settings.get().tunnel;
+    if (this.killed)
+      return {
+        ...base,
+        state: 'degraded',
+        detail: 'Interrupteur actionné : tunnel coupé et jetons révoqués, ouverture à la main.',
+      };
+    if (this.error !== null)
+      return { ...base, state: 'degraded', detail: `Ouverture en échec : ${this.error}` };
+    if (this.url !== null)
+      return { ...base, state: 'ok', detail: `Ouvert (${settings.provider}) : ${this.url}` };
+    return {
+      ...base,
+      state: 'absent',
+      detail: settings.autoExpose
+        ? 'Fermé : ouvert automatiquement quand une tâche de jeu en a besoin.'
+        : 'Fermé.',
     };
   }
 

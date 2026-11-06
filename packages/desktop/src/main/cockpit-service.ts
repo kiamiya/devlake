@@ -1,8 +1,16 @@
 import type { GitHubPort } from 'github';
+import {
+  GLOBAL_CONFIG_PATH,
+  GLOBAL_CONFIG_REPOSITORY,
+  mainProtectionProblems,
+  parseGlobalConfig,
+  ProjectConfigSchema,
+} from 'shared';
+import { parse } from 'yaml';
 import type { IntegrationStatus } from '../shared/ipc-contract.js';
 import { maskToken } from '../shared/mask.js';
 import type { Settings, SettingsPatch } from '../shared/settings.js';
-import { rebuildAll, type RebuildSummary } from './db/rebuild.js';
+import { PROJECT_CONFIG_PATH, rebuildAll, type RebuildSummary } from './db/rebuild.js';
 import type { Repositories } from './db/repositories.js';
 import { GlobalConfigSyncError, publishGlobalConfig } from './services/global-config.js';
 import type { SecretVault } from './vault.js';
@@ -21,14 +29,20 @@ export interface CockpitDeps {
   github: (token: string) => GitHubPort;
   /** État des ponts Aura (absent tant que le cockpit n'en démarre aucun). */
   bridgeStatus?: () => IntegrationStatus;
+  /** État du tunnel vers la passerelle des ponts. */
+  tunnelStatus?: () => IntegrationStatus;
 }
 
 type GitHubCheck =
   { state: 'unchecked' } | { state: 'ok'; login: string } | { state: 'failed'; message: string };
+type ConfigCheck = { state: 'unchecked' } | { state: 'ok' } | { state: 'failed'; message: string };
 
 /** Logique du cockpit derrière l'IPC ; aucune dépendance à Electron. */
 export class CockpitService {
   private githubCheck: GitHubCheck = { state: 'unchecked' };
+  private configCheck: ConfigCheck = { state: 'unchecked' };
+  /** Projets dont `main` n'est plus protégée comme au bootstrap. */
+  private protectionIssues: string[] = [];
 
   constructor(private readonly deps: CockpitDeps) {}
 
@@ -41,18 +55,117 @@ export class CockpitService {
    * où les dispatchers le lisent (sans jeton GitHub, il le sera au prochain changement).
    */
   async updateSettings(patch: SettingsPatch): Promise<Settings> {
-    const previous = this.deps.repos.settings.get().maxConcurrentAgents;
+    const previous = this.deps.repos.settings.get();
     const settings = this.deps.repos.settings.update(patch);
-    if (settings.maxConcurrentAgents === previous) return settings;
+    if (
+      settings.maxConcurrentAgents === previous.maxConcurrentAgents &&
+      settings.globalPaused === previous.globalPaused
+    )
+      return settings;
     if ((await this.deps.vault.get('github-token')) === null) return settings;
     try {
       await publishGlobalConfig(await this.githubPort(), {
         maxConcurrentAgents: settings.maxConcurrentAgents,
+        paused: settings.globalPaused,
       });
+      this.configCheck = { state: 'ok' };
     } catch (error) {
+      this.configCheck = {
+        state: 'failed',
+        message: `Publication dans ${GLOBAL_CONFIG_REPOSITORY} en échec : ${error instanceof Error ? error.message : String(error)}`,
+      };
       throw new GlobalConfigSyncError(error);
     }
     return settings;
+  }
+
+  /**
+   * Configuration globale lue dans devlake-config et comparée aux réglages : les dispatchers
+   * appliquent ce qu'ils y lisent, pas ce que montre le cockpit.
+   */
+  async refreshConfigStatus(): Promise<void> {
+    if ((await this.deps.vault.get('github-token')) === null) {
+      this.configCheck = { state: 'unchecked' };
+      return;
+    }
+    const failed = (message: string) => {
+      this.configCheck = { state: 'failed', message };
+    };
+    try {
+      const github = await this.githubPort();
+      const owner = (await github.getAuthenticatedUser()).login;
+      const file = await github.getFile(
+        { owner, repo: GLOBAL_CONFIG_REPOSITORY },
+        GLOBAL_CONFIG_PATH,
+      );
+      if (file === null) {
+        failed(
+          `${GLOBAL_CONFIG_REPOSITORY} pas encore publié : les dispatchers appliquent le plafond par défaut.`,
+        );
+        return;
+      }
+      const parsed = parseGlobalConfig(file.content);
+      if (!parsed.ok) {
+        failed(`${GLOBAL_CONFIG_PATH} illisible : ${parsed.error}`);
+        return;
+      }
+      const settings = this.deps.repos.settings.get();
+      if (
+        parsed.value.maxConcurrentAgents !== settings.maxConcurrentAgents ||
+        parsed.value.paused !== settings.globalPaused
+      ) {
+        failed(
+          `${GLOBAL_CONFIG_REPOSITORY} diffère des réglages (plafond ${String(parsed.value.maxConcurrentAgents)}, pause ${parsed.value.paused ? 'active' : 'inactive'}) : enregistrer à nouveau les réglages.`,
+        );
+        return;
+      }
+      this.configCheck = { state: 'ok' };
+    } catch (error) {
+      failed(
+        `Lecture de ${GLOBAL_CONFIG_REPOSITORY} impossible : ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Protection de `main` de chaque projet, comparée à celle du bootstrap. Les dispatchers
+   * ne lancent plus d'agent sur un projet dont `main` n'est plus protégée.
+   */
+  async refreshProtection(): Promise<void> {
+    if ((await this.deps.vault.get('github-token')) === null) {
+      this.protectionIssues = [];
+      return;
+    }
+    const github = await this.githubPort();
+    const issues: string[] = [];
+    for (const project of this.deps.repos.projects.list()) {
+      const ref = { owner: project.owner, repo: project.repo };
+      try {
+        const file = await github.getFile(ref, PROJECT_CONFIG_PATH, 'main');
+        const config = file ? ProjectConfigSchema.safeParse(parse(file.content)) : null;
+        if (!config?.success) continue;
+        const protection = await github.getBranchProtection(ref, 'main');
+        const problems = mainProtectionProblems(
+          protection === null
+            ? { protected: false, requiredChecks: [] }
+            : { protected: true, requiredChecks: protection.requiredChecks },
+          config.data.qualityProfile,
+        );
+        if (problems.length > 0) issues.push(`${project.id} (${problems.join(' ; ')})`);
+      } catch (error) {
+        issues.push(
+          `${project.id} (vérification impossible : ${error instanceof Error ? error.message : String(error)})`,
+        );
+      }
+    }
+    this.protectionIssues = issues;
+  }
+
+  /** Vérifications périodiques de la barre d'état (démarrage, puis toutes les 10 minutes). */
+  async refreshHealth(): Promise<void> {
+    await this.refreshGitHubStatus();
+    await this.refreshConfigStatus().catch(() => undefined);
+    await this.refreshProtection().catch(() => undefined);
   }
 
   async getMaskedToken(): Promise<{ masked: string | null }> {
@@ -117,7 +230,40 @@ export class CockpitService {
 
   async getStatus(): Promise<IntegrationStatus[]> {
     const token = await this.deps.vault.get('github-token');
-    return [this.githubStatus(token !== null), this.deps.bridgeStatus?.() ?? auraStatus()];
+    return [
+      this.githubStatus(token !== null),
+      this.deps.bridgeStatus?.() ?? auraStatus(),
+      this.deps.tunnelStatus?.() ?? closedTunnelStatus(),
+      this.configStatus(token !== null),
+    ];
+  }
+
+  private configStatus(hasToken: boolean): IntegrationStatus {
+    const base = { id: 'config', label: 'Configuration globale' } as const;
+    if (!hasToken) return { ...base, state: 'absent', detail: 'Aucun jeton GitHub enregistré.' };
+    const settings = this.deps.repos.settings.get();
+    switch (this.configCheck.state) {
+      case 'failed':
+        return { ...base, state: 'degraded', detail: this.configCheck.message };
+      case 'unchecked':
+        return {
+          ...base,
+          state: 'degraded',
+          detail: `${GLOBAL_CONFIG_REPOSITORY} pas encore vérifié.`,
+        };
+      case 'ok':
+        return settings.globalPaused
+          ? {
+              ...base,
+              state: 'degraded',
+              detail: 'Pause globale active : aucun agent n’est lancé, tous projets confondus.',
+            }
+          : {
+              ...base,
+              state: 'ok',
+              detail: `Plafond de ${String(settings.maxConcurrentAgents)} agents publié dans ${GLOBAL_CONFIG_REPOSITORY}.`,
+            };
+    }
   }
 
   private githubStatus(hasToken: boolean): IntegrationStatus {
@@ -132,7 +278,13 @@ export class CockpitService {
     if (!hasToken) return { ...base, state: 'absent', detail: 'Aucun jeton enregistré.' };
     switch (this.githubCheck.state) {
       case 'ok':
-        return { ...base, state: 'ok', detail: `Connecté en tant que ${this.githubCheck.login}.` };
+        return this.protectionIssues.length > 0
+          ? {
+              ...base,
+              state: 'degraded',
+              detail: `Connecté en tant que ${this.githubCheck.login}, mais main n’est plus protégée sur : ${this.protectionIssues.join(', ')}. Aucun agent n’y est lancé : relancer le bootstrap du projet.`,
+            }
+          : { ...base, state: 'ok', detail: `Connecté en tant que ${this.githubCheck.login}.` };
       case 'failed':
         return { ...base, state: 'degraded', detail: this.githubCheck.message };
       case 'unchecked':
@@ -150,6 +302,10 @@ export class CockpitService {
     if (token === null) throw new NoTokenError();
     return this.deps.github(token);
   }
+}
+
+function closedTunnelStatus(): IntegrationStatus {
+  return { id: 'tunnel', label: 'Tunnel', state: 'absent', detail: 'Tunnel fermé.' };
 }
 
 function auraStatus(): IntegrationStatus {

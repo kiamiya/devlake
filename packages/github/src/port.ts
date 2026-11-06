@@ -5,6 +5,7 @@ import type {
   AuthenticatedUser,
   BranchProtection,
   BranchProtectionInput,
+  BranchProtectionSummary,
   Capabilities,
   CheckRun,
   Comment,
@@ -47,6 +48,8 @@ export interface GitHubPort {
   configureMergeSettings(ref: RepoRef): Promise<Repository>;
   protectBranch(ref: RepoRef, branch: string, input: BranchProtectionInput): Promise<void>;
   getBranchProtection(ref: RepoRef, branch: string): Promise<BranchProtection | null>;
+  /** Protection lisible avec `contents: read` (dispatcher) ; null si la branche n'existe pas. */
+  getBranchProtectionSummary(ref: RepoRef, branch: string): Promise<BranchProtectionSummary | null>;
   getCapabilities(ref: RepoRef): Promise<Capabilities>;
   getActionsPermissions(ref: RepoRef): Promise<ActionsPermissions>;
   /** GITHUB_TOKEN en lecture seule, approbation obligatoire des workflows de tous les contributeurs externes. */

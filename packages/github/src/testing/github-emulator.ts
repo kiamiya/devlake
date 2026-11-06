@@ -113,8 +113,12 @@ function pullJson(p: PullRequest, ref: RepoRef) {
     body: p.body,
     state: p.state === 'open' ? 'open' : 'closed',
     merged_at: p.state === 'merged' ? new Date().toISOString() : null,
-    head: { ref: p.head, sha: p.headSha },
-    base: { ref: p.base },
+    head: {
+      ref: p.head,
+      sha: p.headSha,
+      repo: { full_name: p.fromFork ? `${p.author}/${ref.repo}` : `${ref.owner}/${ref.repo}` },
+    },
+    base: { ref: p.base, repo: { full_name: `${ref.owner}/${ref.repo}` } },
     auto_merge: p.autoMerge ? { merge_method: 'squash' } : null,
     user: { login: p.author },
   };
@@ -270,11 +274,19 @@ export function githubEmulator(fake: FakeGitHub): HttpHandler[] {
     // Fichiers et Git Data
     http.get(
       `${R}/branches/:branch`,
-      handle(({ params }) =>
-        fake.state(refOf(params)).branches.has(param(params, 'branch'))
-          ? json({ name: param(params, 'branch') })
-          : json({ message: 'Branch not found' }, 404),
-      ),
+      handle(async ({ params }) => {
+        const branch = param(params, 'branch');
+        const summary = await fake.getBranchProtectionSummary(refOf(params), branch);
+        if (!summary) return json({ message: 'Branch not found' }, 404);
+        return json({
+          name: branch,
+          protected: summary.protected,
+          protection: {
+            enabled: summary.protected,
+            required_status_checks: { contexts: summary.requiredChecks },
+          },
+        });
+      }),
     ),
     http.get(
       `${R}/contents/*`,

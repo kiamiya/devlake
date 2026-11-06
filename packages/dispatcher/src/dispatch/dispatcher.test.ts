@@ -202,7 +202,18 @@ describe('adaptateurs', () => {
       message: 'c',
       changes: [{ path: 'config.yml', content: renderGlobalConfig({ maxConcurrentAgents: 5 }) }],
     });
-    expect(await readGlobalCap(config, 'kiamiya')).toEqual({ cap: 5 });
+    expect(await readGlobalCap(config, 'kiamiya')).toEqual({ cap: 5, paused: false });
+    await config.commitFiles(repo, {
+      branch: 'main',
+      message: 'c',
+      changes: [
+        {
+          path: 'config.yml',
+          content: renderGlobalConfig({ maxConcurrentAgents: 5, paused: true }),
+        },
+      ],
+    });
+    expect(await readGlobalCap(config, 'kiamiya')).toEqual({ cap: 5, paused: true });
     await config.commitFiles(repo, {
       branch: 'main',
       message: 'c',

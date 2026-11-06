@@ -96,7 +96,8 @@ export async function prepareReview(
   );
   const files = await github.listPullRequestFiles(ref, prNumber);
   const analysis = analyzeTestChanges(files);
-  const issue = linkedIssue(pr.body);
+  // PR de fork : jamais reliée à une tâche (aucune reprise, aucun changement d'état).
+  const issue = pr.fromFork ? null : linkedIssue(pr.body);
   let task: TaskIssue | null = null;
   if (issue !== null) {
     const parsed = parseTaskIssueBody((await github.getIssue(ref, issue)).body);
@@ -182,7 +183,8 @@ export async function finalizeReview(
     ...(findings === '' ? [] : ['', findings]),
   ].join('\n');
   await github.createComment(ref, input.prNumber, body);
-  const issue = linkedIssue(pr.body);
+  // PR de fork : jamais reliée à une tâche (aucune reprise, aucun changement d'état).
+  const issue = pr.fromFork ? null : linkedIssue(pr.body);
   if (!approved && issue !== null) {
     await github.createComment(
       ref,

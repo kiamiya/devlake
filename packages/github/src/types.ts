@@ -39,6 +39,16 @@ export interface BranchProtection extends BranchProtectionInput {
   requirePullRequest: boolean;
 }
 
+/**
+ * Protection d'une branche telle que la voit un jeton en lecture (`GET /branches/{branch}`) :
+ * le GITHUB_TOKEN d'un job ne lit pas la protection complète (droit administrateur).
+ */
+export interface BranchProtectionSummary {
+  protected: boolean;
+  /** Checks obligatoires (contextes). */
+  requiredChecks: string[];
+}
+
 export interface FileContent {
   path: string;
   /** Contenu décodé en UTF-8. */
@@ -113,6 +123,8 @@ export interface PullRequest {
   state: PullRequestState;
   autoMerge: boolean;
   author: string;
+  /** PR ouverte depuis un fork (ou un dépôt supprimé) : jamais traitée comme une PR d'agent. */
+  fromFork: boolean;
 }
 
 /** Fichier modifié par une PR. */

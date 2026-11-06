@@ -32,7 +32,9 @@ export async function readGlobalCap(
     if (!file)
       return fallback(`${GLOBAL_CONFIG_PATH} absent de ${owner}/${GLOBAL_CONFIG_REPOSITORY}.`);
     const parsed = parseGlobalConfig(file.content);
-    return parsed.ok ? { cap: parsed.value.maxConcurrentAgents } : fallback(parsed.error);
+    return parsed.ok
+      ? { cap: parsed.value.maxConcurrentAgents, paused: parsed.value.paused }
+      : fallback(parsed.error);
   } catch (error) {
     return fallback(
       `lecture de ${owner}/${GLOBAL_CONFIG_REPOSITORY} impossible (${error instanceof Error ? error.message : String(error)}).`,
@@ -174,9 +176,39 @@ export async function checkBridgeHealth(
 /** Compte du bot qui agit avec le GITHUB_TOKEN : le dispatcher lui-même. */
 export const DISPATCHER_BOT = 'github-actions[bot]';
 
+interface RepoName {
+  full_name?: unknown;
+}
+
 /**
- * Filtre d'auteur : seuls le propriétaire du dépôt et le dispatcher déclenchent une passe.
- * La passe planifiée (`schedule`) n'a pas d'auteur.
+ * Dépôt de tête d'un événement lié à du code (PR, suite de checks, run de workflow), s'il
+ * diffère du dépôt de l'événement : l'événement vient d'un fork.
+ */
+export function forkOrigin(payload: unknown): string | null {
+  if (typeof payload !== 'object' || payload === null) return null;
+  const p = payload as {
+    repository?: RepoName;
+    pull_request?: { head?: { repo?: RepoName | null } };
+    check_suite?: { head_repository?: RepoName | null };
+    workflow_run?: { head_repository?: RepoName | null };
+  };
+  const base = p.repository?.full_name;
+  const head =
+    p.pull_request !== undefined
+      ? p.pull_request.head?.repo
+      : p.check_suite !== undefined
+        ? p.check_suite.head_repository
+        : p.workflow_run?.head_repository;
+  if (head === undefined || typeof base !== 'string') return null;
+  // Dépôt de tête supprimé : traité comme un fork.
+  if (head === null) return 'dépôt supprimé';
+  return typeof head.full_name === 'string' && head.full_name !== base ? head.full_name : null;
+}
+
+/**
+ * Filtre d'auteur : seuls le propriétaire du dépôt et le dispatcher déclenchent une passe, et
+ * jamais un événement venant d'un fork (PR, CI ou run d'un compte tiers), même relayé par le
+ * bot d'Actions. La passe planifiée (`schedule`) n'a pas d'auteur.
  */
 export function eventAllowed(
   eventName: string,
@@ -184,6 +216,12 @@ export function eventAllowed(
   owner: string,
 ): { allowed: true } | { allowed: false; reason: string } {
   if (eventName === 'schedule') return { allowed: true };
+  const fork = forkOrigin(payload);
+  if (fork !== null)
+    return {
+      allowed: false,
+      reason: `événement « ${eventName} » venant d’un fork (${fork}) : ignoré.`,
+    };
   const sender =
     typeof payload === 'object' && payload !== null && 'sender' in payload
       ? (payload as { sender?: { login?: unknown } }).sender?.login

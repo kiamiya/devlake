@@ -128,19 +128,25 @@ async function start(): Promise<void> {
     vault,
     github: (): Promise<GitHubPort> => service.githubPort(),
   });
-  const service = new CockpitService({
+  const service: CockpitService = new CockpitService({
     repos,
     vault,
     github: await githubFactory(),
     bridgeStatus: () => bridge.integrationStatus(),
+    tunnelStatus: () => tunnel.integrationStatus(),
   });
   const tunnel = new TunnelService({ repos, github: () => service.githubPort(), bridges: bridge });
   // Exposition automatique : vérifiée au rythme du sondage du cockpit (30 s).
   const exposure = setInterval(() => {
     tunnel.tick().catch(() => undefined);
   }, 30_000);
+  // Barre d'état : jeton, configuration globale et protection de main revérifiés (10 min).
+  const health = setInterval(() => {
+    service.refreshHealth().catch(() => undefined);
+  }, 10 * 60_000);
   // Fermer le cockpit ferme le tunnel et arrête les ponts (et le serveur MCP d'Aura).
   app.on('before-quit', () => {
+    clearInterval(health);
     clearInterval(exposure);
     void tunnel.close().finally(() => bridge.stopAll());
   });
@@ -196,7 +202,7 @@ async function start(): Promise<void> {
   registerDroppedFiles(ipcMain, context, isTrustedUrl);
 
   createWindow();
-  await service.refreshGitHubStatus();
+  await service.refreshHealth();
   // Base créée à l'instant (supprimée ou poste neuf) : reconstruction depuis GitHub en arrière-plan.
   if (created && (await vault.get('github-token')) !== null) {
     service.rebuildCache().catch(() => undefined);

@@ -2,6 +2,7 @@ import { Octokit } from '@octokit/core';
 import { z } from 'zod';
 import {
   BranchProtectionApi,
+  BranchApi,
   ArtifactsApi,
   CheckRunsApi,
   VariableApi,
@@ -41,6 +42,7 @@ import type {
   AuthenticatedUser,
   BranchProtection,
   BranchProtectionInput,
+  BranchProtectionSummary,
   Capabilities,
   CheckRun,
   Comment,
@@ -192,6 +194,26 @@ export class OctokitGitHub implements GitHubPort {
         requiredChecks: p.required_status_checks?.contexts ?? [],
         enforceAdmins: p.enforce_admins?.enabled ?? false,
         requirePullRequest: p.required_pull_request_reviews != null,
+      };
+    } catch (error) {
+      if (isGitHubError(error, 'not-found')) return null;
+      throw error;
+    }
+  }
+
+  async getBranchProtectionSummary(
+    ref: RepoRef,
+    branch: string,
+  ): Promise<BranchProtectionSummary | null> {
+    try {
+      const b = await this.http.request(
+        'GET /repos/{owner}/{repo}/branches/{branch}',
+        { ...repoParams(ref), branch },
+        BranchApi,
+      );
+      return {
+        protected: b.protected,
+        requiredChecks: b.protection?.required_status_checks?.contexts ?? [],
       };
     } catch (error) {
       if (isGitHubError(error, 'not-found')) return null;
