@@ -101,7 +101,7 @@ jobs:
         run: |
           arch=$(uname -m)
           if [ "$arch" = x86_64 ]; then arch=x64; fi
-          dmg=$(ls release/AgentLake-*-"$arch".dmg | head -1)
+          dmg=$(find release -maxdepth 1 -name "AgentLake-*-$arch.dmg" | head -1)
           mount=$(hdiutil attach "$dmg" -nobrowse -noverify | tail -1 | awk -F'\t' '{print $NF}')
           cp -R "$mount/AgentLake.app" "$RUNNER_TEMP/"
           hdiutil detach "$mount"
