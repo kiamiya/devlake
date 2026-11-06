@@ -9,6 +9,16 @@ import { encodeHiddenJson, formatZodError, normalizeNewlines, type ParseResult }
 export const GLOBAL_CONFIG_REPOSITORY = 'devlake-config';
 export const GLOBAL_CONFIG_PATH = 'config.yml';
 
+/**
+ * Variable Actions d'un projet : « true » met le projet en pause. Le dispatcher ne lance
+ * plus d'agent ; ceux en cours finissent, les questions et la CI restent suivies.
+ */
+export const PAUSE_VARIABLE = 'AGENTLAKE_PAUSED';
+
+export function isPausedValue(value: string | null | undefined): boolean {
+  return value?.trim().toLowerCase() === 'true';
+}
+
 /** Plafond global appliqué quand la configuration globale est illisible (défaut du cockpit). */
 export const DEFAULT_GLOBAL_CAP = 3;
 

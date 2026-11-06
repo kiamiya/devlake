@@ -2,7 +2,9 @@ import { Octokit } from '@octokit/core';
 import { z } from 'zod';
 import {
   BranchProtectionApi,
+  ArtifactsApi,
   CheckRunsApi,
+  VariableApi,
   PullRequestFileApi,
   CommentApi,
   CommitApi,
@@ -55,6 +57,7 @@ import type {
   ListWorkflowRunsInput,
   PullRequest,
   PullRequestFile,
+  Artifact,
   RepoRef,
   Repository,
   UpdateIssueInput,
@@ -684,6 +687,56 @@ export class OctokitGitHub implements GitHubPort {
       { ...repoParams(ref), job_id: jobId },
       z.string(),
     );
+  }
+
+  async listRunArtifacts(ref: RepoRef, runId: number): Promise<Artifact[]> {
+    return this.http.request(
+      'GET /repos/{owner}/{repo}/actions/runs/{run_id}/artifacts',
+      { ...repoParams(ref), run_id: runId, per_page: PER_PAGE },
+      ArtifactsApi,
+    );
+  }
+
+  async downloadArtifact(ref: RepoRef, artifactId: number): Promise<Uint8Array> {
+    const data = await this.http.raw(
+      'GET /repos/{owner}/{repo}/actions/artifacts/{artifact_id}/{archive_format}',
+      { ...repoParams(ref), artifact_id: artifactId, archive_format: 'zip' },
+    );
+    if (data instanceof ArrayBuffer) return new Uint8Array(data);
+    if (data instanceof Uint8Array) return data;
+    throw new GitHubError(
+      'invalid-response',
+      `Archive de l’artefact ${String(artifactId)} illisible.`,
+    );
+  }
+
+  async getRepositoryVariable(ref: RepoRef, name: string): Promise<string | null> {
+    try {
+      const variable = await this.http.request(
+        'GET /repos/{owner}/{repo}/actions/variables/{name}',
+        { ...repoParams(ref), name },
+        VariableApi,
+      );
+      return variable.value;
+    } catch (error) {
+      if (isGitHubError(error, 'not-found')) return null;
+      throw error;
+    }
+  }
+
+  async setRepositoryVariable(ref: RepoRef, name: string, value: string): Promise<void> {
+    if ((await this.getRepositoryVariable(ref, name)) === null)
+      await this.http.raw('POST /repos/{owner}/{repo}/actions/variables', {
+        ...repoParams(ref),
+        name,
+        value,
+      });
+    else
+      await this.http.raw('PATCH /repos/{owner}/{repo}/actions/variables/{name}', {
+        ...repoParams(ref),
+        name,
+        value,
+      });
   }
 
   async rerunFailedJobs(ref: RepoRef, runId: number): Promise<void> {

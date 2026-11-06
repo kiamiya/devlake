@@ -22,6 +22,7 @@ import { ProjectCreationService } from './services/projects/creation-service.js'
 import { ContextService } from './services/ingestion/context-service.js';
 import { PlannerLaunchService } from './services/planner/planner-launch.js';
 import { PlanService } from './services/plan/plan-service.js';
+import { DashboardService } from './services/dashboard/dashboard-service.js';
 import {
   QuestionsService,
   type QuestionNotification,
@@ -164,6 +165,7 @@ async function start(): Promise<void> {
         notify: showQuestionNotification,
         badge: (count) => app.setBadgeCount(count),
       }),
+      dashboard: new DashboardService({ repos, github: () => service.githubPort() }),
     }),
     isTrustedUrl,
   );

@@ -22,6 +22,7 @@
     "clsx": "^2.1.1",
     "dompurify": "^3.4.17",
     "drizzle-orm": "^0.45.4",
+    "fflate": "^0.8.3",
     "github": "*",
     "jsdom": "^29.1.1",
     "lucide-react": "^1.69.0",

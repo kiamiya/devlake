@@ -406,6 +406,16 @@ export function describeGitHubContract(
       });
     });
 
+    describe('variables Actions', () => {
+      it('lit, crée puis modifie une variable du dépôt', async () => {
+        expect(await port.getRepositoryVariable(ref, 'AGENTLAKE_PAUSED')).toBeNull();
+        await port.setRepositoryVariable(ref, 'AGENTLAKE_PAUSED', 'true');
+        expect(await port.getRepositoryVariable(ref, 'AGENTLAKE_PAUSED')).toBe('true');
+        await port.setRepositoryVariable(ref, 'AGENTLAKE_PAUSED', 'false');
+        expect(await port.getRepositoryVariable(ref, 'AGENTLAKE_PAUSED')).toBe('false');
+      });
+    });
+
     describe('Actions', () => {
       it('déclenche un workflow_dispatch', async () => {
         await port.dispatchWorkflow(ref, {
@@ -450,6 +460,16 @@ export function describeGitHubContract(
         expect(await port.getJobLogs(ref, 70)).toBe('Erreur : test cassé\n');
         await port.rerunFailedJobs(ref, 7);
         expect(fake.state(ref).reruns).toEqual([7]);
+        const zip = new Uint8Array([80, 75, 3, 4, 1, 2, 3]);
+        fake.seedArtifact(ref, 7, { id: 71, name: 'agent-issue-1-tentative-1', data: zip });
+        fake.seedArtifact(ref, 7, { id: 72, name: 'vieux', data: zip, expired: true });
+        expect(await port.listRunArtifacts(ref, 7)).toEqual([
+          { id: 71, name: 'agent-issue-1-tentative-1', sizeInBytes: 7, expired: false },
+          { id: 72, name: 'vieux', sizeInBytes: 7, expired: true },
+        ]);
+        expect([...(await port.downloadArtifact(ref, 71))]).toEqual([...zip]);
+        await expect(port.downloadArtifact(ref, 72)).rejects.toThrow();
+        expect(await port.listRunArtifacts(ref, 99)).toEqual([]);
         await expect(port.rerunFailedJobs(ref, 99)).rejects.toThrow();
       });
     });

@@ -1,5 +1,6 @@
 import type { LfsPointer } from './lfs.js';
 import type {
+  Artifact,
   ActionsPermissions,
   AuthenticatedUser,
   BranchProtection,
@@ -107,6 +108,12 @@ export interface GitHubPort {
   getJobLogs(ref: RepoRef, jobId: number): Promise<string>;
   /** Relance les jobs en échec d'un run (après une autorisation de Kia, par exemple). */
   rerunFailedJobs(ref: RepoRef, runId: number): Promise<void>;
+  listRunArtifacts(ref: RepoRef, runId: number): Promise<Artifact[]>;
+  /** Archive zip d'un artefact. */
+  downloadArtifact(ref: RepoRef, artifactId: number): Promise<Uint8Array>;
+  /** Variable Actions du dépôt ; null si elle n'existe pas. */
+  getRepositoryVariable(ref: RepoRef, name: string): Promise<string | null>;
+  setRepositoryVariable(ref: RepoRef, name: string, value: string): Promise<void>;
 
   // Secrets
   /** Chiffré avec la clé publique du dépôt (libsodium, boîte scellée). */

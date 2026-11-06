@@ -1,12 +1,15 @@
-import type { FakeGitHub } from 'github';
+import { strToU8, zipSync } from 'fflate';
+import type { FakeGitHub, RepoRef } from 'github';
 import {
   parseAnswerComment,
   parseQuestionComment,
   renderQuestionComment,
+  renderTaskIssueBody,
   stateLabel,
   TASK_LABEL,
+  writeDispatchMeta,
 } from 'shared';
-import { makePlan } from 'shared/test-utils';
+import { makePlan, makeTask } from 'shared/test-utils';
 import { PROJECT_CONFIG_PATH } from './db/rebuild.js';
 import { PLAN_PATH } from './services/plan/plan-service.js';
 
@@ -62,7 +65,69 @@ export async function seedFakeProjects(fake: FakeGitHub, names: readonly string[
       body: '',
       labels: [TASK_LABEL, stateLabel('running')],
     });
+    if (repo === 'outil') await seedDashboard(fake, ref);
   }
+}
+
+/**
+ * Tableau de bord du projet « outil » : une tâche terminée (M), une tâche escaladée (S)
+ * avec sa question, et le run de sa dernière tentative (journal de 10 000 lignes, transcription).
+ */
+async function seedDashboard(fake: FakeGitHub, ref: RepoRef): Promise<void> {
+  const done = await fake.createIssue(ref, {
+    title: 'T50 — Socle',
+    body: renderTaskIssueBody(makeTask({ id: 'T50', title: 'Socle', complexity: 'M' })),
+    labels: [TASK_LABEL],
+  });
+  await fake.updateIssue(ref, done.number, { state: 'closed' });
+  const escalated = await fake.createIssue(ref, {
+    title: 'T51 — Export',
+    body: writeDispatchMeta(
+      renderTaskIssueBody(
+        makeTask({ id: 'T51', title: 'Export', complexity: 'S', dependencies: ['T50'] }),
+      ),
+      { attempts: 3, launchedAt: '2026-11-20T09:00:00.000Z' },
+    ),
+    labels: [TASK_LABEL, stateLabel('escalated')],
+  });
+  await fake.createComment(
+    ref,
+    escalated.number,
+    renderQuestionComment({
+      id: 'escalade-T51-3',
+      blocking: true,
+      text: 'La tâche T51 a échoué 3 fois. Comment continuer ?',
+      options: [],
+    }),
+  );
+  const logs = Array.from({ length: 10_000 }, (_, i) => `ligne ${String(i + 1)}`).join('\n');
+  fake.seedWorkflowRun(
+    ref,
+    {
+      id: 501,
+      name: 'AgentLake — agent',
+      title: `AgentLake — agent, issue #${String(escalated.number)}, tentative 3`,
+      workflow: 'agentlake-agent-task.yml',
+      status: 'completed',
+      conclusion: 'failure',
+      headBranch: 'main',
+      event: 'workflow_dispatch',
+      createdAt: '2026-11-20T09:00:00.000Z',
+      updatedAt: '2026-11-20T09:12:00.000Z',
+      url: `https://github.com/${ref.owner}/${ref.repo}/actions/runs/501`,
+    },
+    [
+      {
+        job: { id: 5010, runId: 501, name: 'agent', status: 'completed', conclusion: 'failure' },
+        logs,
+      },
+    ],
+  );
+  fake.seedArtifact(ref, 501, {
+    id: 5011,
+    name: 'agent-issue-tentative-3',
+    data: zipSync({ 'execution.json': strToU8('{"type":"result","subtype":"error_max_turns"}') }),
+  });
 }
 
 /**

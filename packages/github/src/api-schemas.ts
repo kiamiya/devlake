@@ -9,6 +9,7 @@ import type {
   WorkflowJob,
   WorkflowRun,
   PullRequestFile,
+  Artifact,
 } from './types.js';
 
 // Messages d'erreur zod en français.
@@ -181,6 +182,28 @@ const WorkflowRunObject = z
     ...(r.updated_at ? { updatedAt: r.updated_at } : {}),
     url: r.html_url,
   }));
+
+export const ArtifactsApi = z
+  .object({
+    artifacts: z.array(
+      z.object({
+        id: z.number(),
+        name: z.string(),
+        size_in_bytes: z.number(),
+        expired: z.boolean(),
+      }),
+    ),
+  })
+  .transform((r): Artifact[] =>
+    r.artifacts.map((a) => ({
+      id: a.id,
+      name: a.name,
+      sizeInBytes: a.size_in_bytes,
+      expired: a.expired,
+    })),
+  );
+
+export const VariableApi = z.object({ name: z.string(), value: z.string() });
 
 export const PullRequestFileApi = z
   .object({

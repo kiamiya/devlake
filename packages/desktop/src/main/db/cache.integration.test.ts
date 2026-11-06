@@ -166,7 +166,7 @@ describe('reconstruction depuis GitHub (FakeGitHub)', () => {
       },
       { number: 2, title: 'T01', body: '', state: 'closed', labels: [], author: 'kiamiya' },
     ]);
-    expect(repos.mirror.listRuns('kiamiya/jeu')).toEqual([run]);
+    expect(repos.mirror.listRuns('kiamiya/jeu')).toEqual([{ ...run, title: run.name }]);
     expect(repos.projects.list()[0]?.lastSyncedAt).toBe('2026-11-05T12:00:00Z');
 
     await github.updateIssue(ref, 1, { title: 'T00 — renommée' });

@@ -172,6 +172,14 @@ export interface ListWorkflowRunsInput {
   event?: string;
 }
 
+/** Artefact d'un run (journaux, transcription de session). */
+export interface Artifact {
+  id: number;
+  name: string;
+  sizeInBytes: number;
+  expired: boolean;
+}
+
 export interface WorkflowJob {
   id: number;
   runId: number;

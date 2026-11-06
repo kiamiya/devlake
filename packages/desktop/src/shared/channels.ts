@@ -41,6 +41,11 @@ export const IPC_CHANNELS = [
   'questions:list',
   'questions:sync',
   'questions:answer',
+  'dashboard:get',
+  'dashboard:set-paused',
+  'dashboard:relaunch',
+  'runs:logs',
+  'runs:transcript',
 ] as const;
 
 /**

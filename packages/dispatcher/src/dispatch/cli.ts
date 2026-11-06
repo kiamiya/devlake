@@ -6,7 +6,7 @@
 import { OctokitGitHub, type GitHubPort } from 'github';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { formatZodError } from 'shared';
+import { formatZodError, isPausedValue } from 'shared';
 import { z } from 'zod';
 import {
   checkBridgeHealth,
@@ -37,6 +37,7 @@ export const DispatchEnvSchema = z.object({
   AGENTLAKE_CONFIG_TOKEN: optional,
   AGENTLAKE_BILLING_TOKEN: optional,
   AURA_BRIDGE_URL: optional,
+  AGENTLAKE_PAUSED: optional,
 });
 
 export interface DispatchCliDeps {
@@ -85,6 +86,7 @@ export async function runDispatchCli(
     bridgeHealthy: () => checkBridgeHealth(e.AURA_BRIDGE_URL, deps.fetch),
     now: deps.now,
     log: deps.log,
+    paused: isPausedValue(e.AGENTLAKE_PAUSED),
   });
   const launched = result.applied.filter((a) => a.kind === 'launch').length;
   deps.log(

@@ -708,6 +708,60 @@ export function githubEmulator(fake: FakeGitHub): HttpHandler[] {
         return json({ total_count: jobs.length, jobs: jobs.map(jobJson) });
       }),
     ),
+    http.get(
+      `${R}/actions/runs/:runId/artifacts`,
+      handle(async ({ params }) => {
+        const artifacts = await fake.listRunArtifacts(
+          refOf(params),
+          Number(param(params, 'runId')),
+        );
+        return json({
+          total_count: artifacts.length,
+          artifacts: artifacts.map((a) => ({
+            id: a.id,
+            name: a.name,
+            size_in_bytes: a.sizeInBytes,
+            expired: a.expired,
+          })),
+        });
+      }),
+    ),
+    http.get(
+      `${R}/actions/artifacts/:artifactId/zip`,
+      handle(async ({ params }) => {
+        const data = await fake.downloadArtifact(
+          refOf(params),
+          Number(param(params, 'artifactId')),
+        );
+        return new HttpResponse(data.slice().buffer, {
+          headers: { 'content-type': 'application/zip' },
+        });
+      }),
+    ),
+    http.get(
+      `${R}/actions/variables/:name`,
+      handle(async ({ params }) => {
+        const name = param(params, 'name');
+        const value = await fake.getRepositoryVariable(refOf(params), name);
+        return value === null
+          ? HttpResponse.json({ message: 'Not Found' }, { status: 404 })
+          : json({ name, value });
+      }),
+    ),
+    http.post(
+      `${R}/actions/variables`,
+      handle(async ({ params, body }) => {
+        await fake.setRepositoryVariable(refOf(params), str(body.name), str(body.value));
+        return HttpResponse.json({}, { status: 201 });
+      }),
+    ),
+    http.patch(
+      `${R}/actions/variables/:name`,
+      handle(async ({ params, body }) => {
+        await fake.setRepositoryVariable(refOf(params), param(params, 'name'), str(body.value));
+        return empty();
+      }),
+    ),
     http.post(
       `${R}/actions/runs/:runId/rerun-failed-jobs`,
       handle(async ({ params }) => {

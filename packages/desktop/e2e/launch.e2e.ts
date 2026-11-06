@@ -437,4 +437,43 @@ test.describe('cockpit', () => {
     );
     await app.close();
   });
+
+  test('tableau de bord : avancement, kanban, journal de 10 000 lignes, pause et relance', async () => {
+    const { app, page } = await launch(userData);
+    await saveToken(page);
+    await page.keyboard.press('Control+1');
+    await page.getByRole('button', { name: 'Ouvrir un dépôt existant' }).click();
+    await page.getByRole('button', { name: 'Ouvrir outil' }).click();
+
+    await page.getByRole('button', { name: 'Exécution', exact: true }).click();
+    // T50 terminée (M = 2) sur T50 + T51 (S = 1) : 2 / 3 = 67 %.
+    await expect(page.getByRole('progressbar', { name: 'Avancement global' })).toHaveAttribute(
+      'aria-valuenow',
+      '67',
+    );
+    await expect(page.getByRole('region', { name: 'Colonne Terminée' })).toContainText('T50');
+    const escalated = page.getByRole('article', { name: 'Tâche T51' });
+    await expect(page.getByRole('region', { name: 'Colonne Escaladée' })).toContainText('T51');
+    await expect(escalated).toContainText('3 tentative(s)');
+
+    await page.getByRole('button', { name: 'Mettre en pause' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Projet en pause' })).toBeVisible();
+    await escalated.getByLabel('Consigne pour T51').fill('Exporter en CSV');
+    await escalated.getByRole('button', { name: 'Relancer T51' }).click();
+    await expect(escalated.getByRole('button', { name: 'Relance demandée' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Runs', exact: true }).click();
+    await page.getByRole('button', { name: /issue #\d+, tentative 3/ }).click();
+    const log = page.getByRole('log', { name: 'Journal du run' });
+    await expect(page.getByText('10001 lignes')).toBeVisible();
+    // Virtualisé : quelques dizaines de lignes dans le DOM, jusqu'à la dernière en défilant.
+    expect(await log.locator('div > div > div').count()).toBeLessThan(100);
+    await log.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+    await expect(log.getByText('ligne 10000', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Transcription' }).click();
+    await expect(page.getByRole('log', { name: /Transcription/ })).toContainText('error_max_turns');
+    await app.close();
+  });
 });
