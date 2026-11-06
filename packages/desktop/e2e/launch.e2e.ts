@@ -470,9 +470,11 @@ test.describe('cockpit', () => {
     await page.keyboard.press('Control+1');
     await page.getByRole('button', { name: 'Ouvrir un dépôt existant' }).click();
     await page.getByRole('button', { name: 'Ouvrir outil' }).click();
-    await page.keyboard.press('Control+1');
+    await expect(page.getByRole('tab', { name: /outil/, selected: true })).toBeVisible();
+    await page.getByRole('tab', { name: 'Accueil' }).click();
+    await expect(page.getByRole('heading', { name: 'Accueil', level: 1 })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Nouvelle tâche' }).click();
+    await page.getByRole('button', { name: 'Nouvelle tâche', exact: true }).click();
     const form = page.getByRole('form', { name: 'Nouvelle tâche' });
     await expect(form.getByLabel('Projet')).toHaveValue('kiamiya/outil');
     await form.getByLabel('Titre').fill('Exporter en CSV');
