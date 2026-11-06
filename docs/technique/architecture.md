@@ -10,7 +10,7 @@ GitHub est la source de vérité : l'état de chaque tâche vit dans son issue (
 | `github`      | `GitHubPort` : adaptateur Octokit, `FakeGitHub` en mémoire, émulateur HTTP, suite de contrat   | shared                                              |
 | `planner`     | Planificateur : questions de cadrage, découpe, validation du plan, publication sur `plan/vN`   | shared, github                                      |
 | `dispatcher`  | Passe du dispatcher, contexte et finalisation des agents, porte qualité, CI Unreal par le pont | shared, github                                      |
-| `aura-bridge` | Pont MCP vers Aura, verrou d'éditeur, passerelle et tunnel, synchronisation du clone           | shared                                              |
+| `aura-bridge` | Ponts MCP du poste (Unity, Unreal, Blender), verrou d'éditeur, passerelle et tunnel, synchro des clones | shared                                              |
 | `desktop`     | Cockpit Electron (main, preload, renderer React)                                               | shared, github, aura-bridge (+ exception de test)   |
 
 Vérifié par dependency-cruiser (`npm run depcruise`) : seul `desktop` importe Electron, le renderer n'importe jamais le main ; `desktop/src/main/testing/` (monde simulé des E2E) peut seul importer `dispatcher` et `planner`, par import dynamique en mode E2E.
@@ -44,7 +44,7 @@ Vérifié par dependency-cruiser (`npm run depcruise`) : seul `desktop` importe 
 
 ## Pont Aura
 
-Un pont par éditeur (ports 8765/8766) derrière une passerelle (8764, `/unity`, `/unreal`) publiée par Tailscale Funnel ou Cloudflare Tunnel. Jeton signé (HMAC, `AURA_BRIDGE_SECRET`) par usage : `mcp` (agent), `health` (dispatcher), `ci` (tests d'automatisation Unreal). Réponses signées, verrou d'éditeur, liste blanche d'outils, journal d'audit, interrupteur.
+Un pont par éditeur (Unity 8765, Unreal 8766, Blender 8767) derrière une passerelle (8764, `/unity`, `/unreal`, `/blender`) publiée par Tailscale Funnel ou Cloudflare Tunnel. Jeton signé (HMAC, `AURA_BRIDGE_SECRET`) par usage : `mcp` (agent), `health` (dispatcher), `ci` (tests d'automatisation Unreal). Réponses signées, verrou d'éditeur, liste blanche d'outils, journal d'audit, interrupteur.
 
 ## Tests
 

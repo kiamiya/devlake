@@ -95,11 +95,24 @@ export const SettingsSchema = z.object({
     .string()
     .regex(/^[A-Za-z0-9._-]+$/, 'Version invalide : lettres, chiffres, « . », « _ » ou « - ».'),
   /** Configurations MCP d'Aura, collées telles quelles. */
-  auraMcp: z.object({ unity: AuraMcpBlockSchema, unreal: AuraMcpBlockSchema }),
+  auraMcp: z.object({
+    unity: AuraMcpBlockSchema,
+    unreal: AuraMcpBlockSchema,
+    /** Serveur MCP de Blender (blender-mcp), principal du pont Blender. */
+    blender: AuraMcpBlockSchema,
+  }),
   /** Autres serveurs MCP relayés par le pont de chaque éditeur (outils préfixés par leur nom). */
-  extraMcp: z.object({ unity: ExtraMcpListSchema, unreal: ExtraMcpListSchema }),
+  extraMcp: z.object({
+    unity: ExtraMcpListSchema,
+    unreal: ExtraMcpListSchema,
+    blender: ExtraMcpListSchema,
+  }),
   /** Ponts Aura : port et liste blanche d'outils, par éditeur. */
-  auraBridge: z.object({ unity: BridgeSettingsSchema, unreal: BridgeSettingsSchema }),
+  auraBridge: z.object({
+    unity: BridgeSettingsSchema,
+    unreal: BridgeSettingsSchema,
+    blender: BridgeSettingsSchema,
+  }),
   /** Tunnel HTTPS vers la passerelle des ponts. */
   tunnel: z.object({
     provider: z.enum(['tailscale', 'cloudflare']),
@@ -126,12 +139,13 @@ export const DEFAULT_SETTINGS: Settings = {
   unrealEditorCmd: null,
   workflowsVersion: 'v1',
   maxImportMegabytes: 50,
-  auraMcp: { unity: null, unreal: null },
-  extraMcp: { unity: [], unreal: [] },
+  auraMcp: { unity: null, unreal: null, blender: null },
+  extraMcp: { unity: [], unreal: [], blender: [] },
   // Liste blanche vide par défaut : aucun outil Aura n'est ouvert tant que Kia ne l'a pas choisi.
   auraBridge: {
     unity: { port: 8765, allowedTools: [] },
     unreal: { port: 8766, allowedTools: [] },
+    blender: { port: 8767, allowedTools: [] },
   },
   tunnel: { provider: 'tailscale', gatewayPort: 8764, autoExpose: true },
 };

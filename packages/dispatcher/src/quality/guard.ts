@@ -1,3 +1,4 @@
+import { checkBlenderExports } from './assets.js';
 import type { GitHubPort, RepoRef } from 'github';
 import { parseAnswerComment, parseQuestionComment, renderQuestionComment } from 'shared';
 import { setTaskState } from '../agent-context/resume.js';
@@ -51,7 +52,8 @@ export async function runTestsGuard(
   prNumber: number,
 ): Promise<GuardResult> {
   const pr = await github.getPullRequest(ref, prNumber);
-  const analysis = analyzeTestChanges(await github.listPullRequestFiles(ref, prNumber));
+  const files = await github.listPullRequestFiles(ref, prNumber);
+  const analysis = analyzeTestChanges(files);
   const reasons: string[] = [];
   // PR de fork : jamais reliée à une tâche (aucune reprise, aucun changement d'état).
   const issue = pr.fromFork ? null : linkedIssue(pr.body);
@@ -84,6 +86,8 @@ export async function runTestsGuard(
       `Du code applicatif est modifié sans aucun test ajouté ni complété : ${analysis.applicationCode.join(', ')}.`,
     );
   }
+  // Livrables Blender : chaque .blend avec son export valide.
+  reasons.push(...(await checkBlenderExports(github, ref, pr.head, files)));
   return { ok: reasons.length === 0, reasons, analysis };
 }
 

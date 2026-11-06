@@ -4,8 +4,12 @@ import { basename, join } from 'node:path';
 import { readdir } from 'node:fs/promises';
 import type { Editor } from '../types.js';
 
-/** Journal de l'éditeur : Unity (Editor.log global) ou Unreal (Saved/Logs du projet). */
+/**
+ * Journal de l'éditeur : Unity (Editor.log global) ou Unreal (Saved/Logs du projet). Blender
+ * n'en a pas : chemin dans le clone, jamais écrit (rien à attendre après une bascule).
+ */
 export async function editorLogPath(editor: Editor, clone: string): Promise<string> {
+  if (editor === 'blender') return join(clone, '.git', 'agentlake-blender.log');
   if (editor === 'unreal') {
     const entries = await readdir(clone).catch(() => [] as string[]);
     const project = entries.find((e) => e.endsWith('.uproject'));
@@ -35,12 +39,15 @@ const DONE: Record<Editor, RegExp> = {
     /(Asset Pipeline Refresh.*Total:|Refresh completed in|Reloading assemblies after finished compiling|Domain Reload Profiling)/,
   unreal:
     /(Live coding (succeeded|failed)|Hot ?reload.*(complete|succeeded|failed)|Compile of .* (complete|failed)|LogInit: Display: Engine is initialized)/i,
+  // Blender ne compile rien : jamais de ligne de fin (pas d'attente, voir waitForEditor).
+  blender: /(?!)/,
 };
 
 /** Erreurs de compilation : C# (Unity), C++ et Blueprints (Unreal). */
 const ERROR: Record<Editor, RegExp> = {
   unity: /error CS\d{4}:/,
   unreal: /(error C\d{4}:|error LNK\d{4}:|LogBlueprint: Error:|: error:)/,
+  blender: /(?!)/,
 };
 
 export async function logSize(path: string): Promise<number> {
@@ -98,6 +105,8 @@ export async function waitForEditor(
   offset: number,
   options: WaitOptions = DEFAULT_WAIT,
 ): Promise<{ settled: boolean; text: string }> {
+  // Blender rouvre les fichiers à la demande de l'agent : rien ne tourne après une bascule.
+  if (editor === 'blender') return { settled: true, text: '' };
   const sleep =
     options.sleep ?? ((ms: number) => new Promise<void>((done) => setTimeout(done, ms)));
   const now = options.now ?? Date.now;

@@ -11,6 +11,7 @@ export const PROFILE_COLORS: Record<ProfileId, string> = {
   qa: '#15803d',
   unity: '#7c3aed',
   unreal: '#1d4ed8',
+  blender: '#ea7600',
   reviewer: '#9f1239',
   docs: '#57534e',
 };

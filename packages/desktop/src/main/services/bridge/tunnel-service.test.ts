@@ -52,7 +52,7 @@ describe('tunnel du cockpit', () => {
     }
     const vault = new MemoryVault();
     await vault.set('aura-bridge-secret', 'secret'); // gitleaks:allow
-    repos.settings.update({ auraMcp: { unity: AURA_BLOCK, unreal: null } });
+    repos.settings.update({ auraMcp: { unity: AURA_BLOCK, unreal: null, blender: null } });
     bridges = new BridgeService({
       repos,
       vault,
@@ -100,11 +100,18 @@ describe('tunnel du cockpit', () => {
       provider: 'tailscale',
       killed: false,
       autoExpose: true,
-      projects: [{ id: 'kiamiya/jeu', editor: 'unity', url: 'https://poste.tailnet.ts.net/unity' }],
+      projects: [
+        { id: 'kiamiya/jeu', editor: 'unity', url: 'https://poste.tailnet.ts.net/unity' },
+        // Agents Artiste 3D du projet de jeu : pont Blender, même tunnel.
+        { id: 'kiamiya/jeu', editor: 'blender', url: 'https://poste.tailnet.ts.net/blender' },
+      ],
       error: null,
     });
     expect(await github.getRepositoryVariable(jeu, 'AURA_BRIDGE_URL')).toBe(
       'https://poste.tailnet.ts.net/unity',
+    );
+    expect(await github.getRepositoryVariable(jeu, 'BLENDER_BRIDGE_URL')).toBe(
+      'https://poste.tailnet.ts.net/blender',
     );
     expect(
       await github.getRepositoryVariable({ owner: 'kiamiya', repo: 'site' }, 'AURA_BRIDGE_URL'),

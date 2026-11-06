@@ -16,14 +16,19 @@ import { authArgs, EDITOR_AUTHOR, EditorSyncError, systemGit, type GitExec } fro
 export const EDITOR_PATHS: Record<Editor, readonly string[]> = {
   unity: ['Assets', 'ProjectSettings', 'Packages'],
   unreal: ['Content', 'Config'],
+  // Sources .blend dans Art/, exports dans Art/ (Unreal) ou Assets/Art/ (importés par Unity).
+  blender: ['Art', 'Assets/Art'],
 };
+
+/** Exports d'un modèle Blender attendus à côté de sa source. */
+const BLENDER_EXPORT = /\.(fbx|glb|gltf)$/i;
 
 /** Assets Unity sérialisés en YAML : doivent commencer par `%YAML` (sérialisation texte forcée). */
 const UNITY_YAML_ASSET =
   /\.(unity|prefab|asset|mat|controller|anim|overrideController|mask|physicMaterial|playable|preset|lighting|spriteatlas|guiskin|fontsettings|signal|renderTexture|cubemap|flare)$/i;
 /** Fichiers binaires qui doivent passer par Git LFS. */
 const LFS_REQUIRED =
-  /\.(uasset|umap|fbx|obj|blend|png|jpe?g|tga|psd|tiff?|exr|hdr|wav|mp3|ogg|mp4|mov|ttf|otf|unitypackage)$/i;
+  /\.(uasset|umap|fbx|glb|obj|blend|png|jpe?g|tga|psd|tiff?|exr|hdr|wav|mp3|ogg|mp4|mov|ttf|otf|unitypackage)$/i;
 
 const PROTECTED_BRANCHES = ['main', 'master', 'HEAD'];
 
@@ -34,8 +39,11 @@ export interface CloneInfo {
 
 export interface EditorSyncOptions {
   editor: Editor;
-  /** Clone dédié actuellement ouvert dans l'éditeur (sonde du pont). */
-  currentClone: () => Promise<CloneInfo | null>;
+  /**
+   * Clone dédié ouvert dans l'éditeur (sonde du pont). Le dépôt attendu est fourni : Blender
+   * a un clone par projet, choisi d'après lui.
+   */
+  currentClone: (expectedRepo: string) => Promise<CloneInfo | null>;
   /** Jeton GitHub du cockpit (coffre), pour fetch et push. */
   token: () => Promise<string | null>;
   git?: GitExec;
@@ -70,7 +78,7 @@ export class EditorSync {
 
   /** Clone ouvert dans l'éditeur, sur le dépôt du run qui appelle. */
   private async clone(expectedRepo: string): Promise<string> {
-    const info = await this.options.currentClone();
+    const info = await this.options.currentClone(expectedRepo);
     if (info === null)
       throw new EditorSyncError(
         `Éditeur ${this.options.editor} fermé : ouvrir le clone dédié de ${expectedRepo} sur le poste.`,
@@ -214,6 +222,16 @@ export class EditorSync {
     const present = staged.filter((f) => !f.endsWith('/'));
     const existing: string[] = [];
     for (const f of present) if (await exists(join(clone, f))) existing.push(f);
+    if (this.options.editor === 'blender') {
+      // Chaque source .blend poussée part avec son export (FBX, glTF) du même nom.
+      const base = (f: string) => f.slice(f.lastIndexOf('/') + 1).replace(/\.[^.]+$/, '');
+      const exported = new Set(existing.filter((f) => BLENDER_EXPORT.test(f)).map(base));
+      for (const file of existing.filter((f) => f.toLowerCase().endsWith('.blend')))
+        if (!exported.has(base(file)))
+          problems.push(
+            `${file} n’a pas d’export du même nom (.fbx, .glb ou .gltf) : exporter le modèle avant de pousser.`,
+          );
+    }
     if (this.options.editor === 'unity') {
       for (const file of existing.filter((f) => UNITY_YAML_ASSET.test(f))) {
         const head = (await readFile(join(clone, file))).subarray(0, 5).toString('utf8');
@@ -281,9 +299,12 @@ export interface PrepareCloneInput {
   remoteUrl?: string;
 }
 
-/** Dossier du clone dédié d'un projet. */
-export function cloneDir(clonesRoot: string, owner: string, repo: string): string {
-  return join(clonesRoot, `${owner}__${repo}`);
+/** Suffixe des clones Blender : distincts du clone du moteur, pour travailler en parallèle. */
+export const BLENDER_CLONE_SUFFIX = '__blender';
+
+/** Dossier du clone dédié d'un projet (Blender : un clone à part). */
+export function cloneDir(clonesRoot: string, owner: string, repo: string, editor?: Editor): string {
+  return join(clonesRoot, `${owner}__${repo}${editor === 'blender' ? BLENDER_CLONE_SUFFIX : ''}`);
 }
 
 /**
@@ -292,7 +313,7 @@ export function cloneDir(clonesRoot: string, owner: string, repo: string): strin
  */
 export async function prepareEditorClone(input: PrepareCloneInput) {
   const git = input.git ?? systemGit;
-  const dir = cloneDir(input.clonesRoot, input.owner, input.repo);
+  const dir = cloneDir(input.clonesRoot, input.owner, input.repo, input.editor);
   const url = input.remoteUrl ?? `https://github.com/${input.owner}/${input.repo}.git`;
   let created = false;
   if (await exists(join(dir, '.git'))) {

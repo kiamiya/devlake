@@ -234,6 +234,7 @@ describe('pont Aura contre un faux serveur MCP Aura (stdio)', () => {
         ),
       ).toBe(true);
       expect((await fetch(`http://127.0.0.1:${String(port)}/unreal/health`)).status).toBe(503);
+      expect((await fetch(`http://127.0.0.1:${String(port)}/blender/health`)).status).toBe(503);
       expect((await fetch(`http://127.0.0.1:${String(port)}/autre`)).status).toBe(404);
       expect(gateway.port).toBe(port);
     } finally {

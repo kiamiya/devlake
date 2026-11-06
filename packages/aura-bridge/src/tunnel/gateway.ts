@@ -1,7 +1,7 @@
 import { createServer, request, type Server } from 'node:http';
 import type { Editor } from '../bridge.js';
 
-const EDITOR_PREFIX = /^\/(unity|unreal)(\/.*)?$/;
+const EDITOR_PREFIX = /^\/(unity|unreal|blender)(\/.*)?$/;
 
 /**
  * Passerelle locale exposée par le tunnel : une seule URL publique, un chemin par éditeur.
@@ -29,7 +29,7 @@ export class BridgeGateway {
       const editor = match?.[1] as Editor | undefined;
       if (editor === undefined) {
         res.writeHead(404, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Chemin attendu : /unity/… ou /unreal/….' }));
+        res.end(JSON.stringify({ error: 'Chemin attendu : /unity/…, /unreal/… ou /blender/….' }));
         return;
       }
       const targetPort = this.target(editor);

@@ -1,5 +1,6 @@
 import {
   ContextEntrySchema,
+  EditorIdSchema,
   ProfileIdSchema,
   ProjectConfigSchema,
   ProjectPlanSchema,
@@ -233,7 +234,7 @@ export type DashboardView = z.infer<typeof DashboardSchema>;
 
 const RunRefSchema = z.object({ projectId: z.string(), runId: z.number().int() });
 
-const EditorSchema = z.enum(['unity', 'unreal']);
+const EditorSchema = EditorIdSchema;
 
 export const AuditEntrySchema = z.object({
   at: z.string(),
@@ -458,7 +459,10 @@ export const IPC_CONTRACT = {
   'tunnel:close': { input: NoInput, output: TunnelStateSchema },
   'tunnel:kill': { input: NoInput, output: TunnelStateSchema },
   'bridge:prepare-clone': {
-    input: z.object({ projectId: z.string() }),
+    input: z.object({
+      projectId: z.string(),
+      target: z.enum(['engine', 'blender']).default('engine'),
+    }),
     output: z.object({
       dir: z.string(),
       created: z.boolean(),

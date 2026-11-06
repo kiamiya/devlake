@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
+import { EditorIdSchema } from './ids.js';
 
 /**
  * Jeton du pont Aura : `base64url(payload).base64url(hmac-sha256)`, signé avec le secret
@@ -12,7 +13,7 @@ export const BridgePayloadSchema = z.object({
   /** Identifiant du run GitHub Actions de l'agent. */
   runId: z.string().min(1),
   /** Profil de l'agent : choisit l'éditeur et la liste blanche d'outils. */
-  profile: z.enum(['unity', 'unreal']),
+  profile: EditorIdSchema,
   /** Expiration, en secondes depuis l'époque Unix. */
   exp: z.number().int().positive(),
   /** Émission (secondes) : l'interrupteur du cockpit révoque les jetons émis avant lui. */

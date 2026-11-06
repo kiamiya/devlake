@@ -88,6 +88,7 @@ describe('gabarit d’appel de l’agent', () => {
       'attempt',
       'resume_reason',
       'needs_editor',
+      'editor',
     ]);
     expect(workflow.jobs.agent.with).toEqual({
       issue_number: '${{ inputs.issue_number }}',
@@ -95,6 +96,7 @@ describe('gabarit d’appel de l’agent', () => {
       attempt: '${{ inputs.attempt }}',
       resume_reason: '${{ inputs.resume_reason }}',
       needs_editor: '${{ inputs.needs_editor }}',
+      editor: '${{ inputs.editor }}',
       devlake_ref: 'v1',
     });
   });

@@ -42,3 +42,24 @@ Le **journal d'audit** du pont liste chaque appel d'outil et chaque accès refus
 ## Tests d'automatisation Unreal
 
 Les runners GitHub n'ont pas Unreal : les checks `unit-tests` et `integration-tests` du gabarit Unreal demandent au pont de lancer `UnrealEditor-Cmd` sur le clone dédié, au commit exact de la PR. Le cockpit, le tunnel et le pont Unreal doivent être ouverts ; si l'éditeur est occupé par un agent, le check patiente. Adapter `AUTOMATION_FILTER` dans `.github/workflows/ci.yml` aux noms des tests du projet.
+
+## Blender et les agents Artiste 3D
+
+Dans un projet de jeu (Unity ou Unreal), le planificateur peut créer des tâches du profil **Artiste 3D** (`blender`) : modèles, UV, matériaux, rigs, animations. Elles passent par un **pont Blender** dédié, en parallèle des tâches du moteur (verrou et groupe de concurrence à part).
+
+Mise en route :
+
+1. Installer dans Blender un serveur MCP, par exemple [blender-mcp](https://github.com/ahujasid/blender-mcp) (extension Blender + `uvx blender-mcp`).
+2. **Réglages → Éditeurs et Aura → Configuration MCP Blender** : coller sa configuration, par exemple `{ "command": "uvx", "args": ["blender-mcp"] }`. D'autres serveurs MCP peuvent s'ajouter sous le pont Blender, comme pour les moteurs.
+3. Projet ouvert → **Préparer le clone Blender** : un clone à part (`<owner>__<repo>__blender`), distinct de celui du moteur.
+4. Lancer Blender, puis **Démarrer le pont Blender** et cocher ses outils (`blender__…`) dans la liste blanche.
+5. Le tunnel publie l'URL du pont Blender dans la variable `BLENDER_BRIDGE_URL` des projets de jeu.
+
+Livrables d'une tâche Artiste 3D :
+
+- la source `Art/<asset>/<asset>.blend` (Git LFS) ;
+- son export du même nom : FBX dans `Assets/Art/<asset>/` pour Unity (importé par l'éditeur), à côté de la source pour Unreal (une tâche Unreal l'importe dans Content).
+
+Le pont refuse de pousser un `.blend` sans export, et le check `agentlake / tests-guard` vérifie sur chaque PR que l'export existe, est suivi par Git LFS et est un FBX, GLB ou glTF valide.
+
+Un projet de jeu créé avant la prise en charge de Blender doit être **rebootstrappé** (bouton « Relancer le bootstrap ») pour que ses workflows acceptent les tâches Artiste 3D.

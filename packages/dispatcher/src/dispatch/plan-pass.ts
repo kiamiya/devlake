@@ -1,5 +1,7 @@
 import {
+  editorOf,
   needsEditor,
+  type EditorId,
   type DispatchMeta,
   type ProfileId,
   type TaskIssue,
@@ -63,8 +65,13 @@ export interface PassInput {
   runs: readonly AgentRun[];
   now: Date;
   limits: PassLimits;
-  /** Santé du pont : null si elle n'a pas été vérifiée (aucune tâche de jeu en attente). */
-  bridgeHealthy: boolean | null;
+  /**
+   * Santé des ponts : par éditeur (Unity, Unreal, Blender), ou un booléen pour tous ; null si
+   * elle n'a pas été vérifiée (aucune tâche d'éditeur en attente).
+   */
+  bridgeHealthy: boolean | null | Partial<Record<EditorId, boolean>>;
+  /** Éditeur d'une tâche (moteur du projet ou Blender) ; par défaut, celui de son profil. */
+  taskEditor?: (task: TaskIssue) => EditorId | null;
   /** Minutes Actions restantes ; null = non limité (dépôt public ou inconnu). */
   minutesRemaining: number | null;
   /** Coût estimé d'une tâche, en minutes (profil). */
@@ -109,6 +116,8 @@ export type PassAction =
       failedSha: string | null;
       /** La tâche passe par l'éditeur : verrou d'éditeur côté workflow. */
       needsEditor: boolean;
+      /** Éditeur de la tâche (groupe de concurrence par éditeur) ; null sans éditeur. */
+      editor: EditorId | null;
     }
   | { kind: 'summarize'; issue: number; taskId: string; prNumber: number }
   /** Rattrapage : état incohérent corrigé (événement manqué, geste manuel). */
@@ -121,6 +130,13 @@ export interface PassPlan {
   /** Explications pour le journal du run. */
   log: string[];
   capacity: number;
+}
+
+/** Pont de l'éditeur prêt pour cette tâche. */
+function bridgeReady(input: PassInput, editor: EditorId | null): boolean {
+  const health = input.bridgeHealthy;
+  if (health === null || editor === null) return false;
+  return typeof health === 'boolean' ? health : health[editor] === true;
 }
 
 /** Tâche qui passe par l'éditeur (pont Aura) ; le code pur C#/C++ n'en fait pas partie. */
@@ -190,6 +206,7 @@ function deadReason(view: TaskView, input: PassInput): string | null {
  * mettre en attente de l'éditeur, remettre en file ou escalader.
  */
 export function planPass(input: PassInput): PassPlan {
+  const editorFor = (task: TaskIssue): EditorId | null => (input.taskEditor ?? editorOf)(task);
   const actions: PassAction[] = [];
   const log: string[] = [];
   const byId = new Map(input.tasks.map((t) => [t.task.id, t]));
@@ -378,7 +395,7 @@ export function planPass(input: PassInput): PassPlan {
       log.push(`${label} : ressource exclusive occupée (${busy.join(', ')}).`);
       continue;
     }
-    if (isGameTask(view.task) && input.bridgeHealthy !== true) {
+    if (isGameTask(view.task) && !bridgeReady(input, editorFor(view.task))) {
       if (state === 'ready')
         actions.push({ kind: 'wait-editor', issue: view.number, taskId: view.task.id });
       log.push(`${label} : pont Aura indisponible, en attente de l’éditeur.`);
@@ -411,6 +428,7 @@ export function planPass(input: PassInput): PassPlan {
       from,
       failedSha: state === 'fixing' ? (view.pr?.headSha ?? null) : null,
       needsEditor: isGameTask(view.task),
+      editor: isGameTask(view.task) ? editorFor(view.task) : null,
     });
     effective.set(view.number, 'running');
     for (const r of view.task.exclusiveResources) occupied.add(r);

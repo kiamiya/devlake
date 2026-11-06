@@ -1,4 +1,10 @@
-import { PROFILE_IDS, type ProfileId } from 'shared';
+import { EDITORS, PROFILE_IDS, type EditorId as Editor, type ProfileId } from 'shared';
+
+const EDITOR_LABELS: Record<Editor, string> = {
+  unity: 'Unity',
+  unreal: 'Unreal',
+  blender: 'Blender',
+};
 import { useEffect, useState, type FormEvent } from 'react';
 import type { Settings } from '../../shared/settings.js';
 import {
@@ -25,11 +31,11 @@ function ExtraMcpServers({
   servers,
   onChange,
 }: {
-  editor: 'unity' | 'unreal';
+  editor: Editor;
   servers: ExtraServers;
   onChange: (servers: ExtraServers) => void;
 }) {
-  const label = editor === 'unity' ? 'Unity' : 'Unreal';
+  const label = EDITOR_LABELS[editor];
   const update = (index: number, patch: Partial<ExtraServers[number]>) => {
     onChange(servers.map((s, i) => (i === index ? { ...s, ...patch } : s)));
   };
@@ -343,10 +349,12 @@ function SettingsForm({ initial }: { initial: Settings }) {
               Tests d’automatisation Unreal lancés par la CI via le pont, sur le clone dédié.
             </p>
           </div>
-          {(['unity', 'unreal'] as const).map((editor) => (
+          {EDITORS.map((editor) => (
             <div key={editor} className="flex flex-col gap-2">
               <Label htmlFor={`aura-${editor}`}>
-                Configuration MCP Aura — {editor === 'unity' ? 'Unity' : 'Unreal'}
+                {editor === 'blender'
+                  ? 'Configuration MCP Blender (blender-mcp)'
+                  : `Configuration MCP Aura — ${EDITOR_LABELS[editor]}`}
               </Label>
               <Textarea
                 id={`aura-${editor}`}

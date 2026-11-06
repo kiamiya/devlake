@@ -20,6 +20,7 @@ import {
   type NamedMcpServer,
 } from 'aura-bridge';
 import type { GitHubPort } from 'github';
+import { EDITORS as SHARED_EDITORS } from 'shared';
 import { ProjectConfigSchema } from 'shared';
 import { parse } from 'yaml';
 import type { IntegrationStatus } from '../../../shared/ipc-contract.js';
@@ -27,7 +28,12 @@ import { PROJECT_CONFIG_PATH } from '../../db/rebuild.js';
 import type { Repositories } from '../../db/repositories.js';
 import type { SecretVault } from '../../vault.js';
 
-export const EDITORS: readonly Editor[] = ['unity', 'unreal'];
+export const EDITORS: readonly Editor[] = SHARED_EDITORS;
+
+/** Serveur principal du pont d'un éditeur : Aura pour les moteurs, blender-mcp pour Blender. */
+export function primaryServer(editor: Editor): string {
+  return editor === 'blender' ? 'blender' : 'aura';
+}
 /** Entrées gardées en mémoire par pont pour le journal d'audit du cockpit. */
 export const AUDIT_LIMIT = 500;
 
@@ -63,13 +69,19 @@ export interface BridgeView extends BridgeStatus {
   servers: { name: string; connected: boolean; error: string | null }[];
 }
 
-/** Serveurs MCP configurés pour un éditeur : Aura (`aura`), puis les autres, dans l'ordre. */
+/**
+ * Serveurs MCP configurés pour un éditeur : le principal (`aura`, ou `blender` pour Blender),
+ * puis les autres, dans l'ordre.
+ */
 export function configuredServers(
   settings: ReturnType<Repositories['settings']['get']>,
   editor: Editor,
 ): { name: string; config: string }[] {
-  const aura = settings.auraMcp[editor];
-  return [...(aura === null ? [] : [{ name: 'aura', config: aura }]), ...settings.extraMcp[editor]];
+  const main = settings.auraMcp[editor];
+  return [
+    ...(main === null ? [] : [{ name: primaryServer(editor), config: main }]),
+    ...settings.extraMcp[editor],
+  ];
 }
 
 /** Ponts Aura du cockpit : un par éditeur, démarrés et arrêtés à la demande de Kia. */
@@ -113,7 +125,7 @@ export class BridgeService {
       ...new Set(
         this.deps.repos.settings
           .get()
-          .auraBridge[editor].allowedTools.map((t) => qualifyToolName(t)),
+          .auraBridge[editor].allowedTools.map((t) => qualifyToolName(t, primaryServer(editor))),
       ),
     ];
   }
@@ -163,11 +175,23 @@ export class BridgeService {
         return multi;
       },
       // Clone dédié ouvert dans l'éditeur : dossier des clones des réglages (T19).
-      probe: () => probeEditor(this.deps.repos.settings.get().editorClonesDir, editor),
+      // Blender : un clone par projet, celui du dépôt demandé.
+      probe: (repo) =>
+        probeEditor(
+          this.deps.repos.settings.get().editorClonesDir,
+          editor,
+          undefined,
+          editor === 'blender' ? repo : undefined,
+        ),
       editorSync: new EditorSync({
         editor,
-        currentClone: async () => {
-          const state = await probeEditor(this.deps.repos.settings.get().editorClonesDir, editor);
+        currentClone: async (expectedRepo) => {
+          const state = await probeEditor(
+            this.deps.repos.settings.get().editorClonesDir,
+            editor,
+            undefined,
+            editor === 'blender' ? expectedRepo : undefined,
+          );
           return state.open && state.clone !== null
             ? { clone: state.clone, repo: state.repo }
             : null;
@@ -210,9 +234,14 @@ export class BridgeService {
    * Prépare le clone dédié d'un projet de jeu dans le dossier des clones des réglages
    * (distinct de la copie de travail de Kia) : clone ou mise à jour, Git LFS.
    */
+  /**
+   * Prépare le clone dédié d'un projet de jeu : celui du moteur (Unity, Unreal), ou celui de
+   * Blender (`for: 'blender'`), distinct pour travailler en parallèle.
+   */
   async prepareClone(
     projectId: string,
     remoteUrl?: string,
+    target: 'engine' | 'blender' = 'engine',
   ): Promise<{ dir: string; created: boolean; editor: Editor; warnings: string[] }> {
     const settings = this.deps.repos.settings.get();
     if (settings.editorClonesDir === null)
@@ -231,16 +260,17 @@ export class BridgeService {
     const type = config?.success ? config.data.type : null;
     if (type !== 'unity' && type !== 'unreal')
       throw new BridgeConfigError(`${projectId} n’est pas un projet de jeu (Unity ou Unreal).`);
+    const editor: Editor = target === 'blender' ? 'blender' : type;
     const result = await prepareEditorClone({
       clonesRoot: settings.editorClonesDir,
       owner: project.owner,
       repo: project.repo,
-      editor: type,
+      editor,
       token: await this.deps.vault.get('github-token'),
       ...(this.deps.git ? { git: this.deps.git } : {}),
       ...(remoteUrl ? { remoteUrl } : {}),
     });
-    return { ...result, editor: type };
+    return { ...result, editor };
   }
 
   /** Port local d'un pont démarré (cible de la passerelle). */
@@ -280,7 +310,9 @@ export class BridgeService {
         ...current,
         [editor]: {
           ...current[editor],
-          allowedTools: [...new Set(tools.map((t) => qualifyToolName(t)))].sort(),
+          allowedTools: [
+            ...new Set(tools.map((t) => qualifyToolName(t, primaryServer(editor)))),
+          ].sort(),
         },
       },
     });

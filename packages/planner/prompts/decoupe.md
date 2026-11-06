@@ -24,7 +24,7 @@ Projet : {{PROJECT}}
 - Chaque tâche de type `code` exige au moins un test ; catégories de tests : {{TEST_CATEGORIES}}.
 - Profils possibles : {{PROFILES}}. Retiens seulement les profils utiles, chacun avec une justification ; chaque tâche utilise un profil retenu.
 - Ressources exclusives : une même ressource (éditeur, migrations…) n'est utilisée que par une tâche à la fois.
-- Jeux (profils `unity`, `unreal`) : une tâche qui touche scènes, prefabs, niveaux ou Blueprints a besoin de l'éditeur (ressource exclusive `unity-editor` ou `unreal-editor`). Une tâche de code pur C# ou C++ testable sans éditeur porte `"needsEditor": false` et pas de ressource d'éditeur : elle avance en parallèle, sans le pont.
+- Jeux (profils `unity`, `unreal`, et `blender` pour les assets 3D) : une tâche qui touche scènes, prefabs, niveaux ou Blueprints a besoin de l'éditeur (ressource exclusive `unity-editor` ou `unreal-editor`). Une tâche de code pur C# ou C++ testable sans éditeur porte `"needsEditor": false` et pas de ressource d'éditeur : elle avance en parallèle, sans le pont.
 - Découpe par zones de code pour limiter les conflits entre tâches parallèles.
 - Épopées et jalons facultatifs ; une tâche ne renvoie qu'à une épopée ou un jalon défini.
 - Ne fixe pas le nombre d'agents : il est calculé à partir du graphe.

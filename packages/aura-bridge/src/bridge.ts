@@ -61,7 +61,7 @@ export interface BridgeOptions {
   now?: () => Date;
   idleMs?: number;
   /** État de l'éditeur sur le poste (clone dédié ouvert, projet, branche). */
-  probe?: () => Promise<EditorState>;
+  probe?: (repo?: string) => Promise<EditorState>;
   /** Synchronisation du clone dédié : outils editor_checkout, editor_commit_push, editor_status. */
   editorSync?: EditorSync;
   /** Tests d'automatisation lancés par la CI (`/automation`, Unreal). */
@@ -408,7 +408,7 @@ export class AuraBridge {
 
   /** Santé signée : pont actif, Aura joignable, éditeur ouvert, projet et branche. */
   private async sendHealth(res: ServerResponse, payload: BridgePayload): Promise<void> {
-    const [aura, editor] = await Promise.all([this.auraAlive(), this.probeEditor()]);
+    const [aura, editor] = await Promise.all([this.auraAlive(), this.probeEditor(payload.repo)]);
     const report: HealthReport = {
       status: 'ok',
       editor: this.options.editor,
@@ -440,9 +440,9 @@ export class AuraBridge {
     }
   }
 
-  private async probeEditor(): Promise<EditorState> {
+  private async probeEditor(repo?: string): Promise<EditorState> {
     try {
-      return (await this.options.probe?.()) ?? EDITOR_CLOSED;
+      return (await this.options.probe?.(repo)) ?? EDITOR_CLOSED;
     } catch {
       return EDITOR_CLOSED;
     }

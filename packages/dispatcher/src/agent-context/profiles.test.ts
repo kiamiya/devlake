@@ -11,6 +11,7 @@ const TEMPLATES = fileURLToPath(new URL('../../../../templates/profiles/', impor
 const env = profileEnvFrom({
   AURA_BRIDGE_URL: 'https://pont.exemple.ts.net/mcp',
   AURA_BRIDGE_TOKEN: 'jeton-signe',
+  BLENDER_BRIDGE_URL: 'https://pont.exemple.ts.net/blender',
   AUTRE: 'ignorée',
 });
 

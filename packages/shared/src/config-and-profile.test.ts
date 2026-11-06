@@ -100,10 +100,12 @@ describe('profils par défaut (templates/profiles)', () => {
       expect(prompt).toContain('Écris les tests');
       expect(prompt).toContain('Ne modifie, ne désactive et ne supprime aucun test existant');
     }
-    const usesBridge = id === 'unity' || id === 'unreal';
-    expect(Object.keys(loaded.value.mcpServers)).toEqual(usesBridge ? ['aura'] : []);
-    expect(loaded.value.allowedTools.includes('mcp__aura')).toBe(usesBridge);
-    if (usesBridge) expect(prompt).toContain('editor_checkout');
+    // Moteurs : pont Aura ; Artiste 3D : pont Blender ; les autres : aucun pont.
+    const server = id === 'unity' || id === 'unreal' ? 'aura' : id === 'blender' ? 'blender' : null;
+    expect(Object.keys(loaded.value.mcpServers)).toEqual(server === null ? [] : [server]);
+    expect(loaded.value.allowedTools.includes('mcp__aura')).toBe(server === 'aura');
+    expect(loaded.value.allowedTools.includes('mcp__blender')).toBe(server === 'blender');
+    if (server !== null) expect(prompt).toContain('editor_checkout');
   });
 
   it('modèle par alias : Opus pour architecte et relecteur, Sonnet ailleurs', () => {
