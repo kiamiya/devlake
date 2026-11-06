@@ -63,6 +63,18 @@ export const SettingsSchema = z.object({
   auraMcp: z.object({ unity: AuraMcpBlockSchema, unreal: AuraMcpBlockSchema }),
   /** Ponts Aura : port et liste blanche d'outils, par éditeur. */
   auraBridge: z.object({ unity: BridgeSettingsSchema, unreal: BridgeSettingsSchema }),
+  /** Tunnel HTTPS vers la passerelle des ponts. */
+  tunnel: z.object({
+    provider: z.enum(['tailscale', 'cloudflare']),
+    /** Port local de la passerelle (une URL publique, un chemin par éditeur). */
+    gatewayPort: z
+      .number()
+      .int('Le port doit être un entier.')
+      .min(1024, 'Port entre 1024 et 65535.')
+      .max(65535, 'Port entre 1024 et 65535.'),
+    /** N'exposer le pont que si une tâche de jeu est prête ou en cours. */
+    autoExpose: z.boolean(),
+  }),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 
@@ -81,6 +93,7 @@ export const DEFAULT_SETTINGS: Settings = {
     unity: { port: 8765, allowedTools: [] },
     unreal: { port: 8766, allowedTools: [] },
   },
+  tunnel: { provider: 'tailscale', gatewayPort: 8764, autoExpose: true },
 };
 
 export const SettingsPatchSchema = SettingsSchema.partial();

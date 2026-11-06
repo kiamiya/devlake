@@ -3,8 +3,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AuditEntryView, BridgeViewData } from '../../../shared/ipc-contract.js';
-import { BridgeCard, BridgePanel, describeCall } from './BridgePanel.js';
+import type {
+  AuditEntryView,
+  BridgeViewData,
+  TunnelStateView,
+} from '../../../shared/ipc-contract.js';
+import { BridgeCard, BridgePanel, describeCall, TunnelCard } from './BridgePanel.js';
 
 const call: AuditEntryView = {
   at: '2026-11-21T10:00:00.000Z',
@@ -31,13 +35,24 @@ const bridge = (overrides: Partial<BridgeViewData> = {}): BridgeViewData => ({
 
 type Invoke = (channel: string, input: unknown) => Promise<{ ok: true; data: unknown }>;
 let invoke: ReturnType<typeof vi.fn<Invoke>>;
+let tunnelState: TunnelStateView;
 
 beforeEach(() => {
+  tunnelState = {
+    open: true,
+    url: 'https://poste.tailnet.ts.net',
+    provider: 'tailscale',
+    killed: false,
+    autoExpose: true,
+    projects: [{ id: 'kiamiya/jeu', editor: 'unity', url: 'https://poste.tailnet.ts.net/unity' }],
+    error: null,
+  };
   invoke = vi.fn<Invoke>((channel) =>
     Promise.resolve({
       ok: true,
-      data:
-        channel === 'bridge:list'
+      data: channel.startsWith('tunnel:')
+        ? tunnelState
+        : channel === 'bridge:list'
           ? [
               bridge(),
               bridge({
@@ -153,5 +168,50 @@ describe('pont Aura dans le cockpit', () => {
     expect(describeCall({ ...call, tool: null, runId: null, outcome: 'refused' })).toBe(
       'accès · inconnu · refusé',
     );
+  });
+});
+
+describe('tunnel dans le cockpit', () => {
+  it('ouvert : URL publique, projets reliés, fermeture et interrupteur', async () => {
+    wrap(<TunnelCard />);
+    const card = await screen.findByRole('region', { name: 'Tunnel' });
+    expect(card.textContent).toContain('Tunnel (Tailscale Funnel)');
+    expect(card.textContent).toContain('Ouvert');
+    expect(card.textContent).toContain('URL publique : https://poste.tailnet.ts.net');
+    expect(screen.getByRole('list', { name: 'Projets de jeu reliés' }).textContent).toContain(
+      'kiamiya/jeu → https://poste.tailnet.ts.net/unity',
+    );
+    expect(card.textContent).toContain('Exposition automatique');
+    fireEvent.click(screen.getByRole('button', { name: 'Interrupteur d’arrêt' }));
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('tunnel:kill', undefined);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer le tunnel' }));
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('tunnel:close', undefined);
+    });
+  });
+
+  it('coupé par l’interrupteur, exposition manuelle, erreur affichée ; réouverture', async () => {
+    tunnelState = {
+      ...tunnelState,
+      open: false,
+      url: null,
+      killed: true,
+      autoExpose: false,
+      projects: [],
+      provider: 'cloudflare',
+      error: 'cloudflared introuvable',
+    };
+    wrap(<TunnelCard />);
+    const card = await screen.findByRole('region', { name: 'Tunnel' });
+    expect(card.textContent).toContain('Cloudflare Tunnel');
+    expect(card.textContent).toContain('Coupé par l’interrupteur');
+    expect(card.textContent).toContain('Exposition manuelle');
+    expect(screen.getByRole('alert').textContent).toBe('cloudflared introuvable');
+    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir le tunnel' }));
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('tunnel:open', undefined);
+    });
   });
 });

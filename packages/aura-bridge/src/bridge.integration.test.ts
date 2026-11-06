@@ -1,16 +1,22 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { fileURLToPath } from 'node:url';
-import { signBridgeToken, type BridgePayload } from 'shared/bridge-token';
+import {
+  signBridgeToken,
+  verifyBridgeResponse,
+  type BridgePayloadInput,
+} from 'shared/bridge-token';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AuraBridge, type AuditEntry } from './bridge.js';
+import type { EditorState } from './editor-probe.js';
+import { BridgeGateway } from './tunnel/gateway.js';
 import { connectStdioUpstream } from './upstream.js';
 
 const SECRET = 'secret-integration-pont'; // gitleaks:allow
 const FAKE_AURA = fileURLToPath(new URL('./testing/fake-aura.mjs', import.meta.url));
 
 const inHours = (h: number) => Math.floor(Date.now() / 1000) + h * 3600;
-const payload = (overrides: Partial<BridgePayload> = {}): BridgePayload => ({
+const payload = (overrides: Partial<BridgePayloadInput> = {}): BridgePayloadInput => ({
   repo: 'kiamiya/jeu',
   runId: '1001',
   profile: 'unity',
@@ -24,7 +30,15 @@ describe('pont Aura contre un faux serveur MCP Aura (stdio)', () => {
   let url: URL;
   const clients: Client[] = [];
 
+  let editorState: EditorState;
+
   beforeEach(async () => {
+    editorState = {
+      open: true,
+      repo: 'kiamiya/jeu',
+      branch: 'main',
+      clone: '/clones/kiamiya__jeu',
+    };
     audit = [];
     bridge = new AuraBridge({
       editor: 'unity',
@@ -34,6 +48,7 @@ describe('pont Aura contre un faux serveur MCP Aura (stdio)', () => {
       connectUpstream: () =>
         connectStdioUpstream({ command: process.execPath, args: [FAKE_AURA], env: {} }),
       onAudit: (e) => audit.push(e),
+      probe: () => Promise.resolve(editorState),
     });
     const status = await bridge.start();
     url = new URL(`http://127.0.0.1:${String(status.port)}/mcp`);
@@ -107,11 +122,75 @@ describe('pont Aura contre un faux serveur MCP Aura (stdio)', () => {
     expect((await second.listTools()).tools.length).toBe(2);
   });
 
-  it('santé et chemins inconnus', async () => {
-    const health = await fetch(new URL('/health', url));
-    expect(await health.json()).toEqual({ status: 'ok', editor: 'unity' });
+  const healthToken = (overrides: Partial<BridgePayloadInput> = {}) =>
+    signBridgeToken(
+      payload({
+        scope: 'health',
+        iat: inHours(0),
+        exp: inHours(0.05),
+        runId: 'disp-1',
+        ...overrides,
+      }),
+      SECRET,
+    );
+
+  async function health(token: string, base = url) {
+    const response = await fetch(new URL('health', base.href.replace(/mcp$/, '')), {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    return { response, body: await response.text() };
+  }
+
+  it('santé signée : pont, Aura, éditeur, projet et branche ; réponse vérifiable', async () => {
+    const { response, body } = await health(healthToken());
+    expect(response.status).toBe(200);
+    expect(
+      verifyBridgeResponse(body, response.headers.get('x-agentlake-signature') ?? '', SECRET),
+    ).toBe(true);
+    expect(JSON.parse(body)).toMatchObject({
+      status: 'ok',
+      editor: 'unity',
+      aura: true,
+      editorOpen: true,
+      project: 'kiamiya/jeu',
+      branch: 'main',
+      requestedBy: { repo: 'kiamiya/jeu', runId: 'disp-1' },
+    });
+    editorState = { open: false, repo: null, branch: null, clone: null };
+    expect(JSON.parse((await health(healthToken())).body)).toMatchObject({
+      editorOpen: false,
+      project: null,
+    });
+  });
+
+  it('santé refusée sans jeton, avec un jeton MCP ; jeton de santé refusé pour MCP', async () => {
+    expect((await health('')).response.status).toBe(401);
+    expect((await health(signBridgeToken(payload(), SECRET))).response.status).toBe(403);
+    await expect(connect(healthToken())).rejects.toThrow(
+      'Un jeton de santé n’ouvre pas de session MCP',
+    );
     expect((await fetch(new URL('/autre', url))).status).toBe(404);
-    // Requête MCP sans initialisation ni session : refusée proprement.
+  });
+
+  it('interrupteur : sessions fermées, jetons émis avant refusés, nouveaux jetons acceptés', async () => {
+    const before = await connect(
+      signBridgeToken(payload({ runId: 'A', iat: inHours(0) - 5 }), SECRET),
+    );
+    await before.callTool({ name: 'scene_list', arguments: {} });
+    await bridge.revokeTokens();
+    await expect(
+      connect(signBridgeToken(payload({ runId: 'A', iat: inHours(0) - 5 }), SECRET)),
+    ).rejects.toThrow('Jeton révoqué');
+    // Jeton sans date d'émission (ancien format) : émis il y a deux heures selon son expiration.
+    await expect(connect(signBridgeToken(payload({ runId: 'B' }), SECRET))).rejects.toThrow(
+      'Jeton révoqué',
+    );
+    await new Promise((done) => setTimeout(done, 1100));
+    const after = await connect(signBridgeToken(payload({ runId: 'C', iat: inHours(0) }), SECRET));
+    expect((await after.listTools()).tools.length).toBe(2);
+  });
+
+  it('requête MCP sans session : refusée proprement', async () => {
     const orphan = await fetch(url, {
       method: 'POST',
       headers: {
@@ -122,5 +201,44 @@ describe('pont Aura contre un faux serveur MCP Aura (stdio)', () => {
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
     });
     expect(orphan.status).toBe(400);
+  });
+
+  it('passerelle : une URL, un chemin par éditeur, jusqu’au pont et retour', async () => {
+    const gateway = new BridgeGateway((editor) =>
+      editor === 'unity' ? bridge.status().port : null,
+    );
+    const port = await gateway.start(0);
+    try {
+      const base = new URL(`http://127.0.0.1:${String(port)}/unity/mcp`);
+      const client = new Client({ name: 'agent', version: '1' });
+      clients.push(client);
+      await client.connect(
+        new StreamableHTTPClientTransport(base, {
+          requestInit: {
+            headers: { authorization: `Bearer ${signBridgeToken(payload(), SECRET)}` },
+          },
+        }),
+      );
+      expect(
+        await client.callTool({ name: 'echo', arguments: { text: 'via tunnel' } }),
+      ).toMatchObject({
+        content: [{ type: 'text', text: 'écho : via tunnel' }],
+      });
+      const viaGateway = await health(healthToken(), base);
+      expect(viaGateway.response.status).toBe(200);
+      expect(
+        verifyBridgeResponse(
+          viaGateway.body,
+          viaGateway.response.headers.get('x-agentlake-signature') ?? '',
+          SECRET,
+        ),
+      ).toBe(true);
+      expect((await fetch(`http://127.0.0.1:${String(port)}/unreal/health`)).status).toBe(503);
+      expect((await fetch(`http://127.0.0.1:${String(port)}/autre`)).status).toBe(404);
+      expect(gateway.port).toBe(port);
+    } finally {
+      await gateway.stop();
+    }
+    expect(gateway.port).toBeNull();
   });
 });

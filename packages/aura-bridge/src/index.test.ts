@@ -109,7 +109,13 @@ describe('liste blanche (session MCP en mémoire)', () => {
     await bridge.start();
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
     await bridge
-      .sessionServer({ repo: 'kiamiya/jeu', runId: '42', profile: 'unity', exp: 9_999_999_999 })
+      .sessionServer({
+        repo: 'kiamiya/jeu',
+        runId: '42',
+        profile: 'unity',
+        exp: 9_999_999_999,
+        scope: 'mcp',
+      })
       .connect(serverSide);
     const client = new Client({ name: 'agent', version: '1' });
     await client.connect(clientSide);

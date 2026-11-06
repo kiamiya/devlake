@@ -214,7 +214,9 @@ describe('jeton du pont Aura', () => {
         repo: 'kiamiya/jeu',
         runId: '777',
         profile: 'unity',
+        iat: now.getTime() / 1000,
         exp: now.getTime() / 1000 + 7200,
+        scope: 'mcp',
       },
     });
   });

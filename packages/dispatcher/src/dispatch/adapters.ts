@@ -6,6 +6,12 @@ import {
   parseGlobalConfig,
 } from 'shared';
 import type { GlobalCap } from './dispatcher.js';
+import {
+  BRIDGE_SIGNATURE_HEADER,
+  HEALTH_TOKEN_TTL_SECONDS,
+  signBridgeToken,
+  verifyBridgeResponse,
+} from 'shared/bridge-token';
 
 /**
  * Plafond global, lu dans `<propriétaire>/devlake-config` avec un jeton en lecture
@@ -82,17 +88,87 @@ export async function readMinutesRemaining(
   }
 }
 
-/** Santé du pont Aura : `GET <AURA_BRIDGE_URL>/health` répond 2xx. */
-export async function checkBridgeHealth(url: string | null, fetchFn: Fetch): Promise<boolean> {
-  if (url === null) return false;
-  try {
-    const response = await fetchFn(`${url.replace(/\/+$/, '')}/health`, {
-      signal: AbortSignal.timeout(5_000),
-    });
-    return response.ok;
-  } catch {
+export interface HealthCheckInput {
+  /** URL publique du pont de l'éditeur (variable AURA_BRIDGE_URL du projet). */
+  url: string | null;
+  secret: string | null;
+  repo: string;
+  runId: string;
+  editor: 'unity' | 'unreal';
+}
+
+/** Âge maximal d'une réponse de santé acceptée (anti-rejeu). */
+const HEALTH_MAX_AGE_MS = 5 * 60_000;
+
+/**
+ * Santé du pont Aura : `GET <AURA_BRIDGE_URL>/health` avec un jeton de santé signé, puis
+ * vérification de la réponse signée. Sain seulement si Aura répond et si l'éditeur est
+ * ouvert sur le clone de ce projet ; sinon la raison est écrite dans le journal.
+ */
+export async function checkBridgeHealth(
+  input: HealthCheckInput,
+  fetchFn: Fetch,
+  now: () => Date,
+  log: (line: string) => void,
+): Promise<boolean> {
+  const unhealthy = (why: string) => {
+    log(`Pont Aura (${input.editor}) indisponible : ${why}`);
     return false;
+  };
+  if (input.url === null) return unhealthy('variable AURA_BRIDGE_URL absente (tunnel fermé ?).');
+  if (input.secret === null) return unhealthy('secret AURA_BRIDGE_SECRET absent.');
+  const issued = Math.floor(now().getTime() / 1000);
+  const token = signBridgeToken(
+    {
+      repo: input.repo,
+      runId: input.runId,
+      profile: input.editor,
+      scope: 'health',
+      iat: issued,
+      exp: issued + HEALTH_TOKEN_TTL_SECONDS,
+    },
+    input.secret,
+  );
+  let response: Response;
+  try {
+    response = await fetchFn(`${input.url.replace(/\/+$/, '')}/health`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (error) {
+    return unhealthy(`injoignable (${error instanceof Error ? error.message : String(error)}).`);
   }
+  if (!response.ok) return unhealthy(`réponse HTTP ${String(response.status)}.`);
+  const body = await response.text();
+  const signature = response.headers.get(BRIDGE_SIGNATURE_HEADER) ?? '';
+  if (!verifyBridgeResponse(body, signature, input.secret))
+    return unhealthy('réponse non signée par le pont : ignorée.');
+  let report: {
+    aura?: unknown;
+    editorOpen?: unknown;
+    project?: unknown;
+    branch?: unknown;
+    at?: unknown;
+    requestedBy?: { runId?: unknown };
+  };
+  try {
+    report = JSON.parse(body) as typeof report;
+  } catch {
+    return unhealthy('réponse illisible.');
+  }
+  const age = now().getTime() - Date.parse(typeof report.at === 'string' ? report.at : '');
+  if (report.requestedBy?.runId !== input.runId || !(age < HEALTH_MAX_AGE_MS))
+    return unhealthy('réponse périmée ou destinée à un autre run.');
+  if (report.aura !== true) return unhealthy('le serveur MCP d’Aura ne répond pas.');
+  if (report.editorOpen !== true) return unhealthy('éditeur fermé sur le poste.');
+  if (report.project !== input.repo)
+    return unhealthy(
+      `éditeur ouvert sur ${typeof report.project === 'string' ? report.project : 'un autre projet'}, pas sur ${input.repo}.`,
+    );
+  log(
+    `Pont Aura (${input.editor}) sain : éditeur ouvert sur ${input.repo}${typeof report.branch === 'string' ? ` (${report.branch})` : ''}.`,
+  );
+  return true;
 }
 
 /** Compte du bot qui agit avec le GITHUB_TOKEN : le dispatcher lui-même. */

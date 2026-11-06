@@ -23,6 +23,7 @@ import {
 import { MemoryVault, VaultUnavailableError } from './vault.js';
 import { DashboardService } from './services/dashboard/dashboard-service.js';
 import { BridgeService } from './services/bridge/bridge-service.js';
+import { TunnelService } from './services/bridge/tunnel-service.js';
 import {
   QuestionsService,
   type QuestionNotification,
@@ -51,6 +52,7 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
   const vault = new MemoryVault(options.vaultAvailable ?? true);
   const github = options.github ?? new FakeGitHub({ actor: 'kiamiya' });
   const service = new CockpitService({ repos, vault, github: () => github });
+  const bridges = new BridgeService({ repos, vault });
   const projects = new ProjectsService(repos, () => service.githubPort());
   const context = new ContextService({
     repos,
@@ -90,7 +92,8 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
         github: () => service.githubPort(),
         now: () => new Date('2026-11-06T12:00:00.000Z'),
       }),
-      bridge: new BridgeService({ repos, vault }),
+      bridge: bridges,
+      tunnel: new TunnelService({ repos, github: () => service.githubPort(), bridges }),
     }),
     vault,
     repos,

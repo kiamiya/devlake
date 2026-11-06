@@ -76,7 +76,7 @@ export interface DispatcherDeps {
   github: GitHubPort;
   globalCap: () => Promise<GlobalCap>;
   /** Santé du pont Aura (GET /health). */
-  bridgeHealthy: () => Promise<boolean>;
+  bridgeHealthy: (editor: 'unity' | 'unreal') => Promise<boolean>;
   /** Minutes Actions restantes ; null = non limité. */
   minutesRemaining: () => Promise<{ minutes: number | null; note?: string }>;
   now: () => Date;
@@ -312,7 +312,15 @@ export async function runDispatch(ref: RepoRef, deps: DispatcherDeps): Promise<D
   const gameWaiting = views.some(
     (v) => v.open && GAME_PROFILES.includes(v.task.profile) && WAITING_STATES.includes(v.state),
   );
-  const bridgeHealthy = gameWaiting ? await deps.bridgeHealthy() : null;
+  // Éditeur du projet : celui du type de projet, à défaut celui de la première tâche de jeu.
+  const editor =
+    project.type === 'unity' || project.type === 'unreal'
+      ? project.type
+      : (views.find((v) => v.task.profile === 'unity' || v.task.profile === 'unreal')?.task
+          .profile ?? 'unity');
+  const bridgeHealthy = gameWaiting
+    ? await deps.bridgeHealthy(editor === 'unreal' ? 'unreal' : 'unity')
+    : null;
   const costs =
     minutes.minutes === null
       ? new Map<ProfileId, number>()

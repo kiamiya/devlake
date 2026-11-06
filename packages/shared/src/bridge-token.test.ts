@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
   BRIDGE_TOKEN_TTL_SECONDS,
+  HEALTH_TOKEN_TTL_SECONDS,
+  issuedAt,
+  signBridgeResponse,
+  verifyBridgeResponse,
   signBridgeToken,
   TOKEN_REFUSALS,
   verifyBridgeToken,
-  type BridgePayload,
+  type BridgePayloadInput,
 } from './bridge-token.js';
 
 const SECRET = 'secret-de-test-du-pont'; // gitleaks:allow
 const NOW = new Date('2026-11-21T10:00:00.000Z');
-const payload: BridgePayload = {
+const payload: BridgePayloadInput = {
   repo: 'kiamiya/jeu',
   runId: '123456',
   profile: 'unity',
@@ -20,7 +24,10 @@ describe('jeton du pont Aura', () => {
   it('signé puis vérifié : contenu rendu tel quel', () => {
     const token = signBridgeToken(payload, SECRET);
     expect(token).toMatch(/^[\w-]+\.[\w-]+$/);
-    expect(verifyBridgeToken(token, SECRET, NOW)).toEqual({ ok: true, payload });
+    expect(verifyBridgeToken(token, SECRET, NOW)).toEqual({
+      ok: true,
+      payload: { ...payload, scope: 'mcp' },
+    });
   });
 
   it('expiré : refusé à l’échéance exacte et après', () => {
@@ -79,5 +86,35 @@ describe('jeton du pont Aura', () => {
       ok: false,
       reason: 'payload',
     });
+  });
+});
+
+describe('émission et réponses signées', () => {
+  it('date d’émission : explicite, ou déduite de l’expiration selon l’usage', () => {
+    const parsed = (input: object) => {
+      const check = verifyBridgeToken(
+        signBridgeToken({ ...payload, ...input }, SECRET),
+        SECRET,
+        NOW,
+      );
+      if (!check.ok) throw new Error(check.reason);
+      return check.payload;
+    };
+    expect(issuedAt(parsed({ iat: 1_700_000_000 }))).toBe(1_700_000_000);
+    expect(issuedAt(parsed({}))).toBe(payload.exp - BRIDGE_TOKEN_TTL_SECONDS);
+    expect(issuedAt(parsed({ scope: 'health' }))).toBe(payload.exp - HEALTH_TOKEN_TTL_SECONDS);
+  });
+
+  it('réponse signée : vérifiée telle quelle, refusée si modifiée ou avec un autre secret', () => {
+    const body = JSON.stringify({ status: 'ok', editorOpen: true });
+    const signature = signBridgeResponse(body, SECRET);
+    expect(verifyBridgeResponse(body, signature, SECRET)).toBe(true);
+    expect(verifyBridgeResponse(body.replace('true', 'false'), signature, SECRET)).toBe(false);
+    expect(verifyBridgeResponse(body, signature, 'autre')).toBe(false);
+    expect(verifyBridgeResponse(body, signature.slice(1), SECRET)).toBe(false);
+    expect(verifyBridgeResponse(body, signature, '')).toBe(false);
+    expect(() => signBridgeResponse(body, '')).toThrow('Secret du pont vide.');
+    // Une réponse ne peut pas servir de jeton (préfixes distincts).
+    expect(signature).not.toBe(signBridgeToken(payload, SECRET).split('.')[1]);
   });
 });
