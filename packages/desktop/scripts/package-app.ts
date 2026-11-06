@@ -20,6 +20,21 @@ if (versionAt >= 0) args.splice(versionAt, 2);
 if (version !== undefined && !/^\d+\.\d+\.\d+$/.test(version))
   throw new Error(`Version attendue au format X.Y.Z : ${version}.`);
 
+/**
+ * Signature facultative : un secret absent arrive vide depuis GitHub Actions, et
+ * electron-builder prendrait `CSC_LINK=""` pour un certificat (chemin vide). Une variable vide
+ * est donc retirée : sans certificat, l'installeur n'est simplement pas signé.
+ */
+const SIGNING_VARIABLES = [
+  'CSC_LINK',
+  'CSC_KEY_PASSWORD',
+  'APPLE_ID',
+  'APPLE_APP_SPECIFIC_PASSWORD',
+  'APPLE_TEAM_ID',
+];
+for (const name of SIGNING_VARIABLES)
+  if (process.env[name]?.trim() === '') Reflect.deleteProperty(process.env, name);
+
 /** Commande lancée par le shell (npx est un script .cmd sous Windows) ; arguments sans espace. */
 function run(command: string, commandArgs: string[]): void {
   for (const arg of commandArgs)
