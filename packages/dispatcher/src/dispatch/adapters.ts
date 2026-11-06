@@ -5,7 +5,7 @@ import {
   GLOBAL_CONFIG_REPOSITORY,
   parseGlobalConfig,
 } from 'shared';
-import type { GlobalCap } from './dispatcher.js';
+import { AGENT_WORKFLOW, type GlobalCap } from './dispatcher.js';
 import {
   BRIDGE_SIGNATURE_HEADER,
   HEALTH_TOKEN_TTL_SECONDS,
@@ -14,13 +14,45 @@ import {
 } from 'shared/bridge-token';
 
 /**
+ * Agents en cours dans les autres projets de la configuration globale : runs du workflow
+ * d'agent pas encore terminés. Un projet illisible (droit Actions manquant sur le jeton) est
+ * compté pour zéro, avec la raison au journal.
+ */
+async function otherProjectsAgents(
+  configGithub: GitHubPort,
+  current: RepoRef,
+  projects: readonly string[],
+): Promise<{ count: number; notes: string[] }> {
+  let count = 0;
+  const notes: string[] = [];
+  for (const project of projects) {
+    const [owner = '', repo = ''] = project.split('/');
+    if (owner.toLowerCase() === current.owner.toLowerCase() && repo === current.repo) continue;
+    try {
+      const runs = await configGithub.listWorkflowRuns(
+        { owner, repo },
+        { workflow: AGENT_WORKFLOW },
+      );
+      count += runs.filter((r) => r.status !== 'completed').length;
+    } catch (error) {
+      notes.push(
+        `agents de ${project} non comptés (${error instanceof Error ? error.message : String(error)}) : AGENTLAKE_CONFIG_TOKEN doit pouvoir lire les Actions de ce dépôt.`,
+      );
+    }
+  }
+  return { count, notes };
+}
+
+/**
  * Plafond global, lu dans `<propriétaire>/devlake-config` avec un jeton en lecture
- * (secret `AGENTLAKE_CONFIG_TOKEN`). Illisible : valeur par défaut du cockpit, expliquée.
+ * (secret `AGENTLAKE_CONFIG_TOKEN`), et agents en cours des autres projets qui y sont
+ * listés : C_global s'applique au total. Illisible : valeur par défaut du cockpit, expliquée.
  */
 export async function readGlobalCap(
   configGithub: GitHubPort | null,
-  owner: string,
+  current: RepoRef,
 ): Promise<GlobalCap> {
+  const owner = current.owner;
   const fallback = (why: string): GlobalCap => ({
     cap: DEFAULT_GLOBAL_CAP,
     note: `Plafond global par défaut (${String(DEFAULT_GLOBAL_CAP)}) : ${why}`,
@@ -32,9 +64,14 @@ export async function readGlobalCap(
     if (!file)
       return fallback(`${GLOBAL_CONFIG_PATH} absent de ${owner}/${GLOBAL_CONFIG_REPOSITORY}.`);
     const parsed = parseGlobalConfig(file.content);
-    return parsed.ok
-      ? { cap: parsed.value.maxConcurrentAgents, paused: parsed.value.paused }
-      : fallback(parsed.error);
+    if (!parsed.ok) return fallback(parsed.error);
+    const others = await otherProjectsAgents(configGithub, current, parsed.value.projects);
+    return {
+      cap: parsed.value.maxConcurrentAgents,
+      paused: parsed.value.paused,
+      otherAgents: others.count,
+      ...(others.notes.length > 0 ? { note: `Plafond global : ${others.notes.join(' ; ')}` } : {}),
+    };
   } catch (error) {
     return fallback(
       `lecture de ${owner}/${GLOBAL_CONFIG_REPOSITORY} impossible (${error instanceof Error ? error.message : String(error)}).`,

@@ -1,0 +1,134 @@
+{
+  "name": "rendez-vous",
+  "description": "Projet web à 5 tâches : une question bloquante d'agent (T02) et un échec de CI corrigé (T01).",
+  "brief": "briefs/rendez-vous.md",
+  "clarification": [
+    {
+      "blocking": true,
+      "text": "Les rappels de la veille partent-ils par e-mail seulement, ou aussi par SMS ?",
+      "context": "Le brief cite l'e-mail et demande le téléphone, sans préciser le canal des rappels.",
+      "options": ["E-mail seulement", "E-mail et SMS"]
+    },
+    {
+      "blocking": false,
+      "text": "Faut-il un compte patient, ou une réservation sans compte suffit-elle ?",
+      "options": ["Sans compte", "Avec compte"]
+    }
+  ],
+  "answers": {
+    "C1": "E-mail seulement pour la première version.",
+    "C2": "Sans compte."
+  },
+  "plan": {
+    "summary": "Application web de prise de rendez-vous pour un cabinet de trois praticiens : créneaux, réservation, confirmation et rappel par e-mail.",
+    "assumptions": ["Rappels par e-mail seulement", "Réservation sans compte patient"],
+    "epics": [{ "id": "E1", "title": "Réservation" }],
+    "milestones": [{ "id": "J1", "title": "Première version" }],
+    "tasks": [
+      {
+        "id": "T00",
+        "title": "Bootstrap du dépôt",
+        "description": "Structure du projet web, conventions, CI complète du profil web.",
+        "kind": "code",
+        "profile": "architect",
+        "complexity": "L",
+        "acceptanceCriteria": ["La CI tourne et passe sur main"],
+        "requiredTests": { "unit": ["Test trivial du socle"] },
+        "codeZones": ["/"],
+        "exclusiveResources": [],
+        "dependencies": [],
+        "milestone": "J1"
+      },
+      {
+        "id": "T01",
+        "title": "API des créneaux",
+        "description": "Créneaux libres par praticien sur deux semaines, réservation atomique.",
+        "kind": "code",
+        "profile": "backend",
+        "complexity": "M",
+        "acceptanceCriteria": [
+          "Un créneau réservé n'est plus proposé",
+          "Deux réservations simultanées du même créneau : une seule réussit"
+        ],
+        "requiredTests": {
+          "unit": ["Calcul des créneaux libres"],
+          "integration": ["Réservations concurrentes"]
+        },
+        "codeZones": ["src/api/"],
+        "exclusiveResources": ["migrations"],
+        "dependencies": ["T00"],
+        "epic": "E1",
+        "milestone": "J1"
+      },
+      {
+        "id": "T02",
+        "title": "Écran de réservation",
+        "description": "Choix du praticien et du créneau, formulaire nom, e-mail, téléphone.",
+        "kind": "code",
+        "profile": "frontend",
+        "complexity": "M",
+        "acceptanceCriteria": ["Un patient réserve un créneau depuis son téléphone"],
+        "requiredTests": {
+          "unit": ["Validation du formulaire"],
+          "e2e": ["Parcours de réservation"]
+        },
+        "codeZones": ["src/web/"],
+        "exclusiveResources": [],
+        "dependencies": ["T01"],
+        "epic": "E1",
+        "milestone": "J1"
+      },
+      {
+        "id": "T03",
+        "title": "Confirmation et rappel par e-mail",
+        "description": "E-mail de confirmation à la réservation, rappel la veille.",
+        "kind": "code",
+        "profile": "backend",
+        "complexity": "S",
+        "acceptanceCriteria": ["Le rappel part la veille du rendez-vous"],
+        "requiredTests": { "unit": ["Date d'envoi du rappel"] },
+        "codeZones": ["src/notifications/"],
+        "exclusiveResources": [],
+        "dependencies": ["T00"],
+        "epic": "E1",
+        "milestone": "J1"
+      },
+      {
+        "id": "T04",
+        "title": "Guide du secrétariat",
+        "description": "Consulter les rendez-vous du jour ; installation et exploitation.",
+        "kind": "docs",
+        "profile": "docs",
+        "complexity": "S",
+        "acceptanceCriteria": ["Le guide décrit la consultation des rendez-vous du jour"],
+        "requiredTests": {},
+        "codeZones": ["docs/"],
+        "exclusiveResources": [],
+        "dependencies": ["T02", "T03"],
+        "milestone": "J1"
+      }
+    ],
+    "profiles": [
+      { "profile": "architect", "justification": "Bootstrap du dépôt et de la CI." },
+      { "profile": "backend", "justification": "API des créneaux et e-mails." },
+      { "profile": "frontend", "justification": "Écran de réservation." },
+      { "profile": "docs", "justification": "Guide du secrétariat." }
+    ]
+  },
+  "agents": {
+    "T01": { "ciFailures": 1 },
+    "T02": {
+      "question": {
+        "id": "format-telephone",
+        "text": "Le téléphone est-il obligatoire, et faut-il imposer le format français ?",
+        "options": ["Obligatoire, format français", "Facultatif"]
+      }
+    }
+  },
+  "agentAnswers": {
+    "format-telephone": "Obligatoire, format français."
+  },
+  "expected": {
+    "launches": { "T00": 1, "T01": 2, "T02": 2, "T03": 1, "T04": 1 }
+  }
+}

@@ -31,7 +31,8 @@ function strictCsp(): Plugin {
 }
 
 // Les paquets du monorepo sont intégrés au bundle ; better-sqlite3 (natif) reste externe.
-const bundled = ['shared', 'github', 'aura-bridge'];
+// dispatcher et planner : monde simulé des tests E2E seulement (chunk chargé à la demande).
+const bundled = ['shared', 'github', 'aura-bridge', 'dispatcher', 'planner'];
 
 export default defineConfig({
   main: {

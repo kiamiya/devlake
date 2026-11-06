@@ -74,6 +74,13 @@ describe('barre d’état : statuts DÉGRADÉ explicites', () => {
     await service.refreshConfigStatus();
     expect(await status('config')).toMatchObject({ state: 'ok' });
 
+    // Projet ajouté au cockpit : la liste de devlake-config est republiée d'elle-même
+    // (C_global compté sur tous les projets).
+    repos.projects.upsert('kiamiya', 'site', '2026-11-06T08:00:00.000Z');
+    await service.refreshConfigStatus();
+    expect((await github.getFile(config, 'config.yml'))?.content).toContain('- kiamiya/site');
+    expect(await status('config')).toMatchObject({ state: 'ok' });
+
     // Pause globale : publiée, et signalée tant qu'elle dure.
     await service.updateSettings({ globalPaused: true });
     expect((await github.getFile(config, 'config.yml'))?.content).toContain('paused: true');

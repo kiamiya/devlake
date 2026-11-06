@@ -39,14 +39,21 @@ describe('configuration globale', () => {
   it('aller-retour, et erreurs lisibles', () => {
     expect(parseGlobalConfig(renderGlobalConfig({ maxConcurrentAgents: 4 }))).toEqual({
       ok: true,
-      value: { maxConcurrentAgents: 4, paused: false },
+      value: { maxConcurrentAgents: 4, paused: false, projects: [] },
     });
-    // Pause globale : écrite par le cockpit, absente des anciennes configurations.
-    expect(parseGlobalConfig(renderGlobalConfig({ maxConcurrentAgents: 2, paused: true }))).toEqual(
-      { ok: true, value: { maxConcurrentAgents: 2, paused: true } },
-    );
+    // Pause globale et projets : écrits par le cockpit, absents des anciennes configurations.
+    expect(
+      parseGlobalConfig(
+        renderGlobalConfig({ maxConcurrentAgents: 2, paused: true, projects: ['kiamiya/site'] }),
+      ),
+    ).toEqual({
+      ok: true,
+      value: { maxConcurrentAgents: 2, paused: true, projects: ['kiamiya/site'] },
+    });
     const pause = parseGlobalConfig('maxConcurrentAgents: 2\npaused: oui\n');
     expect(!pause.ok && pause.error).toContain('paused doit valoir true ou false.');
+    const projects = parseGlobalConfig('maxConcurrentAgents: 2\nprojects: [site]\n');
+    expect(!projects.ok && projects.error).toContain('Projet attendu au format owner/repo.');
     expect(parseGlobalConfig('a: [')).toMatchObject({ ok: false });
     const invalid = parseGlobalConfig('maxConcurrentAgents: 1.5\n');
     expect(!invalid.ok && invalid.error).toContain('Le plafond global doit être un entier.');

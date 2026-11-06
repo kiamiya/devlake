@@ -13,7 +13,9 @@ on:
         default: v1
     secrets:
       AGENTLAKE_CONFIG_TOKEN:
-        description: Jeton en lecture sur <propriétaire>/devlake-config (plafond global)
+        description: >-
+          Jeton en lecture sur <propriétaire>/devlake-config (plafond global) et sur les Actions
+          des projets qui y sont listés (agents en cours comptés dans C_global, tous projets)
         required: false
       AGENTLAKE_BILLING_TOKEN:
         description: Jeton de lecture de la facturation (dépôts privés)

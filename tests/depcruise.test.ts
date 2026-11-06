@@ -29,8 +29,13 @@ describe('règles de dependency-cruiser', () => {
           /^electron-reserve-a-desktop: packages\/github\/src\/index\.js → (electron|.*node_modules\/electron\/.*)$/,
         ),
         'renderer-sans-main: packages/desktop/src/renderer/view.js → packages/desktop/src/main/app.js',
+        // Exception de test (T22) : seul testing/ voit dispatcher, chargé à la demande.
+        'desktop-dependances: packages/desktop/src/main/leak.js → packages/dispatcher/src/index.js',
+        'monde-simule-a-la-demande: packages/desktop/src/main/eager.js → packages/desktop/src/main/testing/world.js',
       ]),
     );
+    expect(violations.filter((v) => v.includes('main/testing/world.js →'))).toEqual([]);
+    expect(violations.filter((v) => v.includes('main/lazy.js'))).toEqual([]);
     expect(violations.filter((v) => v.startsWith('planner-'))).toEqual([]);
     expect(violations.filter((v) => v.startsWith('dispatcher-'))).toEqual([]);
   });

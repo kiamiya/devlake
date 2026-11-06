@@ -29,6 +29,25 @@ describe('ProjectsService', () => {
     expect(service.list().map((p) => p.id)).toEqual(['kiamiya/jeu']);
   });
 
+  it('projet ajouté : devlake-config republié une fois, et un échec n’empêche pas l’ouverture', async () => {
+    const github = new FakeGitHub({ actor: 'kiamiya' });
+    await seedFakeProjects(github, ['jeu']);
+    const repos = createRepositories(openDatabase(':memory:').db);
+    let added = 0;
+    const service = new ProjectsService(
+      repos,
+      () => Promise.resolve(github),
+      () => {
+        added += 1;
+        return Promise.reject(new Error('réseau coupé'));
+      },
+    );
+    await service.open({ owner: 'kiamiya', repo: 'jeu' });
+    await service.open({ owner: 'kiamiya', repo: 'jeu' });
+    expect(added).toBe(1);
+    expect(service.list().map((p) => p.id)).toEqual(['kiamiya/jeu']);
+  });
+
   it('refuse un dépôt qui n’est pas un projet AgentLake', async () => {
     const { service, github } = await setup([]);
     github.seedRepository({ owner: 'kiamiya', repo: 'quelconque' });

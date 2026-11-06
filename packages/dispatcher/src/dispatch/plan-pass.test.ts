@@ -72,6 +72,17 @@ describe('tâches prêtes', () => {
 });
 
 describe('capacité', () => {
+  it('C_global au total : les agents des autres projets réduisent la capacité', () => {
+    const ready = [1, 2, 3].map((n) => view(n, 'ready'));
+    const limits = { projectCap: null, globalCap: 3, runnerCap: 20, maxAttempts: 3 };
+    expect(planPass(input(ready, { limits: { ...limits, otherAgents: 2 } })).capacity).toBe(0);
+    const plan = planPass(input(ready, { limits: { ...limits, otherAgents: 2 } }));
+    expect(plan.actions.filter((a) => a.kind === 'launch')).toHaveLength(1);
+    expect(plan.log[0]).toContain('global 3 − 2 ailleurs');
+    // Plus d'agents ailleurs que le plafond : rien, sans capacité négative.
+    expect(planPass(input(ready, { limits: { ...limits, otherAgents: 5 } })).actions).toEqual([]);
+  });
+
   it('min(projet, global, runners) moins les agents en cours', () => {
     const running = view(
       1,

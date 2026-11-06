@@ -72,6 +72,8 @@ export interface GlobalCap {
   cap: number;
   /** Pause globale (clé `paused` de devlake-config). */
   paused?: boolean;
+  /** Agents en cours dans les autres projets : C_global s'applique au total. */
+  otherAgents?: number;
   /** Explication si la valeur par défaut a été appliquée. */
   note?: string;
 }
@@ -353,6 +355,7 @@ export async function runDispatch(ref: RepoRef, deps: DispatcherDeps): Promise<D
     limits: {
       projectCap: limits.maxConcurrentAgents ?? null,
       globalCap: global.cap,
+      otherAgents: global.otherAgents ?? 0,
       runnerCap: DEFAULT_RUNNER_CAP,
       maxAttempts: limits.maxAttempts,
     },

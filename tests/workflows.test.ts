@@ -45,6 +45,8 @@ const triggers = (w: Workflow): string[] =>
 const WRITE_ALLOWED: Record<string, string[]> = {
   // Agent : branche de tâche, issue (état, questions), PR ; OIDC pour le jeton de l'app Claude.
   '.github/workflows/agent-task.yml#agent': ['contents', 'issues', 'pull-requests', 'id-token'],
+  // @live nocturne : issue d'échec dans devlake.
+  '.github/workflows/nightly-live.yml#live': ['issues'],
   'templates/caller/agentlake-agent-task.yml#agent': [
     'contents',
     'issues',

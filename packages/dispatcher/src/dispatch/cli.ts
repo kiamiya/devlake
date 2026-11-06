@@ -81,8 +81,7 @@ export async function runDispatchCli(
   const configToken = e.AGENTLAKE_CONFIG_TOKEN;
   const result = await runDispatch(ref, {
     github,
-    globalCap: () =>
-      readGlobalCap(configToken === null ? null : deps.github(configToken), ref.owner),
+    globalCap: () => readGlobalCap(configToken === null ? null : deps.github(configToken), ref),
     minutesRemaining: () =>
       readMinutesRemaining(github, ref, e.AGENTLAKE_BILLING_TOKEN, deps.fetch),
     bridgeHealthy: (editor) =>
