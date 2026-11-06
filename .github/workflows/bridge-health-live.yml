@@ -1,0 +1,72 @@
+name: AgentLake — santé du pont (@live)
+
+# Test @live de T18 : depuis un runner GitHub, appelle /health du pont Aura à travers le tunnel
+# et vérifie la réponse signée. À lancer depuis le bac à sable (workflow_call, secrets hérités)
+# ou à la main sur un dépôt qui a le secret AURA_BRIDGE_SECRET et la variable AURA_BRIDGE_URL.
+
+on:
+  workflow_call:
+    inputs:
+      expect_editor:
+        description: 'État attendu de l’éditeur : open ou closed'
+        type: string
+        default: open
+      devlake_ref:
+        description: Version de devlake qui fournit les scripts
+        type: string
+        default: main
+    secrets:
+      AURA_BRIDGE_SECRET:
+        required: true
+  workflow_dispatch:
+    inputs:
+      expect_editor:
+        description: État attendu de l’éditeur
+        type: choice
+        options: [open, closed]
+        default: open
+      devlake_ref:
+        description: Version de devlake qui fournit les scripts
+        type: string
+        default: main
+
+permissions: {}
+
+jobs:
+  health:
+    name: Santé du pont depuis un runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      RUNTIME: .agentlake-runtime
+    steps:
+      - name: Scripts AgentLake (devlake ${{ inputs.devlake_ref }})
+        uses: actions/checkout@v4
+        with:
+          repository: kiamiya/devlake
+          ref: ${{ inputs.devlake_ref }}
+          path: ${{ env.RUNTIME }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Installer et compiler
+        working-directory: ${{ env.RUNTIME }}
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc -b tsconfig.build.json
+
+      - name: Appeler /health à travers le tunnel
+        working-directory: ${{ env.RUNTIME }}
+        env:
+          AURA_BRIDGE_URL: ${{ vars.AURA_BRIDGE_URL }}
+          AURA_BRIDGE_SECRET: ${{ secrets.AURA_BRIDGE_SECRET }}
+          AGENTLAKE_SANDBOX_REPO: ${{ github.repository }}
+          AGENTLAKE_EXPECT_EDITOR: ${{ inputs.expect_editor }}
+        run: npx vitest run -c vitest.live.config.ts packages/dispatcher/src/dispatch/bridge-health.live.test.ts

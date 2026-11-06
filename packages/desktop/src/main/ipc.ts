@@ -21,6 +21,8 @@ import {
 import { PlanError, type PlanService } from './services/plan/plan-service.js';
 import { DashboardError, type DashboardService } from './services/dashboard/dashboard-service.js';
 import { BridgeConfigError, type BridgeService } from './services/bridge/bridge-service.js';
+import type { TunnelService } from './services/bridge/tunnel-service.js';
+import { TunnelError } from 'aura-bridge';
 import { AuraConfigError } from 'aura-bridge';
 import {
   EmptyAnswerError,
@@ -50,6 +52,7 @@ export function serviceHandlers(services: {
   questions: QuestionsService;
   dashboard: DashboardService;
   bridge: BridgeService;
+  tunnel: TunnelService;
 }): Record<IpcChannel, Handler> {
   const {
     cockpit: service,
@@ -61,6 +64,7 @@ export function serviceHandlers(services: {
     questions,
     dashboard,
     bridge,
+    tunnel,
   } = services;
   const input = <C extends IpcChannel>(_channel: C, value: unknown) =>
     value as z.output<(typeof IPC_CONTRACT)[C]['input']>;
@@ -143,6 +147,10 @@ export function serviceHandlers(services: {
       const { projectId, runId } = input('runs:logs', value);
       return dashboard.logs(projectId, runId);
     },
+    'tunnel:status': () => Promise.resolve(tunnel.state()),
+    'tunnel:open': () => tunnel.open(),
+    'tunnel:close': () => tunnel.close(),
+    'tunnel:kill': () => tunnel.kill(),
     'bridge:list': () => Promise.resolve(bridge.list()),
     'bridge:start': (value) => bridge.start(input('bridge:start', value).editor),
     'bridge:stop': (value) => bridge.stop(input('bridge:stop', value).editor),
@@ -186,6 +194,7 @@ export function toIpcError(error: unknown): IpcErrorPayload {
     [DashboardError, 'DASHBOARD_ERROR'],
     [BridgeConfigError, 'BRIDGE_CONFIG'],
     [AuraConfigError, 'BRIDGE_CONFIG'],
+    [TunnelError, 'TUNNEL_ERROR'],
   ];
   for (const [type, code] of known)
     if (error instanceof type) return { code, message: error.message };

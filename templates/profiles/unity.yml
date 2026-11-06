@@ -17,7 +17,7 @@ allowedTools:
 mcpServers:
   aura:
     type: http
-    url: '${AURA_BRIDGE_URL}'
+    url: '${AURA_BRIDGE_URL}/mcp'
     headers:
       Authorization: 'Bearer ${AURA_BRIDGE_TOKEN}'
 systemPrompt: |

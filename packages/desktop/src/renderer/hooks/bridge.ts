@@ -56,3 +56,17 @@ export function useSetBridgeTools() {
     invoke('bridge:set-tools', input),
   );
 }
+
+export function useTunnel() {
+  return useQuery({
+    queryKey: [...KEY, 'tunnel'],
+    queryFn: () => invoke('tunnel:status'),
+    refetchInterval: BRIDGE_POLL_MS,
+  });
+}
+
+export function useTunnelAction() {
+  return useBridgeMutation((action: 'open' | 'close' | 'kill') =>
+    invoke(action === 'open' ? 'tunnel:open' : action === 'close' ? 'tunnel:close' : 'tunnel:kill'),
+  );
+}

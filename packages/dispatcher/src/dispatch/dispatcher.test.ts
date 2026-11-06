@@ -25,6 +25,7 @@ import {
   type DispatcherDeps,
 } from './dispatcher.js';
 import { seedGreenMain } from '../testing/checks.js';
+import { signBridgeResponse, verifyBridgeToken } from 'shared/bridge-token';
 
 const ref = { owner: 'kiamiya', repo: 'jeu' };
 const NOW = new Date('2026-11-05T12:00:00Z');
@@ -236,19 +237,83 @@ describe('adaptateurs', () => {
     );
   });
 
-  it('santé du pont : GET /health en 2xx', async () => {
-    const ok = vi.fn(() => Promise.resolve(new Response('ok')));
-    expect(await checkBridgeHealth(null, ok)).toBe(false);
-    expect(await checkBridgeHealth('https://pont.ts.net/', ok)).toBe(true);
-    expect(ok).toHaveBeenCalledWith('https://pont.ts.net/health', expect.anything());
-    expect(
-      await checkBridgeHealth('https://pont', () =>
-        Promise.resolve(new Response('', { status: 503 })),
-      ),
-    ).toBe(false);
-    expect(await checkBridgeHealth('https://pont', () => Promise.reject(new Error('délai')))).toBe(
-      false,
-    );
+  it('santé du pont : requête signée, réponse signée vérifiée, raisons dans le journal', async () => {
+    const SECRET = 'secret-du-pont'; // gitleaks:allow
+    const now = () => new Date('2026-11-21T10:00:00.000Z');
+    const input = {
+      url: 'https://poste.tailnet.ts.net/unity/',
+      secret: SECRET,
+      repo: 'kiamiya/jeu',
+      runId: '99',
+      editor: 'unity' as const,
+    };
+    const report = (overrides: object = {}) => ({
+      status: 'ok',
+      editor: 'unity',
+      aura: true,
+      editorOpen: true,
+      project: 'kiamiya/jeu',
+      branch: 'main',
+      requestedBy: { repo: 'kiamiya/jeu', runId: '99' },
+      at: '2026-11-21T09:59:30.000Z',
+      ...overrides,
+    });
+    const answer = (body: object, signature?: string) => {
+      const text = JSON.stringify(body);
+      return () =>
+        Promise.resolve(
+          new Response(text, {
+            headers: { 'x-agentlake-signature': signature ?? signBridgeResponse(text, SECRET) },
+          }),
+        );
+    };
+    const log: string[] = [];
+    const check = (fetchFn: Parameters<typeof checkBridgeHealth>[1], overrides = {}) =>
+      checkBridgeHealth({ ...input, ...overrides }, fetchFn, now, (l) => log.push(l));
+
+    const healthy = vi.fn(answer(report()));
+    expect(await check(healthy)).toBe(true);
+    expect(log.at(-1)).toBe('Pont Aura (unity) sain : éditeur ouvert sur kiamiya/jeu (main).');
+    const [url, init] = healthy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://poste.tailnet.ts.net/unity/health');
+    const token = String((init.headers as Record<string, string>).authorization).slice(7);
+    expect(verifyBridgeToken(token, SECRET, now())).toMatchObject({
+      ok: true,
+      payload: { scope: 'health', profile: 'unity', runId: '99', repo: 'kiamiya/jeu' },
+    });
+
+    const cases: [Parameters<typeof checkBridgeHealth>[1], object, string][] = [
+      [healthy, { url: null }, 'variable AURA_BRIDGE_URL absente'],
+      [healthy, { secret: null }, 'secret AURA_BRIDGE_SECRET absent'],
+      [() => Promise.reject(new Error('délai')), {}, 'injoignable (délai)'],
+      [() => Promise.resolve(new Response('', { status: 401 })), {}, 'réponse HTTP 401'],
+      [answer(report(), 'fausse-signature'), {}, 'réponse non signée par le pont'],
+      [answer(report({ aura: false })), {}, 'le serveur MCP d’Aura ne répond pas'],
+      [answer(report({ editorOpen: false })), {}, 'éditeur fermé sur le poste'],
+      [
+        answer(report({ project: 'kiamiya/autre' })),
+        {},
+        'éditeur ouvert sur kiamiya/autre, pas sur kiamiya/jeu',
+      ],
+      [
+        answer(report({ requestedBy: { runId: '1' } })),
+        {},
+        'réponse périmée ou destinée à un autre run',
+      ],
+      [answer(report({ at: '2026-11-21T09:00:00.000Z' })), {}, 'réponse périmée'],
+    ];
+    for (const [fetchFn, overrides, reason] of cases) {
+      expect(await check(fetchFn, overrides)).toBe(false);
+      expect(log.at(-1)).toContain(reason);
+    }
+    const garbage = () =>
+      Promise.resolve(
+        new Response('pas du json', {
+          headers: { 'x-agentlake-signature': signBridgeResponse('pas du json', SECRET) },
+        }),
+      );
+    expect(await check(garbage)).toBe(false);
+    expect(log.at(-1)).toContain('réponse illisible');
   });
 
   it('filtre d’auteur : propriétaire, dispatcher et passe planifiée seulement', () => {

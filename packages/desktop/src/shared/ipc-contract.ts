@@ -241,6 +241,17 @@ export type BridgeViewData = z.infer<typeof BridgeViewSchema>;
 
 const EditorInput = z.object({ editor: EditorSchema });
 
+export const TunnelStateSchema = z.object({
+  open: z.boolean(),
+  url: z.string().nullable(),
+  provider: z.enum(['tailscale', 'cloudflare']),
+  killed: z.boolean(),
+  autoExpose: z.boolean(),
+  projects: z.array(z.object({ id: z.string(), editor: EditorSchema, url: z.string() })),
+  error: z.string().nullable(),
+});
+export type TunnelStateView = z.infer<typeof TunnelStateSchema>;
+
 export const IPC_CONTRACT = {
   'settings:get': { input: NoInput, output: SettingsSchema },
   'settings:update': { input: SettingsPatchSchema, output: SettingsSchema },
@@ -409,6 +420,10 @@ export const IPC_CONTRACT = {
     output: BridgeViewSchema,
   },
   'bridge:audit': { input: EditorInput, output: z.array(AuditEntrySchema) },
+  'tunnel:status': { input: NoInput, output: TunnelStateSchema },
+  'tunnel:open': { input: NoInput, output: TunnelStateSchema },
+  'tunnel:close': { input: NoInput, output: TunnelStateSchema },
+  'tunnel:kill': { input: NoInput, output: TunnelStateSchema },
   'runs:transcript': {
     input: RunRefSchema,
     output: z.object({ name: z.string(), text: z.string() }).nullable(),

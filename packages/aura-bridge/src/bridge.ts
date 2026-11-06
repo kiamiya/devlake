@@ -14,11 +14,21 @@ import {
   ListToolsRequestSchema,
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
-import { TOKEN_REFUSALS, verifyBridgeToken, type BridgePayload } from 'shared/bridge-token';
+import {
+  BRIDGE_SIGNATURE_HEADER,
+  issuedAt,
+  signBridgeResponse,
+  TOKEN_REFUSALS,
+  verifyBridgeToken,
+  type BridgePayload,
+} from 'shared/bridge-token';
+import { EDITOR_CLOSED, type EditorState } from './editor-probe.js';
 import { EditorLock, IDLE_RELEASE_MS } from './editor-lock.js';
 import type { AuraUpstream } from './upstream.js';
 
-export type Editor = 'unity' | 'unreal';
+import type { Editor } from './types.js';
+
+export type { Editor } from './types.js';
 
 /** Une entrée du journal d'audit : chaque appel d'outil, et chaque accès refusé. */
 export interface AuditEntry {
@@ -47,7 +57,27 @@ export interface BridgeOptions {
   onAudit?: (entry: AuditEntry) => void;
   now?: () => Date;
   idleMs?: number;
+  /** État de l'éditeur sur le poste (clone dédié ouvert, projet, branche). */
+  probe?: () => Promise<EditorState>;
 }
+
+/** Réponse de `/health`, signée avec le secret du pont. */
+export interface HealthReport {
+  status: 'ok';
+  editor: Editor;
+  /** Le serveur MCP d'Aura répond. */
+  aura: boolean;
+  editorOpen: boolean;
+  /** Projet et branche du clone ouvert dans l'éditeur. */
+  project: string | null;
+  branch: string | null;
+  /** Demandeur, tel qu'il figure dans son jeton (anti-rejeu). */
+  requestedBy: { repo: string; runId: string };
+  at: string;
+}
+
+/** Délai maximal de réponse d'Aura pour la santé. */
+const AURA_PROBE_MS = 3_000;
 
 export interface BridgeStatus {
   editor: Editor;
@@ -165,6 +195,66 @@ export class AuraBridge {
     this.upstream = null;
   }
 
+  /** Jetons émis avant cette date (secondes) refusés : posée par l'interrupteur du cockpit. */
+  private revokedBefore = 0;
+
+  /**
+   * Interrupteur : révoque tous les jetons émis jusqu'ici et ferme les sessions en cours.
+   * Les agents devront obtenir un nouveau jeton (nouveau run) pour revenir.
+   */
+  async revokeTokens(): Promise<void> {
+    this.revokedBefore = Math.floor(this.now().getTime() / 1000) + 1;
+    for (const session of [...this.sessions.values()]) await session.transport.close();
+    this.sessions.clear();
+  }
+
+  /** Santé signée : pont actif, Aura joignable, éditeur ouvert, projet et branche. */
+  private async sendHealth(res: ServerResponse, payload: BridgePayload): Promise<void> {
+    const [aura, editor] = await Promise.all([this.auraAlive(), this.probeEditor()]);
+    const report: HealthReport = {
+      status: 'ok',
+      editor: this.options.editor,
+      aura,
+      editorOpen: editor.open,
+      project: editor.repo,
+      branch: editor.branch,
+      requestedBy: { repo: payload.repo, runId: payload.runId },
+      at: this.now().toISOString(),
+    };
+    const body = JSON.stringify(report);
+    res.writeHead(200, {
+      'content-type': 'application/json; charset=utf-8',
+      [BRIDGE_SIGNATURE_HEADER]: signBridgeResponse(body, this.options.secret),
+    });
+    res.end(body);
+  }
+
+  private async auraAlive(): Promise<boolean> {
+    const upstream = this.upstream;
+    if (!upstream) return false;
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<false>((done) => {
+      timer = setTimeout(() => {
+        done(false);
+      }, AURA_PROBE_MS);
+    });
+    try {
+      return await Promise.race([upstream.listTools().then(() => true), timeout]);
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async probeEditor(): Promise<EditorState> {
+    try {
+      return (await this.options.probe?.()) ?? EDITOR_CLOSED;
+    } catch {
+      return EDITOR_CLOSED;
+    }
+  }
+
   private audit(entry: Omit<AuditEntry, 'at' | 'editor'>): void {
     const full: AuditEntry = {
       at: this.now().toISOString(),
@@ -194,11 +284,8 @@ export class AuraBridge {
 
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
-    if (url.pathname === '/health' && req.method === 'GET') {
-      sendJson(res, 200, { status: 'ok', editor: this.options.editor });
-      return;
-    }
-    if (url.pathname !== MCP_PATH) {
+    const health = url.pathname === '/health' && req.method === 'GET';
+    if (url.pathname !== MCP_PATH && !health) {
       sendJson(res, 404, { error: 'Introuvable.' });
       return;
     }
@@ -211,6 +298,21 @@ export class AuraBridge {
       return;
     }
     const payload = check.payload;
+    if (issuedAt(payload) < this.revokedBefore) {
+      this.refuse(res, 401, 'Jeton révoqué par l’interrupteur du cockpit.', payload);
+      return;
+    }
+    if (payload.scope !== (health ? 'health' : 'mcp')) {
+      this.refuse(
+        res,
+        403,
+        health
+          ? 'Ce jeton ouvre une session MCP, pas un contrôle de santé.'
+          : 'Un jeton de santé n’ouvre pas de session MCP.',
+        payload,
+      );
+      return;
+    }
     if (payload.profile !== this.options.editor) {
       this.refuse(
         res,
@@ -218,6 +320,10 @@ export class AuraBridge {
         `Ce pont sert l’éditeur ${this.options.editor}, pas ${payload.profile}.`,
         payload,
       );
+      return;
+    }
+    if (health) {
+      await this.sendHealth(res, payload);
       return;
     }
     const lock = this.lock.acquire(

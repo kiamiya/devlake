@@ -38,6 +38,8 @@ export const DispatchEnvSchema = z.object({
   AGENTLAKE_BILLING_TOKEN: optional,
   AURA_BRIDGE_URL: optional,
   AGENTLAKE_PAUSED: optional,
+  AURA_BRIDGE_SECRET: optional,
+  GITHUB_RUN_ID: optional,
 });
 
 export interface DispatchCliDeps {
@@ -83,7 +85,19 @@ export async function runDispatchCli(
       readGlobalCap(configToken === null ? null : deps.github(configToken), ref.owner),
     minutesRemaining: () =>
       readMinutesRemaining(github, ref, e.AGENTLAKE_BILLING_TOKEN, deps.fetch),
-    bridgeHealthy: () => checkBridgeHealth(e.AURA_BRIDGE_URL, deps.fetch),
+    bridgeHealthy: (editor) =>
+      checkBridgeHealth(
+        {
+          url: e.AURA_BRIDGE_URL,
+          secret: e.AURA_BRIDGE_SECRET,
+          repo: `${ref.owner}/${ref.repo}`,
+          runId: e.GITHUB_RUN_ID ?? 'dispatcher',
+          editor,
+        },
+        deps.fetch,
+        deps.now,
+        deps.log,
+      ),
     now: deps.now,
     log: deps.log,
     paused: isPausedValue(e.AGENTLAKE_PAUSED),

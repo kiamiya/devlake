@@ -9,6 +9,8 @@ import {
   useSetBridgeTools,
   useStartBridge,
   useStopBridge,
+  useTunnel,
+  useTunnelAction,
   type Editor,
 } from '../../hooks/bridge.js';
 
@@ -206,6 +208,89 @@ export function BridgeCard({ bridge }: { bridge: BridgeViewData }) {
   );
 }
 
+const PROVIDER_LABELS = { tailscale: 'Tailscale Funnel', cloudflare: 'Cloudflare Tunnel' } as const;
+
+/** Tunnel HTTPS : état, URL publique, ouverture, fermeture et interrupteur d'arrêt. */
+export function TunnelCard() {
+  const tunnel = useTunnel();
+  const action = useTunnelAction();
+  const state = tunnel.data;
+  if (!state) return null;
+  const error = action.error instanceof Error ? action.error.message : state.error;
+  return (
+    <section
+      aria-label="Tunnel"
+      className="flex flex-col gap-2 rounded-md border border-border p-4"
+    >
+      <header className="flex flex-wrap items-center gap-2">
+        <h3 className="font-medium">Tunnel ({PROVIDER_LABELS[state.provider]})</h3>
+        <Badge tone={state.open ? 'ok' : state.killed ? 'degraded' : 'absent'}>
+          {state.open ? 'Ouvert' : state.killed ? 'Coupé par l’interrupteur' : 'Fermé'}
+        </Badge>
+        <div className="ml-auto flex gap-2">
+          {state.open ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={action.isPending}
+              onClick={() => {
+                action.mutate('close');
+              }}
+            >
+              Fermer le tunnel
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              disabled={action.isPending}
+              onClick={() => {
+                action.mutate('open');
+              }}
+            >
+              Ouvrir le tunnel
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="destructive"
+            disabled={action.isPending}
+            onClick={() => {
+              action.mutate('kill');
+            }}
+          >
+            Interrupteur d’arrêt
+          </Button>
+        </div>
+      </header>
+      {state.url !== null && (
+        <p className="text-sm">
+          URL publique : <code>{state.url}</code>
+        </p>
+      )}
+      {state.projects.length > 0 && (
+        <ul aria-label="Projets de jeu reliés" className="text-xs text-muted-foreground">
+          {state.projects.map((p) => (
+            <li key={p.id}>
+              {p.id} → <code>{p.url}</code>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-xs text-muted-foreground">
+        {state.autoExpose
+          ? 'Exposition automatique : le tunnel s’ouvre seulement quand une tâche de jeu est prête ou en cours.'
+          : 'Exposition manuelle : le tunnel reste ouvert jusqu’à sa fermeture.'}{' '}
+        L’interrupteur coupe le tunnel et révoque les jetons des agents en cours.
+      </p>
+      {error !== null && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+
 /** Ponts Aura : démarrer, arrêter, état, dernier appel, liste blanche, audit. */
 export function BridgePanel() {
   const bridges = useBridges();
@@ -222,6 +307,7 @@ export function BridgePanel() {
         </p>
       )}
       <div className="mt-3 flex flex-col gap-4">
+        <TunnelCard />
         {bridges.data?.map((b) => (
           <BridgeCard key={b.editor} bridge={b} />
         ))}

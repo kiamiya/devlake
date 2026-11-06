@@ -52,6 +52,10 @@ export const IPC_CHANNELS = [
   'bridge:tools',
   'bridge:set-tools',
   'bridge:audit',
+  'tunnel:status',
+  'tunnel:open',
+  'tunnel:close',
+  'tunnel:kill',
 ] as const;
 
 /**

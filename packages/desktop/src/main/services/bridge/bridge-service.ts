@@ -2,6 +2,7 @@ import {
   auraCommandFrom,
   AuraBridge,
   connectStdioUpstream,
+  probeEditor,
   type AuditEntry,
   type AuraCommand,
   type AuraUpstream,
@@ -89,6 +90,8 @@ export class BridgeService {
       // Relu à chaque appel : une liste blanche modifiée s'applique sans redémarrer.
       allowedTools: (profile) => this.deps.repos.settings.get().auraBridge[profile].allowedTools,
       connectUpstream: () => (this.deps.connectUpstream ?? connectStdioUpstream)(command),
+      // Clone dédié ouvert dans l'éditeur : dossier des clones des réglages (T19).
+      probe: () => probeEditor(this.deps.repos.settings.get().editorClonesDir, editor),
       onAudit: (entry) => {
         const list = this.audits.get(editor) ?? [];
         list.push(entry);
@@ -105,6 +108,17 @@ export class BridgeService {
     await this.bridges.get(editor)?.stop();
     this.bridges.delete(editor);
     return this.view(editor);
+  }
+
+  /** Port local d'un pont démarré (cible de la passerelle). */
+  runningPort(editor: Editor): number | null {
+    const status = this.bridges.get(editor)?.status();
+    return status?.running ? status.port : null;
+  }
+
+  /** Interrupteur : révoque les jetons émis et ferme les sessions de tous les ponts. */
+  async revokeAll(): Promise<void> {
+    for (const bridge of this.bridges.values()) await bridge.revokeTokens();
   }
 
   async stopAll(): Promise<void> {

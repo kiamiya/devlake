@@ -106,7 +106,13 @@ export function withBridgeToken(env: NodeJS.ProcessEnv, now: Date): NodeJS.Proce
   )
     return env;
   const token = signBridgeToken(
-    { repo, runId, profile, exp: Math.floor(now.getTime() / 1000) + BRIDGE_TOKEN_TTL_SECONDS },
+    {
+      repo,
+      runId,
+      profile,
+      iat: Math.floor(now.getTime() / 1000),
+      exp: Math.floor(now.getTime() / 1000) + BRIDGE_TOKEN_TTL_SECONDS,
+    },
     secret,
   );
   return { ...env, AURA_BRIDGE_TOKEN: token };

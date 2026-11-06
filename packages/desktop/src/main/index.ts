@@ -24,6 +24,7 @@ import { PlannerLaunchService } from './services/planner/planner-launch.js';
 import { PlanService } from './services/plan/plan-service.js';
 import { DashboardService } from './services/dashboard/dashboard-service.js';
 import { BridgeService } from './services/bridge/bridge-service.js';
+import { TunnelService } from './services/bridge/tunnel-service.js';
 import {
   QuestionsService,
   type QuestionNotification,
@@ -129,9 +130,15 @@ async function start(): Promise<void> {
     github: await githubFactory(),
     bridgeStatus: () => bridge.integrationStatus(),
   });
-  // Fermer le cockpit arrête les ponts (et le serveur MCP d'Aura qu'ils ont lancé).
+  const tunnel = new TunnelService({ repos, github: () => service.githubPort(), bridges: bridge });
+  // Exposition automatique : vérifiée au rythme du sondage du cockpit (30 s).
+  const exposure = setInterval(() => {
+    tunnel.tick().catch(() => undefined);
+  }, 30_000);
+  // Fermer le cockpit ferme le tunnel et arrête les ponts (et le serveur MCP d'Aura).
   app.on('before-quit', () => {
-    void bridge.stopAll();
+    clearInterval(exposure);
+    void tunnel.close().finally(() => bridge.stopAll());
   });
   const projects = new ProjectsService(repos, () => service.githubPort());
   const creation = new ProjectCreationService({
@@ -178,6 +185,7 @@ async function start(): Promise<void> {
       }),
       dashboard: new DashboardService({ repos, github: () => service.githubPort() }),
       bridge,
+      tunnel,
     }),
     isTrustedUrl,
   );
