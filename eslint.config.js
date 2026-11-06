@@ -15,6 +15,8 @@ export default defineConfig(
       '.generated/**',
       '**/playwright-report/**',
       '**/test-results/**',
+      // Doublures exécutées telles quelles par Node (faux serveur MCP Aura en stdio).
+      'packages/*/src/testing/*.mjs',
     ],
   },
   js.configs.recommended,

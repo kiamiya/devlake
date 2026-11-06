@@ -20,6 +20,8 @@ import {
 } from './services/planner/planner-launch.js';
 import { PlanError, type PlanService } from './services/plan/plan-service.js';
 import { DashboardError, type DashboardService } from './services/dashboard/dashboard-service.js';
+import { BridgeConfigError, type BridgeService } from './services/bridge/bridge-service.js';
+import { AuraConfigError } from 'aura-bridge';
 import {
   EmptyAnswerError,
   QuestionNotFoundError,
@@ -47,6 +49,7 @@ export function serviceHandlers(services: {
   plan: PlanService;
   questions: QuestionsService;
   dashboard: DashboardService;
+  bridge: BridgeService;
 }): Record<IpcChannel, Handler> {
   const {
     cockpit: service,
@@ -57,6 +60,7 @@ export function serviceHandlers(services: {
     plan,
     questions,
     dashboard,
+    bridge,
   } = services;
   const input = <C extends IpcChannel>(_channel: C, value: unknown) =>
     value as z.output<(typeof IPC_CONTRACT)[C]['input']>;
@@ -139,6 +143,15 @@ export function serviceHandlers(services: {
       const { projectId, runId } = input('runs:logs', value);
       return dashboard.logs(projectId, runId);
     },
+    'bridge:list': () => Promise.resolve(bridge.list()),
+    'bridge:start': (value) => bridge.start(input('bridge:start', value).editor),
+    'bridge:stop': (value) => bridge.stop(input('bridge:stop', value).editor),
+    'bridge:tools': (value) => bridge.tools(input('bridge:tools', value).editor),
+    'bridge:set-tools': (value) => {
+      const { editor, tools } = input('bridge:set-tools', value);
+      return Promise.resolve(bridge.setAllowedTools(editor, tools));
+    },
+    'bridge:audit': (value) => Promise.resolve(bridge.audit(input('bridge:audit', value).editor)),
     'runs:transcript': (value) => {
       const { projectId, runId } = input('runs:transcript', value);
       return dashboard.transcript(projectId, runId);
@@ -171,6 +184,8 @@ export function toIpcError(error: unknown): IpcErrorPayload {
     [QuestionNotFoundError, 'QUESTION_NOT_FOUND'],
     [EmptyAnswerError, 'EMPTY_ANSWER'],
     [DashboardError, 'DASHBOARD_ERROR'],
+    [BridgeConfigError, 'BRIDGE_CONFIG'],
+    [AuraConfigError, 'BRIDGE_CONFIG'],
   ];
   for (const [type, code] of known)
     if (error instanceof type) return { code, message: error.message };

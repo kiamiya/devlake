@@ -23,6 +23,7 @@ import { ContextService } from './services/ingestion/context-service.js';
 import { PlannerLaunchService } from './services/planner/planner-launch.js';
 import { PlanService } from './services/plan/plan-service.js';
 import { DashboardService } from './services/dashboard/dashboard-service.js';
+import { BridgeService } from './services/bridge/bridge-service.js';
 import {
   QuestionsService,
   type QuestionNotification,
@@ -121,7 +122,17 @@ async function start(): Promise<void> {
   const { db, created } = openDatabase(join(app.getPath('userData'), 'cockpit.sqlite'));
   const repos = createRepositories(db);
   const vault = new SafeStorageVault(app.getPath('userData'), safeStorage);
-  const service = new CockpitService({ repos, vault, github: await githubFactory() });
+  const bridge = new BridgeService({ repos, vault });
+  const service = new CockpitService({
+    repos,
+    vault,
+    github: await githubFactory(),
+    bridgeStatus: () => bridge.integrationStatus(),
+  });
+  // Fermer le cockpit arrête les ponts (et le serveur MCP d'Aura qu'ils ont lancé).
+  app.on('before-quit', () => {
+    void bridge.stopAll();
+  });
   const projects = new ProjectsService(repos, () => service.githubPort());
   const creation = new ProjectCreationService({
     repos,
@@ -166,6 +177,7 @@ async function start(): Promise<void> {
         badge: (count) => app.setBadgeCount(count),
       }),
       dashboard: new DashboardService({ repos, github: () => service.githubPort() }),
+      bridge,
     }),
     isTrustedUrl,
   );

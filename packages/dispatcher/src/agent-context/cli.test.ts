@@ -11,8 +11,10 @@ import {
   PrepareEnvSchema,
   runFinalize,
   runPrepare,
+  withBridgeToken,
   type CliDeps,
 } from './cli.js';
+import { verifyBridgeToken } from 'shared/bridge-token';
 
 const ref = { owner: 'kiamiya', repo: 'site' };
 const BACKSLASH = String.fromCharCode(92);
@@ -191,5 +193,43 @@ describe('commandes', () => {
     const fallback = deps(github, {});
     await runFinalize({ ...env, APP_TOKEN: '' }, fallback.cli);
     expect(fallback.tokens).toEqual(['jeton-job', 'jeton-job']);
+  });
+});
+
+describe('jeton du pont Aura', () => {
+  const now = new Date('2026-11-21T10:00:00.000Z');
+  const base = {
+    GITHUB_REPOSITORY: 'kiamiya/jeu',
+    GITHUB_RUN_ID: '777',
+    PROFILE: 'unity',
+    AURA_BRIDGE_SECRET: 'secret-du-pont', // gitleaks:allow
+  };
+
+  it('signé pour un agent Unity ou Unreal, vérifiable par le pont', () => {
+    const env = withBridgeToken(base, now);
+    const check = verifyBridgeToken(env.AURA_BRIDGE_TOKEN ?? '', 'secret-du-pont', now);
+    expect(check).toEqual({
+      ok: true,
+      payload: {
+        repo: 'kiamiya/jeu',
+        runId: '777',
+        profile: 'unity',
+        exp: now.getTime() / 1000 + 7200,
+      },
+    });
+  });
+
+  it('rien pour un autre profil, sans secret, ou si un jeton est déjà fourni', () => {
+    expect(
+      withBridgeToken({ ...base, PROFILE: 'frontend' }, now).AURA_BRIDGE_TOKEN,
+    ).toBeUndefined();
+    expect(
+      withBridgeToken({ ...base, AURA_BRIDGE_SECRET: '' }, now).AURA_BRIDGE_TOKEN,
+    ).toBeUndefined();
+    expect(withBridgeToken({ ...base, AURA_BRIDGE_TOKEN: 'fourni' }, now).AURA_BRIDGE_TOKEN).toBe(
+      'fourni',
+    );
+    const { GITHUB_RUN_ID: _run, ...noRun } = base;
+    expect(withBridgeToken(noRun, now).AURA_BRIDGE_TOKEN).toBeUndefined();
   });
 });

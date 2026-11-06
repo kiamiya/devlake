@@ -46,6 +46,12 @@ export const IPC_CHANNELS = [
   'dashboard:relaunch',
   'runs:logs',
   'runs:transcript',
+  'bridge:list',
+  'bridge:start',
+  'bridge:stop',
+  'bridge:tools',
+  'bridge:set-tools',
+  'bridge:audit',
 ] as const;
 
 /**
