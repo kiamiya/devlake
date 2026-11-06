@@ -15,5 +15,9 @@ Les checks `agentlake / tests-guard` et `agentlake / review` viennent du workflo
 ## Notes du profil
 
 - Les runners GitHub n’ont pas Unreal : chaque job appelle `scripts/ci/<job>.sh`, à écrire par l’architecte.
-- Les tests d’automatisation passent par le pont, sur l’éditeur du poste, et sont publiés comme checks (tâche T20 du kit) ; en attendant, les scripts vérifient ce qui tourne sans moteur (format clang, structure, compilation de modules isolés).
+- `unit-tests` et `integration-tests` lancent les tests d’automatisation (Automation Spec, Functional Tests) sur l’éditeur du poste, via le pont Aura : UnrealEditor-Cmd tourne sur le clone dédié, au commit exact de la PR, sous le verrou d’éditeur. Le résultat signé par le pont devient le check, avec le détail dans le résumé du job.
+- Prérequis sur le poste : cockpit ouvert, tunnel actif (variable `AURA_BRIDGE_URL`), pont Unreal démarré, clone dédié préparé, chemin d’UnrealEditor-Cmd renseigné dans les réglages. Secret `AURA_BRIDGE_SECRET` posé au bootstrap.
+- Adapter `AUTOMATION_FILTER` aux noms des tests du projet (`Project.Unit`, `Project.Integration` par défaut ; plusieurs filtres joints par `+`). Un filtre qui ne trouve aucun test fait échouer le check.
+- Si l’éditeur est occupé (agent en session), le job patiente ; au-delà de `WAIT_MINUTES`, il échoue.
+- En attendant un runner auto-hébergé (hors périmètre), le pont est la seule voie pour exécuter le moteur en CI.
 - CodeQL C/C++ en mode `none` (sans build).

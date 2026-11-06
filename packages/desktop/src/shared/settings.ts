@@ -49,6 +49,8 @@ export const SettingsSchema = z.object({
   modelsByProfile: z.partialRecord(ProfileIdSchema, z.string().trim().min(1, 'Modèle vide.')),
   /** Dossier des clones dédiés à l'éditeur Unity/Unreal. */
   editorClonesDir: z.string().trim().min(1, 'Dossier vide.').nullable(),
+  /** UnrealEditor-Cmd du poste : tests d'automatisation lancés par la CI via le pont (T20). */
+  unrealEditorCmd: z.string().trim().min(1, 'Chemin vide.').nullable(),
   /** Taille maximale d'un fichier importé dans le contexte, en Mo. */
   maxImportMegabytes: z
     .number()
@@ -85,6 +87,7 @@ export const DEFAULT_SETTINGS: Settings = {
   plannerModel: null,
   modelsByProfile: {},
   editorClonesDir: null,
+  unrealEditorCmd: null,
   workflowsVersion: 'v1',
   maxImportMegabytes: 50,
   auraMcp: { unity: null, unreal: null },

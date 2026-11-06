@@ -47,6 +47,7 @@ export function renderTaskIssueBody(task: TaskIssue): string {
       `- Complexité : ${task.complexity}`,
       ...(task.epic !== undefined ? [`- Épopée : ${task.epic}`] : []),
       ...(task.milestone !== undefined ? [`- Jalon : ${task.milestone}`] : []),
+      ...(task.needsEditor === false ? ['- Éditeur : non requis (code pur, sans pont Aura)'] : []),
     ].join('\n'),
     `## Dépend de\n\n${bulletList(task.dependencies, 'Aucune dépendance.')}`,
     `## Zones de code\n\n${bulletList(task.codeZones, 'Non précisées.')}`,

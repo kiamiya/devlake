@@ -36,6 +36,8 @@ export interface PromptInput {
   resume: Resume;
   /** Porte qualité à poser (tâche bootstrap de l'architecte). */
   quality?: QualityGate;
+  /** Tâche de jeu en code pur : l'éditeur et le pont ne sont pas disponibles. */
+  withoutEditor?: boolean;
 }
 
 /** Budget de caractères pour les documents du contexte et les journaux. */
@@ -159,6 +161,9 @@ export function buildPrompt(input: PromptInput): string {
     ].join('\n'),
     resumeSection(input.resume),
     input.quality ? qualitySection(input.quality) : null,
+    input.withoutEditor
+      ? '## Sans éditeur\n\nCette tâche est du code pur, testable sans éditeur : le pont Aura et les outils `editor_*` ne sont pas disponibles. Écris le code et ses tests dans le dépôt, et lance-les dans le runner.'
+      : null,
     `## Instructions du projet (CLAUDE.md)\n\n${input.context.instructions?.trim() || '_Aucun CLAUDE.md._'}`,
     `## Décisions du projet\n\n${input.context.decisions?.trim() || '_Aucune décision._'}`,
     `## Contexte du projet\n\n${contextSection(input.context.documents)}`,

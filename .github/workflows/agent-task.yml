@@ -23,6 +23,10 @@ on:
         description: 'Raison du lancement : none, answer ou ci-failure'
         type: string
         default: none
+      needs_editor:
+        description: La tâche passe par l'éditeur (pont Aura) ; une seule à la fois par projet
+        type: boolean
+        default: false
       devlake_ref:
         description: Version de devlake qui fournit les scripts (même version que ce workflow)
         type: string
@@ -56,6 +60,10 @@ on:
         type: choice
         options: [none, answer, ci-failure]
         default: none
+      needs_editor:
+        description: La tâche passe par l'éditeur
+        type: boolean
+        default: false
       devlake_ref:
         description: Version de devlake qui fournit les scripts
         type: string
@@ -72,8 +80,9 @@ jobs:
     name: Agent ${{ inputs.profile }} — issue ${{ inputs.issue_number }}
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.timeout_minutes }}
+    # Tâche d'éditeur : un seul éditeur par projet, donc une seule tâche de jeu à la fois.
     concurrency:
-      group: agentlake-task-${{ inputs.issue_number }}
+      group: ${{ inputs.needs_editor && format('agentlake-editor-{0}', github.repository) || format('agentlake-task-{0}', inputs.issue_number) }}
       cancel-in-progress: false
     permissions:
       contents: write

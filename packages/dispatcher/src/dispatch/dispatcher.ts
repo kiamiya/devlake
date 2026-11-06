@@ -28,7 +28,7 @@ import {
   type PostedQuestion,
 } from '../questions/thread.js';
 import {
-  GAME_PROFILES,
+  isGameTask,
   planPass,
   type AgentRun,
   type PassAction,
@@ -310,7 +310,7 @@ export async function runDispatch(ref: RepoRef, deps: DispatcherDeps): Promise<D
   }
 
   const gameWaiting = views.some(
-    (v) => v.open && GAME_PROFILES.includes(v.task.profile) && WAITING_STATES.includes(v.state),
+    (v) => v.open && isGameTask(v.task) && WAITING_STATES.includes(v.state),
   );
   // Éditeur du projet : celui du type de projet, à défaut celui de la première tâche de jeu.
   const editor =
@@ -491,6 +491,8 @@ async function launch(
         profile: action.profile,
         attempt: String(action.attempt),
         resume_reason: action.resume,
+        // Tâche d'éditeur : groupe de concurrence agentlake-editor-<dépôt> dans le workflow.
+        needs_editor: String(action.needsEditor),
       },
     });
     return true;

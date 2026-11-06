@@ -1,4 +1,10 @@
-import type { DispatchMeta, ProfileId, TaskIssue, TaskState } from 'shared';
+import {
+  needsEditor,
+  type DispatchMeta,
+  type ProfileId,
+  type TaskIssue,
+  type TaskState,
+} from 'shared';
 
 /** Profils qui ont besoin de l'éditeur, donc du pont Aura. */
 export const GAME_PROFILES: readonly ProfileId[] = ['unity', 'unreal'];
@@ -93,6 +99,8 @@ export type PassAction =
       from: TaskState;
       /** Commit de la PR dont l'échec est corrigé par ce lancement (pas de seconde détection). */
       failedSha: string | null;
+      /** La tâche passe par l'éditeur : verrou d'éditeur côté workflow. */
+      needsEditor: boolean;
     }
   | { kind: 'summarize'; issue: number; taskId: string; prNumber: number };
 
@@ -103,8 +111,9 @@ export interface PassPlan {
   capacity: number;
 }
 
+/** Tâche qui passe par l'éditeur (pont Aura) ; le code pur C#/C++ n'en fait pas partie. */
 export function isGameTask(task: TaskIssue): boolean {
-  return GAME_PROFILES.includes(task.profile);
+  return needsEditor(task);
 }
 
 /** Tâche bootstrap du plan : l'architecte, sans dépendance ; elle pose la CI. */
@@ -330,6 +339,7 @@ export function planPass(input: PassInput): PassPlan {
       resume: state === 'fixing' ? 'ci-failure' : view.answered === true ? 'answer' : 'none',
       from,
       failedSha: state === 'fixing' ? (view.pr?.headSha ?? null) : null,
+      needsEditor: isGameTask(view.task),
     });
     effective.set(view.number, 'running');
     for (const r of view.task.exclusiveResources) occupied.add(r);

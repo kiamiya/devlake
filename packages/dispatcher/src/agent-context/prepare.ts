@@ -1,5 +1,11 @@
 import type { GitHubPort, RepoRef } from 'github';
-import { ciChecksFor, parseTaskIssueBody, ProjectConfigSchema, type TaskIssue } from 'shared';
+import {
+  ciChecksFor,
+  needsEditor,
+  parseTaskIssueBody,
+  ProjectConfigSchema,
+  type TaskIssue,
+} from 'shared';
 import { parse } from 'yaml';
 import { appendDecision } from '../questions/decisions.js';
 import { DECISIONS_PATH, readProjectContext, taskBranch, type ReadFile } from './context.js';
@@ -69,7 +75,11 @@ export async function prepareAgent(input: PrepareInput, deps: PrepareDeps): Prom
   const task = parsed.value;
   const profile = parseProfile(await deps.readFile(profilePath(input.profileId)), input.profileId);
   // Avant tout changement d'état : un pont non configuré ne doit pas laisser la tâche « running ».
-  const mcpConfig = buildMcpConfig(profile, input.profileEnv ?? {});
+  // Code pur C#/C++ (needsEditor = false) : ni pont Aura, ni identifiants de push en session.
+  const usesEditor =
+    needsEditor({ profile: profile.id, needsEditor: task.needsEditor }) &&
+    Object.keys(profile.mcpServers).length > 0;
+  const mcpConfig = usesEditor ? buildMcpConfig(profile, input.profileEnv ?? {}) : null;
 
   await setTaskState(deps.github, input.ref, input.issueNumber, 'running');
   const branch = taskBranch(task.id, task.title);
@@ -77,7 +87,7 @@ export async function prepareAgent(input: PrepareInput, deps: PrepareDeps): Prom
   // Agent de jeu : il pousse son code avant editor_checkout et récupère ensuite ce que
   // l'éditeur a poussé, en cours de session. Le jeton du job est configuré pour ce seul dépôt
   // du runner (éphémère), jamais commité.
-  if (Object.keys(profile.mcpServers).length > 0) {
+  if (usesEditor) {
     const setting = authHeader(deps.token)[1] ?? '';
     const split = setting.indexOf('=');
     await deps.git.run(['config', '--local', setting.slice(0, split), setting.slice(split + 1)]);
@@ -124,6 +134,7 @@ export async function prepareAgent(input: PrepareInput, deps: PrepareDeps): Prom
       context,
       resume,
       ...(quality ? { quality } : {}),
+      ...(Object.keys(profile.mcpServers).length > 0 && !usesEditor ? { withoutEditor: true } : {}),
     }),
     claudeArgs: claudeArgs(
       profile,
