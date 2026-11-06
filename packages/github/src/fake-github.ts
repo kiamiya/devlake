@@ -25,6 +25,7 @@ import type {
   ListWorkflowRunsInput,
   PullRequest,
   PullRequestFile,
+  Artifact,
   RepoRef,
   Repository,
   UpdateIssueInput,
@@ -66,6 +67,9 @@ export interface FakeRepoState {
   dispatches: DispatchWorkflowInput[];
   /** Runs dont les jobs en échec ont été relancés. */
   reruns: number[];
+  /** Variables Actions du dépôt. */
+  variables: Map<string, string>;
+  artifacts: Map<number, Artifact & { runId: number; data: Uint8Array }>;
   /** Fichiers imposés pour une PR (sinon : différence entre la base et la tête). */
   pullFiles: Map<number, PullRequestFile[]>;
   secrets: Map<string, string>;
@@ -189,6 +193,8 @@ export class FakeGitHub implements GitHubPort {
       logs: new Map(),
       dispatches: [],
       reruns: [],
+      variables: new Map(),
+      artifacts: new Map(),
       pullFiles: new Map(),
       secrets: new Map(),
       issueDependencies: this.defaultIssueDependencies,
@@ -230,6 +236,22 @@ export class FakeGitHub implements GitHubPort {
   }
 
   /** Simule le merge d'une PR par GitHub. */
+  /** Ajoute un artefact (archive zip) à un run. */
+  seedArtifact(
+    ref: RepoRef,
+    runId: number,
+    artifact: { id: number; name: string; data: Uint8Array; expired?: boolean },
+  ): void {
+    this.state(ref).artifacts.set(artifact.id, {
+      id: artifact.id,
+      name: artifact.name,
+      sizeInBytes: artifact.data.byteLength,
+      expired: artifact.expired ?? false,
+      runId,
+      data: new Uint8Array(artifact.data),
+    });
+  }
+
   /** Impose la liste des fichiers d'une PR (renommages, compteurs précis). */
   seedPullRequestFiles(ref: RepoRef, prNumber: number, files: PullRequestFile[]): void {
     this.state(ref).pullFiles.set(prNumber, clone(files));
@@ -702,6 +724,34 @@ export class FakeGitHub implements GitHubPort {
       const run = this.state(ref).runs.find((r) => r.id === runId);
       if (!run) throw notFound(`run ${String(runId)}`);
       return clone(run);
+    });
+  }
+
+  listRunArtifacts(ref: RepoRef, runId: number): Promise<Artifact[]> {
+    return this.run(() =>
+      [...this.state(ref).artifacts.values()]
+        .filter((a) => a.runId === runId)
+        .map(({ runId: _run, data: _data, ...artifact }) => clone(artifact)),
+    );
+  }
+
+  downloadArtifact(ref: RepoRef, artifactId: number): Promise<Uint8Array> {
+    return this.run(() => {
+      const artifact = this.state(ref).artifacts.get(artifactId);
+      if (!artifact) throw notFound(`artefact ${String(artifactId)}`);
+      if (artifact.expired)
+        throw new GitHubError('not-found', `L’artefact ${String(artifactId)} a expiré.`, 410);
+      return new Uint8Array(artifact.data);
+    });
+  }
+
+  getRepositoryVariable(ref: RepoRef, name: string): Promise<string | null> {
+    return this.run(() => this.state(ref).variables.get(name) ?? null);
+  }
+
+  setRepositoryVariable(ref: RepoRef, name: string, value: string): Promise<void> {
+    return this.run(() => {
+      this.state(ref).variables.set(name, value);
     });
   }
 

@@ -1,5 +1,6 @@
 import {
   ContextEntrySchema,
+  ProfileIdSchema,
   ProjectConfigSchema,
   ProjectPlanSchema,
   ProjectTypeSchema,
@@ -7,6 +8,7 @@ import {
 } from 'shared';
 import { z } from 'zod';
 import type { IpcChannel } from './channels.js';
+import { KANBAN_COLUMNS } from './dashboard.js';
 import { SettingsPatchSchema, SettingsSchema } from './settings.js';
 
 export const IntegrationStateSchema = z.enum(['ok', 'degraded', 'absent']);
@@ -151,6 +153,66 @@ export const AnswerInputSchema = z.object({
   attachments: z.array(z.string()).default([]),
 });
 
+const ProgressSchema = z.object({
+  doneWeight: z.number(),
+  totalWeight: z.number(),
+  percent: z.number(),
+  doneTasks: z.number(),
+  totalTasks: z.number(),
+});
+
+export const DashboardSchema = z.object({
+  projectId: z.string(),
+  repositoryUrl: z.string(),
+  paused: z.boolean(),
+  tasks: z.array(
+    z.object({
+      number: z.number(),
+      id: z.string(),
+      title: z.string(),
+      column: z.enum(KANBAN_COLUMNS),
+      profile: ProfileIdSchema,
+      complexity: z.enum(['S', 'M', 'L']),
+      milestone: z.string().nullable(),
+      dependencies: z.array(z.string()),
+      attempts: z.number(),
+    }),
+  ),
+  progress: z.object({
+    overall: ProgressSchema,
+    milestones: z.array(z.object({ milestone: z.string(), progress: ProgressSchema })),
+  }),
+  runs: z.array(
+    z.object({
+      id: z.number(),
+      workflow: z.string(),
+      name: z.string(),
+      status: z.string(),
+      conclusion: z.string().nullable(),
+      createdAt: z.string(),
+      url: z.string(),
+      minutes: z.number(),
+      issueNumber: z.number().nullable(),
+      taskId: z.string().nullable(),
+      profile: ProfileIdSchema.nullable(),
+      attempt: z.number().nullable(),
+    }),
+  ),
+  consumption: z.object({
+    month: z.string(),
+    monthMinutes: z.number(),
+    totalMinutes: z.number(),
+    byTask: z.array(z.object({ taskId: z.string(), agentRuns: z.number(), minutes: z.number() })),
+  }),
+  pullRequests: z.record(
+    z.string(),
+    z.object({ number: z.number(), url: z.string(), state: z.string() }),
+  ),
+});
+export type DashboardView = z.infer<typeof DashboardSchema>;
+
+const RunRefSchema = z.object({ projectId: z.string(), runId: z.number().int() });
+
 export const IPC_CONTRACT = {
   'settings:get': { input: NoInput, output: SettingsSchema },
   'settings:update': { input: SettingsPatchSchema, output: SettingsSchema },
@@ -290,6 +352,27 @@ export const IPC_CONTRACT = {
     }),
   },
   'questions:answer': { input: AnswerInputSchema, output: QuestionViewSchema },
+  'dashboard:get': { input: z.object({ projectId: z.string() }), output: DashboardSchema },
+  'dashboard:set-paused': {
+    input: z.object({ projectId: z.string(), paused: z.boolean() }),
+    output: z.object({ paused: z.boolean() }),
+  },
+  'dashboard:relaunch': {
+    input: z.object({
+      projectId: z.string(),
+      issueNumber: z.number().int().min(1),
+      instruction: z
+        .string()
+        .max(4000, 'Consigne trop longue (4 000 caractères au plus).')
+        .default(''),
+    }),
+    output: z.object({ questionId: z.string() }),
+  },
+  'runs:logs': { input: RunRefSchema, output: z.object({ text: z.string() }) },
+  'runs:transcript': {
+    input: RunRefSchema,
+    output: z.object({ name: z.string(), text: z.string() }).nullable(),
+  },
 } as const satisfies Record<IpcChannel, { input: z.ZodType; output: z.ZodType }>;
 
 export type IpcInput<C extends IpcChannel> = z.input<(typeof IPC_CONTRACT)[C]['input']>;

@@ -19,6 +19,7 @@ import {
   type PlannerLaunchService,
 } from './services/planner/planner-launch.js';
 import { PlanError, type PlanService } from './services/plan/plan-service.js';
+import { DashboardError, type DashboardService } from './services/dashboard/dashboard-service.js';
 import {
   EmptyAnswerError,
   QuestionNotFoundError,
@@ -45,8 +46,18 @@ export function serviceHandlers(services: {
   planner: PlannerLaunchService;
   plan: PlanService;
   questions: QuestionsService;
+  dashboard: DashboardService;
 }): Record<IpcChannel, Handler> {
-  const { cockpit: service, projects, creation, context, planner, plan, questions } = services;
+  const {
+    cockpit: service,
+    projects,
+    creation,
+    context,
+    planner,
+    plan,
+    questions,
+    dashboard,
+  } = services;
   const input = <C extends IpcChannel>(_channel: C, value: unknown) =>
     value as z.output<(typeof IPC_CONTRACT)[C]['input']>;
   return {
@@ -115,6 +126,23 @@ export function serviceHandlers(services: {
     'questions:list': (value) => Promise.resolve(questions.list(input('questions:list', value))),
     'questions:sync': () => questions.syncAll(),
     'questions:answer': (value) => questions.answer(input('questions:answer', value)),
+    'dashboard:get': (value) => dashboard.get(input('dashboard:get', value).projectId),
+    'dashboard:set-paused': (value) => {
+      const { projectId, paused } = input('dashboard:set-paused', value);
+      return dashboard.setPaused(projectId, paused);
+    },
+    'dashboard:relaunch': (value) => {
+      const { projectId, issueNumber, instruction } = input('dashboard:relaunch', value);
+      return dashboard.relaunch(projectId, issueNumber, instruction);
+    },
+    'runs:logs': (value) => {
+      const { projectId, runId } = input('runs:logs', value);
+      return dashboard.logs(projectId, runId);
+    },
+    'runs:transcript': (value) => {
+      const { projectId, runId } = input('runs:transcript', value);
+      return dashboard.transcript(projectId, runId);
+    },
   };
 }
 
@@ -142,6 +170,7 @@ export function toIpcError(error: unknown): IpcErrorPayload {
     [GlobalConfigSyncError, 'GLOBAL_CONFIG_SYNC_FAILED'],
     [QuestionNotFoundError, 'QUESTION_NOT_FOUND'],
     [EmptyAnswerError, 'EMPTY_ANSWER'],
+    [DashboardError, 'DASHBOARD_ERROR'],
   ];
   for (const [type, code] of known)
     if (error instanceof type) return { code, message: error.message };

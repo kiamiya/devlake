@@ -59,6 +59,10 @@ export const runs = sqliteTable(
     event: text('event').notNull(),
     createdAt: text('created_at').notNull(),
     url: text('url').notNull(),
+    /** Titre affiché du run (`run-name`) : relie un run d'agent à son issue. */
+    title: text('title'),
+    /** Dernière mise à jour : fin du run une fois terminé (durée, minutes). */
+    updatedAt: text('updated_at'),
   },
   (t) => [primaryKey({ columns: [t.projectId, t.id] })],
 );

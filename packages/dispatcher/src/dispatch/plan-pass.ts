@@ -64,6 +64,8 @@ export interface PassInput {
    * la tâche bootstrap peut partir. Absent = non vérifié (aucun blocage).
    */
   mainChecks?: { ready: boolean; missing: readonly string[] };
+  /** Projet en pause (variable AGENTLAKE_PAUSED) : aucun lancement. */
+  paused?: boolean;
 }
 
 export type ResumeKind = 'none' | 'ci-failure' | 'answer';
@@ -275,6 +277,10 @@ export function planPass(input: PassInput): PassPlan {
         attempts: view.meta.attempts,
       });
       log.push(`${label} : ${String(view.meta.attempts)} tentatives, escaladée.`);
+      continue;
+    }
+    if (input.paused === true) {
+      log.push(`${label} : projet en pause, pas de lancement.`);
       continue;
     }
     if (input.mainChecks?.ready === false && !isBootstrapTask(view.task)) {

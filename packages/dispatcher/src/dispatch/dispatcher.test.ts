@@ -322,3 +322,25 @@ describe('CLI', () => {
     expect(tokens).toEqual(['jeton-job', 'jeton-config']);
   });
 });
+
+describe('pause du projet', () => {
+  it('AGENTLAKE_PAUSED=true : aucun lancement, la passe le dit ; « false » relance', async () => {
+    const github = await project();
+    await addTask(github);
+    const lines: string[] = [];
+    const cliDeps = {
+      github: () => github,
+      readText: () => Promise.reject(new Error('jamais lu')),
+      fetch: () => Promise.reject(new Error('pas de réseau')),
+      now: () => NOW,
+      log: (line: string) => lines.push(line),
+    };
+    const env = { GITHUB_REPOSITORY: 'kiamiya/jeu', GITHUB_EVENT_NAME: 'schedule', GH_TOKEN: 'j' };
+    const paused = await runDispatchCli({ ...env, AGENTLAKE_PAUSED: ' TRUE ' }, cliDeps);
+    expect(paused?.applied).toEqual([]);
+    expect(lines).toContain('Projet en pause (AGENTLAKE_PAUSED) : aucun agent ne sera lancé.');
+    expect(lines.some((l) => l.includes('projet en pause, pas de lancement'))).toBe(true);
+    const resumed = await runDispatchCli({ ...env, AGENTLAKE_PAUSED: 'false' }, cliDeps);
+    expect(resumed?.applied.map((a) => a.kind)).toEqual(['launch']);
+  });
+});

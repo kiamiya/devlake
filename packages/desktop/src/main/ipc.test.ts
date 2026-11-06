@@ -21,6 +21,7 @@ import {
   type IpcMainLike,
 } from './ipc.js';
 import { MemoryVault, VaultUnavailableError } from './vault.js';
+import { DashboardService } from './services/dashboard/dashboard-service.js';
 import {
   QuestionsService,
   type QuestionNotification,
@@ -82,6 +83,11 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
         notify: (n) => notified.push(n),
         badge: (count) => badges.push(count),
         now: () => '2026-11-06T12:00:00.000Z',
+      }),
+      dashboard: new DashboardService({
+        repos,
+        github: () => service.githubPort(),
+        now: () => new Date('2026-11-06T12:00:00.000Z'),
       }),
     }),
     vault,

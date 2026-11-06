@@ -161,11 +161,18 @@ export class MirrorRepository {
         event: runs.event,
         createdAt: runs.createdAt,
         url: runs.url,
+        title: runs.title,
+        updatedAt: runs.updatedAt,
       })
       .from(runs)
       .where(eq(runs.projectId, id))
       .orderBy(asc(runs.id))
-      .all();
+      .all()
+      .map(({ title, updatedAt, ...run }) => ({
+        ...run,
+        ...(title === null ? {} : { title }),
+        ...(updatedAt === null ? {} : { updatedAt }),
+      }));
   }
 }
 

@@ -81,6 +81,8 @@ export interface DispatcherDeps {
   minutesRemaining: () => Promise<{ minutes: number | null; note?: string }>;
   now: () => Date;
   log: (line: string) => void;
+  /** Projet en pause (variable AGENTLAKE_PAUSED du dépôt). */
+  paused?: boolean;
 }
 
 export class NotAProjectError extends Error {
@@ -336,7 +338,9 @@ export async function runDispatch(ref: RepoRef, deps: DispatcherDeps): Promise<D
     minutesRemaining: minutes.minutes,
     estimateMinutes: (task) => costs.get(task.profile) ?? DEFAULT_ESTIMATE_MINUTES,
     mainChecks,
+    paused: deps.paused === true,
   });
+  if (deps.paused === true) log('Projet en pause (AGENTLAKE_PAUSED) : aucun agent ne sera lancé.');
   for (const line of plan.log) log(line);
 
   const applied: PassAction[] = [];
