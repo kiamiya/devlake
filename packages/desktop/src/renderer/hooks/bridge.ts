@@ -70,3 +70,9 @@ export function useTunnelAction() {
     invoke(action === 'open' ? 'tunnel:open' : action === 'close' ? 'tunnel:close' : 'tunnel:kill'),
   );
 }
+
+export function usePrepareClone() {
+  return useMutation({
+    mutationFn: (projectId: string) => invoke('bridge:prepare-clone', { projectId }),
+  });
+}

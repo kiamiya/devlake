@@ -9,6 +9,7 @@ import type {
   TunnelStateView,
 } from '../../../shared/ipc-contract.js';
 import { BridgeCard, BridgePanel, describeCall, TunnelCard } from './BridgePanel.js';
+import { PrepareClone } from './PrepareClone.js';
 
 const call: AuditEntryView = {
   at: '2026-11-21T10:00:00.000Z',
@@ -52,38 +53,45 @@ beforeEach(() => {
       ok: true,
       data: channel.startsWith('tunnel:')
         ? tunnelState
-        : channel === 'bridge:list'
-          ? [
-              bridge(),
-              bridge({
-                editor: 'unreal',
-                running: false,
-                port: null,
-                activeRun: null,
-                lastCall: null,
-                configured: false,
-                allowedTools: [],
-                configuredPort: 8766,
-              }),
-            ]
-          : channel === 'bridge:tools'
+        : channel === 'bridge:prepare-clone'
+          ? {
+              dir: 'D:/Clones/kiamiya__jeu',
+              created: true,
+              editor: 'unity',
+              warnings: ['Sérialisation des assets non forcée en texte.'],
+            }
+          : channel === 'bridge:list'
             ? [
-                { name: 'scene_list', description: 'Liste les scènes', allowed: true },
-                { name: 'run_script', description: '', allowed: false },
+                bridge(),
+                bridge({
+                  editor: 'unreal',
+                  running: false,
+                  port: null,
+                  activeRun: null,
+                  lastCall: null,
+                  configured: false,
+                  allowedTools: [],
+                  configuredPort: 8766,
+                }),
               ]
-            : channel === 'bridge:audit'
+            : channel === 'bridge:tools'
               ? [
-                  call,
-                  {
-                    ...call,
-                    tool: null,
-                    runId: null,
-                    repo: null,
-                    outcome: 'refused',
-                    detail: 'Jeton du pont expiré.',
-                  },
+                  { name: 'scene_list', description: 'Liste les scènes', allowed: true },
+                  { name: 'run_script', description: '', allowed: false },
                 ]
-              : bridge(),
+              : channel === 'bridge:audit'
+                ? [
+                    call,
+                    {
+                      ...call,
+                      tool: null,
+                      runId: null,
+                      repo: null,
+                      outcome: 'refused',
+                      detail: 'Jeton du pont expiré.',
+                    },
+                  ]
+                : bridge(),
     }),
   );
   (window as unknown as { agentlake: { invoke: Invoke } }).agentlake = { invoke };
@@ -213,5 +221,18 @@ describe('tunnel dans le cockpit', () => {
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith('tunnel:open', undefined);
     });
+  });
+});
+
+describe('clone de l’éditeur dans le cockpit', () => {
+  it('préparation : dossier à ouvrir dans l’éditeur et avertissements', async () => {
+    wrap(<PrepareClone projectId="kiamiya/jeu" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Préparer le clone de l’éditeur' }));
+    const status = await screen.findByRole('status');
+    expect(status.textContent).toContain(
+      'Clone créé : D:/Clones/kiamiya__jeu. Ouvre ce dossier dans Unity.',
+    );
+    expect(status.textContent).toContain('Sérialisation des assets non forcée en texte.');
+    expect(invoke).toHaveBeenCalledWith('bridge:prepare-clone', { projectId: 'kiamiya/jeu' });
   });
 });

@@ -2,14 +2,21 @@ import {
   auraCommandFrom,
   AuraBridge,
   connectStdioUpstream,
+  EditorSync,
+  prepareEditorClone,
   probeEditor,
+  type GitExec,
   type AuditEntry,
   type AuraCommand,
   type AuraUpstream,
   type BridgeStatus,
   type Editor,
 } from 'aura-bridge';
+import type { GitHubPort } from 'github';
+import { ProjectConfigSchema } from 'shared';
+import { parse } from 'yaml';
 import type { IntegrationStatus } from '../../../shared/ipc-contract.js';
+import { PROJECT_CONFIG_PATH } from '../../db/rebuild.js';
 import type { Repositories } from '../../db/repositories.js';
 import type { SecretVault } from '../../vault.js';
 
@@ -31,6 +38,10 @@ export interface BridgeServiceDeps {
   connectUpstream?: (command: AuraCommand) => Promise<AuraUpstream>;
   /** Port imposé (tests : 0 = port libre). */
   portOverride?: number;
+  /** GitHub (type des projets, pour préparer le clone de l'éditeur). */
+  github?: () => Promise<GitHubPort>;
+  /** Exécution de git (tests). */
+  git?: GitExec;
 }
 
 export interface BridgeView extends BridgeStatus {
@@ -92,6 +103,17 @@ export class BridgeService {
       connectUpstream: () => (this.deps.connectUpstream ?? connectStdioUpstream)(command),
       // Clone dédié ouvert dans l'éditeur : dossier des clones des réglages (T19).
       probe: () => probeEditor(this.deps.repos.settings.get().editorClonesDir, editor),
+      editorSync: new EditorSync({
+        editor,
+        currentClone: async () => {
+          const state = await probeEditor(this.deps.repos.settings.get().editorClonesDir, editor);
+          return state.open && state.clone !== null
+            ? { clone: state.clone, repo: state.repo }
+            : null;
+        },
+        token: () => this.deps.vault.get('github-token'),
+        ...(this.deps.git ? { git: this.deps.git } : {}),
+      }),
       onAudit: (entry) => {
         const list = this.audits.get(editor) ?? [];
         list.push(entry);
@@ -108,6 +130,43 @@ export class BridgeService {
     await this.bridges.get(editor)?.stop();
     this.bridges.delete(editor);
     return this.view(editor);
+  }
+
+  /**
+   * Prépare le clone dédié d'un projet de jeu dans le dossier des clones des réglages
+   * (distinct de la copie de travail de Kia) : clone ou mise à jour, Git LFS.
+   */
+  async prepareClone(
+    projectId: string,
+    remoteUrl?: string,
+  ): Promise<{ dir: string; created: boolean; editor: Editor; warnings: string[] }> {
+    const settings = this.deps.repos.settings.get();
+    if (settings.editorClonesDir === null)
+      throw new BridgeConfigError(
+        'Dossier des clones de l’éditeur absent : le choisir dans les réglages.',
+      );
+    const project = this.deps.repos.projects.list().find((p) => p.id === projectId);
+    if (!project) throw new BridgeConfigError(`Projet inconnu du cockpit : ${projectId}.`);
+    if (!this.deps.github) throw new BridgeConfigError('GitHub indisponible.');
+    const github = await this.deps.github();
+    const file = await github.getFile(
+      { owner: project.owner, repo: project.repo },
+      PROJECT_CONFIG_PATH,
+    );
+    const config = file ? ProjectConfigSchema.safeParse(parse(file.content)) : null;
+    const type = config?.success ? config.data.type : null;
+    if (type !== 'unity' && type !== 'unreal')
+      throw new BridgeConfigError(`${projectId} n’est pas un projet de jeu (Unity ou Unreal).`);
+    const result = await prepareEditorClone({
+      clonesRoot: settings.editorClonesDir,
+      owner: project.owner,
+      repo: project.repo,
+      editor: type,
+      token: await this.deps.vault.get('github-token'),
+      ...(this.deps.git ? { git: this.deps.git } : {}),
+      ...(remoteUrl ? { remoteUrl } : {}),
+    });
+    return { ...result, editor: type };
   }
 
   /** Port local d'un pont démarré (cible de la passerelle). */

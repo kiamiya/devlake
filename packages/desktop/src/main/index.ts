@@ -123,7 +123,11 @@ async function start(): Promise<void> {
   const { db, created } = openDatabase(join(app.getPath('userData'), 'cockpit.sqlite'));
   const repos = createRepositories(db);
   const vault = new SafeStorageVault(app.getPath('userData'), safeStorage);
-  const bridge = new BridgeService({ repos, vault });
+  const bridge: BridgeService = new BridgeService({
+    repos,
+    vault,
+    github: (): Promise<GitHubPort> => service.githubPort(),
+  });
   const service = new CockpitService({
     repos,
     vault,

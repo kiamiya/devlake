@@ -1,4 +1,8 @@
-import type { AuraUpstream } from 'aura-bridge';
+import type { AuraUpstream, GitExec } from 'aura-bridge';
+import { FakeGitHub } from 'github';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDatabase } from '../../db/database.js';
 import { createRepositories, type Repositories } from '../../db/repositories.js';
@@ -119,5 +123,71 @@ describe('ponts Aura du cockpit', () => {
       { name: 'outil_hors_aura', description: '', allowed: true },
       { name: 'scene_list', description: '', allowed: true },
     ]);
+  });
+});
+
+describe('clone dédié de l’éditeur', () => {
+  it('préparé pour un projet de jeu : clone authentifié, Git LFS ; refusé sinon', async () => {
+    const repos = createRepositories(openDatabase(':memory:').db);
+    const vault = new MemoryVault();
+    await vault.set('github-token', 'jeton-cockpit'); // gitleaks:allow
+    const github = new FakeGitHub({ actor: 'kiamiya' });
+    for (const [repo, type] of [
+      ['jeu', 'unreal'],
+      ['site', 'web'],
+    ] as const) {
+      github.seedRepository({ owner: 'kiamiya', repo });
+      await github.commitFiles(
+        { owner: 'kiamiya', repo },
+        {
+          branch: 'main',
+          message: 'p',
+          changes: [
+            {
+              path: '.agentlake/project.yml',
+              content: `type: ${type}\nqualityProfile: ${type}\nlimits:\n  maxAttempts: 3\nprofiles: [architect]\nexclusiveResources: []\nbridgeRequired: true\n`,
+            },
+          ],
+        },
+      );
+      repos.projects.upsert('kiamiya', repo, '2026-11-21T08:00:00.000Z');
+    }
+    const calls: string[][] = [];
+    const git: GitExec = (_cwd, args) => {
+      calls.push([...args]);
+      return Promise.resolve('');
+    };
+    const service = new BridgeService({ repos, vault, github: () => Promise.resolve(github), git });
+
+    await expect(service.prepareClone('kiamiya/jeu')).rejects.toThrow(
+      'Dossier des clones de l’éditeur absent',
+    );
+    const clonesRoot = mkdtempSync(join(tmpdir(), 'agentlake-clones-'));
+    try {
+      repos.settings.update({ editorClonesDir: clonesRoot });
+      await expect(service.prepareClone('kiamiya/site')).rejects.toThrow(
+        'n’est pas un projet de jeu',
+      );
+      await expect(service.prepareClone('kiamiya/inconnu')).rejects.toThrow('Projet inconnu');
+      const prepared = await service.prepareClone('kiamiya/jeu');
+      expect(prepared).toEqual({
+        dir: join(clonesRoot, 'kiamiya__jeu'),
+        created: true,
+        editor: 'unreal',
+        warnings: [],
+      });
+      const clone = calls.find((c) => c.includes('clone')) ?? [];
+      expect(clone.slice(-2)).toEqual([
+        'https://github.com/kiamiya/jeu.git',
+        join(clonesRoot, 'kiamiya__jeu'),
+      ]);
+      expect(clone[1]).toContain('extraheader=AUTHORIZATION: basic');
+      expect(calls).toContainEqual(['lfs', 'install', '--local']);
+      await expect(new BridgeService({ repos, vault }).prepareClone('kiamiya/jeu')).rejects.toThrow(
+        'GitHub indisponible',
+      );
+    } finally {
+      rmSync(clonesRoot, { recursive: true, force: true });
+    }
   });
 });

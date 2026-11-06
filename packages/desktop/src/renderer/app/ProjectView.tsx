@@ -4,6 +4,7 @@ import { PlanSection } from '../features/plan/PlanSection.js';
 import { QuestionsInbox } from '../features/questions/QuestionsInbox.js';
 import { Dashboard } from '../features/dashboard/Dashboard.js';
 import { RunsView } from '../features/runs/RunsView.js';
+import { PrepareClone } from '../features/bridge/PrepareClone.js';
 import { useRebootstrap } from '../hooks/projects.js';
 import { cn } from '../lib/utils.js';
 import { BootstrapSteps } from './NewProjectWizard.js';
@@ -64,6 +65,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
             </p>
           )}
           {rebootstrap.data && <BootstrapSteps report={rebootstrap.data} />}
+          <PrepareClone projectId={projectId} />
         </div>
       </aside>
       <section className="flex-1 overflow-auto p-6">

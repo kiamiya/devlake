@@ -22,7 +22,7 @@ import { PlanError, type PlanService } from './services/plan/plan-service.js';
 import { DashboardError, type DashboardService } from './services/dashboard/dashboard-service.js';
 import { BridgeConfigError, type BridgeService } from './services/bridge/bridge-service.js';
 import type { TunnelService } from './services/bridge/tunnel-service.js';
-import { TunnelError } from 'aura-bridge';
+import { EditorSyncError, TunnelError } from 'aura-bridge';
 import { AuraConfigError } from 'aura-bridge';
 import {
   EmptyAnswerError,
@@ -151,6 +151,8 @@ export function serviceHandlers(services: {
     'tunnel:open': () => tunnel.open(),
     'tunnel:close': () => tunnel.close(),
     'tunnel:kill': () => tunnel.kill(),
+    'bridge:prepare-clone': (value) =>
+      bridge.prepareClone(input('bridge:prepare-clone', value).projectId),
     'bridge:list': () => Promise.resolve(bridge.list()),
     'bridge:start': (value) => bridge.start(input('bridge:start', value).editor),
     'bridge:stop': (value) => bridge.stop(input('bridge:stop', value).editor),
@@ -195,6 +197,7 @@ export function toIpcError(error: unknown): IpcErrorPayload {
     [BridgeConfigError, 'BRIDGE_CONFIG'],
     [AuraConfigError, 'BRIDGE_CONFIG'],
     [TunnelError, 'TUNNEL_ERROR'],
+    [EditorSyncError, 'EDITOR_SYNC'],
   ];
   for (const [type, code] of known)
     if (error instanceof type) return { code, message: error.message };

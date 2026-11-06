@@ -424,6 +424,15 @@ export const IPC_CONTRACT = {
   'tunnel:open': { input: NoInput, output: TunnelStateSchema },
   'tunnel:close': { input: NoInput, output: TunnelStateSchema },
   'tunnel:kill': { input: NoInput, output: TunnelStateSchema },
+  'bridge:prepare-clone': {
+    input: z.object({ projectId: z.string() }),
+    output: z.object({
+      dir: z.string(),
+      created: z.boolean(),
+      editor: EditorSchema,
+      warnings: z.array(z.string()),
+    }),
+  },
   'runs:transcript': {
     input: RunRefSchema,
     output: z.object({ name: z.string(), text: z.string() }).nullable(),
