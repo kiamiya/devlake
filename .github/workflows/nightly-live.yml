@@ -7,6 +7,8 @@ name: AgentLake — @live nocturne
 # Configuration (dépôt devlake) :
 #   secrets   AGENTLAKE_SANDBOX_TOKEN (accès aux bacs à sable), CLAUDE_CODE_OAUTH_TOKEN
 #   variables AGENTLAKE_SANDBOX_REPO, AGENTLAKE_UNITY_SANDBOX_REPO, AGENTLAKE_LIVE_MODEL
+#             AGENTLAKE_LIVE_ENABLED = true pour activer la passe nocturne, une fois le reste
+#             configuré (sans elle, seul un lancement à la main exécute les tests).
 
 on:
   schedule:
@@ -22,6 +24,9 @@ concurrency:
 jobs:
   live:
     name: Tests @live sur le bac à sable
+    # Passe nocturne seulement si elle est activée : pas de fausse alerte tant que les bacs à
+    # sable ne sont pas configurés. Un lancement à la main tourne toujours.
+    if: github.event_name == 'workflow_dispatch' || vars.AGENTLAKE_LIVE_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:

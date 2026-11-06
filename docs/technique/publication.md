@@ -44,3 +44,12 @@ Sans certificat, les installeurs ne sont pas signés (SmartScreen et Gatekeeper 
 | `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | Notarisation Apple                                       |
 
 Hors périmètre : mise à jour automatique du cockpit (installer la nouvelle version par-dessus).
+
+## Tests @live nocturnes
+
+`.github/workflows/nightly-live.yml` lance chaque nuit les tests `@live` sur les bacs à sable, avec rapport (résumé du job, artefact) et une issue `agentlake:nightly` en cas d'échec. La passe nocturne ne tourne que si la variable `AGENTLAKE_LIVE_ENABLED` vaut `true` sur `kiamiya/devlake` ; à activer une fois configurés :
+
+- secrets `AGENTLAKE_SANDBOX_TOKEN` (accès aux bacs à sable) et `CLAUDE_CODE_OAUTH_TOKEN` ;
+- variables `AGENTLAKE_SANDBOX_REPO`, `AGENTLAKE_UNITY_SANDBOX_REPO`, `AGENTLAKE_LIVE_MODEL`.
+
+Un lancement à la main (**Actions** → « AgentLake — @live nocturne » → **Run workflow**) tourne toujours, activé ou non.
