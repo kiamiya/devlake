@@ -105,6 +105,32 @@ test.describe('cockpit', () => {
     await app.close();
   });
 
+  test('autres serveurs MCP du pont : ajout, refus d’un nom réservé, persistance', async () => {
+    let { app, page } = await launch(userData);
+    await openSettings(page);
+    await page.getByRole('button', { name: 'Ajouter un serveur MCP (Unreal)' }).click();
+    await page.getByLabel('Nom du serveur MCP 1 (Unreal)').fill('aura');
+    await page
+      .getByLabel('Configuration du serveur MCP 1 (Unreal)')
+      .fill('{ "url": "http://127.0.0.1:8000/mcp" }');
+    await page.getByRole('button', { name: 'Enregistrer les réglages' }).click();
+    await expect(page.getByRole('alert')).toContainText('Le nom « aura » est réservé');
+
+    await page.getByLabel('Nom du serveur MCP 1 (Unreal)').fill('unreal');
+    await page.getByRole('button', { name: 'Enregistrer les réglages' }).click();
+    await expect(page.getByText('Réglages enregistrés.')).toBeVisible();
+    // Le pont Unreal a désormais un serveur : il peut démarrer.
+    await expect(page.getByRole('list', { name: 'Serveurs MCP Unreal' })).toContainText('unreal');
+    await app.close();
+
+    ({ app, page } = await launch(userData));
+    await openSettings(page);
+    await expect(page.getByLabel('Nom du serveur MCP 1 (Unreal)')).toHaveValue('unreal');
+    await page.getByRole('button', { name: 'Retirer unreal' }).click();
+    await expect(page.getByLabel('Nom du serveur MCP 1 (Unreal)')).toHaveCount(0);
+    await app.close();
+  });
+
   test('refuse un réglage invalide avec un message clair', async () => {
     const { app, page } = await launch(userData);
     await openSettings(page);

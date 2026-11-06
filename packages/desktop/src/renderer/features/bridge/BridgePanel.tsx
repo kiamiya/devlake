@@ -185,9 +185,28 @@ export function BridgeCard({ bridge }: { bridge: BridgeViewData }) {
       </header>
       {!bridge.configured && (
         <p className="text-xs text-muted-foreground">
-          Colle d’abord la configuration MCP d’Aura ({EDITOR_LABELS[bridge.editor]}) dans les
-          réglages.
+          Colle d’abord la configuration MCP d’Aura ou d’un autre serveur (
+          {EDITOR_LABELS[bridge.editor]}) dans les réglages.
         </p>
+      )}
+      {bridge.servers.length > 0 && (
+        <ul
+          aria-label={`Serveurs MCP ${EDITOR_LABELS[bridge.editor]}`}
+          className="flex flex-wrap gap-2 text-xs"
+        >
+          {bridge.servers.map((server) => (
+            <li key={server.name} title={server.error ?? undefined}>
+              <Badge tone={server.connected ? 'ok' : bridge.running ? 'degraded' : 'absent'}>
+                {server.name}
+                {server.connected
+                  ? ' · connecté'
+                  : bridge.running
+                    ? ` · injoignable${server.error ? ` (${server.error})` : ''}`
+                    : ''}
+              </Badge>
+            </li>
+          ))}
+        </ul>
       )}
       <p className="text-sm">
         {bridge.activeRun

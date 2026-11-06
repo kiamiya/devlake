@@ -31,6 +31,7 @@ const bridge = (overrides: Partial<BridgeViewData> = {}): BridgeViewData => ({
   configured: true,
   allowedTools: ['scene_list'],
   configuredPort: 8765,
+  servers: [{ name: 'aura', connected: true, error: null }],
   ...overrides,
 });
 
@@ -158,7 +159,25 @@ describe('pont Aura dans le cockpit', () => {
     expect(
       screen.getByRole('button', { name: 'Démarrer le pont Unreal' }).hasAttribute('disabled'),
     ).toBe(true);
-    expect(screen.getByText(/Colle d’abord la configuration MCP d’Aura \(Unreal\)/)).toBeTruthy();
+    expect(
+      screen.getByText(/Colle d’abord la configuration MCP d’Aura ou d’un autre serveur/),
+    ).toBeTruthy();
+  });
+
+  it('serveurs MCP du pont : connectés, ou injoignables avec la raison', () => {
+    wrap(
+      <BridgeCard
+        bridge={bridge({
+          servers: [
+            { name: 'aura', connected: true, error: null },
+            { name: 'unity', connected: false, error: 'connexion refusée' },
+          ],
+        })}
+      />,
+    );
+    const list = screen.getByRole('list', { name: 'Serveurs MCP Unity' });
+    expect(list.textContent).toContain('aura · connecté');
+    expect(list.textContent).toContain('unity · injoignable (connexion refusée)');
   });
 
   it('démarrer un pont configuré', async () => {

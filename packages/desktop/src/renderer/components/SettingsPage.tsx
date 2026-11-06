@@ -14,6 +14,80 @@ import { ClaudeTokenSection } from './ClaudeTokenSection.js';
 import { Button } from './ui/button.js';
 import { Card, CardDescription, CardTitle, Input, Label, Textarea } from './ui/primitives.js';
 
+type ExtraServers = Settings['extraMcp']['unity'];
+
+/**
+ * Autres serveurs MCP du pont d'un éditeur (Unity MCP, Unreal MCP…) : nom (préfixe des
+ * outils, ex. `unity__…`) et configuration collée (commande stdio ou URL locale).
+ */
+function ExtraMcpServers({
+  editor,
+  servers,
+  onChange,
+}: {
+  editor: 'unity' | 'unreal';
+  servers: ExtraServers;
+  onChange: (servers: ExtraServers) => void;
+}) {
+  const label = editor === 'unity' ? 'Unity' : 'Unreal';
+  const update = (index: number, patch: Partial<ExtraServers[number]>) => {
+    onChange(servers.map((s, i) => (i === index ? { ...s, ...patch } : s)));
+  };
+  return (
+    <fieldset className="flex flex-col gap-2 rounded-md border border-border p-3">
+      <legend className="px-1 text-sm">Autres serveurs MCP — {label}</legend>
+      <p className="text-xs text-muted-foreground">
+        Relayés par le même pont ; leurs outils sont proposés aux agents sous le nom «
+        serveur__outil », à autoriser dans la liste blanche.
+      </p>
+      {servers.map((server, index) => (
+        <div key={index} className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <Input
+              aria-label={`Nom du serveur MCP ${String(index + 1)} (${label})`}
+              placeholder="unity"
+              value={server.name}
+              onChange={(e) => {
+                update(index, { name: e.target.value.trim().toLowerCase() });
+              }}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                onChange(servers.filter((_, i) => i !== index));
+              }}
+            >
+              Retirer {server.name || 'le serveur'}
+            </Button>
+          </div>
+          <Textarea
+            aria-label={`Configuration du serveur MCP ${String(index + 1)} (${label})`}
+            placeholder='{ "command": "uvx", "args": ["mcp-unity"] } ou { "url": "http://127.0.0.1:6400/mcp" }'
+            value={server.config}
+            onChange={(e) => {
+              update(index, { config: e.target.value });
+            }}
+          />
+        </div>
+      ))}
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="self-start"
+        disabled={servers.length >= 8}
+        onClick={() => {
+          onChange([...servers, { name: '', config: '' }]);
+        }}
+      >
+        Ajouter un serveur MCP ({label})
+      </Button>
+    </fieldset>
+  );
+}
+
 function Feedback({ error, success }: { error: unknown; success?: string | undefined }) {
   if (error instanceof Error) {
     return (
@@ -282,6 +356,13 @@ function SettingsForm({ initial }: { initial: Settings }) {
                     ...form.auraMcp,
                     [editor]: e.target.value.trim() === '' ? null : e.target.value,
                   });
+                }}
+              />
+              <ExtraMcpServers
+                editor={editor}
+                servers={form.extraMcp[editor]}
+                onChange={(servers) => {
+                  set('extraMcp', { ...form.extraMcp, [editor]: servers });
                 }}
               />
             </div>
