@@ -213,6 +213,34 @@ export type DashboardView = z.infer<typeof DashboardSchema>;
 
 const RunRefSchema = z.object({ projectId: z.string(), runId: z.number().int() });
 
+const EditorSchema = z.enum(['unity', 'unreal']);
+
+export const AuditEntrySchema = z.object({
+  at: z.string(),
+  editor: EditorSchema,
+  repo: z.string().nullable(),
+  runId: z.string().nullable(),
+  tool: z.string().nullable(),
+  durationMs: z.number(),
+  outcome: z.enum(['ok', 'error', 'refused']),
+  detail: z.string().nullable(),
+});
+export type AuditEntryView = z.infer<typeof AuditEntrySchema>;
+
+export const BridgeViewSchema = z.object({
+  editor: EditorSchema,
+  running: z.boolean(),
+  port: z.number().nullable(),
+  activeRun: z.object({ runId: z.string(), repo: z.string() }).nullable(),
+  lastCall: AuditEntrySchema.nullable(),
+  configured: z.boolean(),
+  allowedTools: z.array(z.string()),
+  configuredPort: z.number(),
+});
+export type BridgeViewData = z.infer<typeof BridgeViewSchema>;
+
+const EditorInput = z.object({ editor: EditorSchema });
+
 export const IPC_CONTRACT = {
   'settings:get': { input: NoInput, output: SettingsSchema },
   'settings:update': { input: SettingsPatchSchema, output: SettingsSchema },
@@ -369,6 +397,18 @@ export const IPC_CONTRACT = {
     output: z.object({ questionId: z.string() }),
   },
   'runs:logs': { input: RunRefSchema, output: z.object({ text: z.string() }) },
+  'bridge:list': { input: NoInput, output: z.array(BridgeViewSchema) },
+  'bridge:start': { input: EditorInput, output: BridgeViewSchema },
+  'bridge:stop': { input: EditorInput, output: BridgeViewSchema },
+  'bridge:tools': {
+    input: EditorInput,
+    output: z.array(z.object({ name: z.string(), description: z.string(), allowed: z.boolean() })),
+  },
+  'bridge:set-tools': {
+    input: z.object({ editor: EditorSchema, tools: z.array(z.string().trim().min(1)) }),
+    output: BridgeViewSchema,
+  },
+  'bridge:audit': { input: EditorInput, output: z.array(AuditEntrySchema) },
   'runs:transcript': {
     input: RunRefSchema,
     output: z.object({ name: z.string(), text: z.string() }).nullable(),

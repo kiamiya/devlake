@@ -22,6 +22,7 @@ import {
 } from './ipc.js';
 import { MemoryVault, VaultUnavailableError } from './vault.js';
 import { DashboardService } from './services/dashboard/dashboard-service.js';
+import { BridgeService } from './services/bridge/bridge-service.js';
 import {
   QuestionsService,
   type QuestionNotification,
@@ -89,6 +90,7 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
         github: () => service.githubPort(),
         now: () => new Date('2026-11-06T12:00:00.000Z'),
       }),
+      bridge: new BridgeService({ repos, vault }),
     }),
     vault,
     repos,

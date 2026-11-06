@@ -9,6 +9,7 @@ import {
   useTestToken,
   useUpdateSettings,
 } from '../hooks/queries.js';
+import { BridgePanel } from '../features/bridge/BridgePanel.js';
 import { ClaudeTokenSection } from './ClaudeTokenSection.js';
 import { Button } from './ui/button.js';
 import { Card, CardDescription, CardTitle, Input, Label, Textarea } from './ui/primitives.js';
@@ -278,6 +279,7 @@ export function SettingsPage() {
       <TokenSection />
       <ClaudeTokenSection />
       {data ? <SettingsForm initial={data} /> : <Feedback error={error} />}
+      <BridgePanel />
     </div>
   );
 }

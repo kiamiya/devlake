@@ -14,6 +14,18 @@ const AuraMcpBlockSchema = z
   }, 'Le bloc collé depuis Aura doit être un objet JSON valide.')
   .nullable();
 
+/** Réglages d'un pont Aura (un par éditeur). */
+const BridgeSettingsSchema = z.object({
+  /** Port local du pont (127.0.0.1). */
+  port: z
+    .number()
+    .int('Le port doit être un entier.')
+    .min(1024, 'Port entre 1024 et 65535.')
+    .max(65535, 'Port entre 1024 et 65535.'),
+  /** Liste blanche des outils Aura que les agents de ce profil peuvent appeler. */
+  allowedTools: z.array(z.string().trim().min(1)),
+});
+
 export const SettingsSchema = z.object({
   /** Compte GitHub des projets. */
   githubAccount: z
@@ -49,6 +61,8 @@ export const SettingsSchema = z.object({
     .regex(/^[A-Za-z0-9._-]+$/, 'Version invalide : lettres, chiffres, « . », « _ » ou « - ».'),
   /** Configurations MCP d'Aura, collées telles quelles. */
   auraMcp: z.object({ unity: AuraMcpBlockSchema, unreal: AuraMcpBlockSchema }),
+  /** Ponts Aura : port et liste blanche d'outils, par éditeur. */
+  auraBridge: z.object({ unity: BridgeSettingsSchema, unreal: BridgeSettingsSchema }),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 
@@ -62,6 +76,11 @@ export const DEFAULT_SETTINGS: Settings = {
   workflowsVersion: 'v1',
   maxImportMegabytes: 50,
   auraMcp: { unity: null, unreal: null },
+  // Liste blanche vide par défaut : aucun outil Aura n'est ouvert tant que Kia ne l'a pas choisi.
+  auraBridge: {
+    unity: { port: 8765, allowedTools: [] },
+    unreal: { port: 8766, allowedTools: [] },
+  },
 };
 
 export const SettingsPatchSchema = SettingsSchema.partial();

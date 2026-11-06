@@ -16,6 +16,7 @@ import { systemGit, type Git } from './git.js';
 import { prepareAgent, type Prepared } from './prepare.js';
 import { profileEnvFrom } from './profile.js';
 import { RESUME_REASONS } from './resume.js';
+import { BRIDGE_TOKEN_TTL_SECONDS, signBridgeToken } from 'shared/bridge-token';
 
 const repository = z
   .string()
@@ -81,8 +82,34 @@ export interface CliDeps {
   readText: (path: string) => Promise<string | null>;
   appendText: (path: string, text: string) => Promise<void>;
   writeText: (path: string, text: string) => Promise<void>;
+  /** Horloge (expiration du jeton du pont). */
+  now?: () => Date;
   /** Journal du job (commandes `::add-mask::`). */
   log: (line: string) => void;
+}
+
+/**
+ * Jeton du pont Aura pour un agent Unity ou Unreal : signé ici avec `AURA_BRIDGE_SECRET`
+ * (dépôt, run, profil, expiration à 2 h), jamais écrit dans le dépôt.
+ */
+export function withBridgeToken(env: NodeJS.ProcessEnv, now: Date): NodeJS.ProcessEnv {
+  const secret = env.AURA_BRIDGE_SECRET ?? '';
+  const profile = env.PROFILE;
+  const repo = env.GITHUB_REPOSITORY;
+  const runId = env.GITHUB_RUN_ID;
+  if (
+    secret === '' ||
+    (env.AURA_BRIDGE_TOKEN ?? '') !== '' ||
+    (profile !== 'unity' && profile !== 'unreal') ||
+    repo === undefined ||
+    runId === undefined
+  )
+    return env;
+  const token = signBridgeToken(
+    { repo, runId, profile, exp: Math.floor(now.getTime() / 1000) + BRIDGE_TOKEN_TTL_SECONDS },
+    secret,
+  );
+  return { ...env, AURA_BRIDGE_TOKEN: token };
 }
 
 export async function runPrepare(env: NodeJS.ProcessEnv, deps: CliDeps): Promise<Prepared> {
@@ -96,7 +123,7 @@ export async function runPrepare(env: NodeJS.ProcessEnv, deps: CliDeps): Promise
       profileId: e.PROFILE,
       attempt: e.ATTEMPT,
       reason: e.RESUME_REASON,
-      profileEnv: profileEnvFrom(env),
+      profileEnv: profileEnvFrom(withBridgeToken(env, deps.now?.() ?? new Date())),
       mcpConfigPath,
     },
     {

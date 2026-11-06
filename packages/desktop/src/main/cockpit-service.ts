@@ -19,6 +19,8 @@ export interface CockpitDeps {
   vault: SecretVault;
   /** Fabrique le port GitHub à partir du jeton. */
   github: (token: string) => GitHubPort;
+  /** État des ponts Aura (absent tant que le cockpit n'en démarre aucun). */
+  bridgeStatus?: () => IntegrationStatus;
 }
 
 type GitHubCheck =
@@ -115,7 +117,7 @@ export class CockpitService {
 
   async getStatus(): Promise<IntegrationStatus[]> {
     const token = await this.deps.vault.get('github-token');
-    return [this.githubStatus(token !== null), auraStatus()];
+    return [this.githubStatus(token !== null), this.deps.bridgeStatus?.() ?? auraStatus()];
   }
 
   private githubStatus(hasToken: boolean): IntegrationStatus {
@@ -155,6 +157,6 @@ function auraStatus(): IntegrationStatus {
     id: 'aura',
     label: 'Pont Aura',
     state: 'absent',
-    detail: 'Pas encore disponible (tâche T17).',
+    detail: 'Aucun pont démarré.',
   };
 }

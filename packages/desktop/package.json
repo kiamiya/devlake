@@ -17,6 +17,7 @@
     "@radix-ui/react-slot": "^1.5.0",
     "@tanstack/react-query": "^5.106.1",
     "@xyflow/react": "^12.12.1",
+    "aura-bridge": "*",
     "better-sqlite3": "^13.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
