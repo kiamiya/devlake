@@ -11,14 +11,12 @@ import {
   useStopBridge,
   useTunnel,
   useTunnelAction,
+  EDITOR_LABELS,
   type Editor,
 } from '../../hooks/bridge.js';
+import { useSettings } from '../../hooks/queries.js';
+import { BridgeChecklist } from './McpGuide.js';
 
-const EDITOR_LABELS: Record<Editor, string> = {
-  unity: 'Unity',
-  unreal: 'Unreal',
-  blender: 'Blender',
-};
 const OUTCOME_LABELS: Record<AuditEntryView['outcome'], string> = {
   ok: 'réussi',
   error: 'erreur',
@@ -148,6 +146,8 @@ function AuditLog({ editor }: { editor: Editor }) {
 export function BridgeCard({ bridge }: { bridge: BridgeViewData }) {
   const start = useStartBridge();
   const stop = useStopBridge();
+  const settings = useSettings();
+  const tunnel = useTunnel();
   const error = start.error ?? stop.error;
   return (
     <section
@@ -187,6 +187,11 @@ export function BridgeCard({ bridge }: { bridge: BridgeViewData }) {
           )}
         </div>
       </header>
+      <BridgeChecklist
+        bridge={bridge}
+        clonesDir={settings.data?.editorClonesDir ?? null}
+        tunnel={tunnel.data ?? null}
+      />
       {!bridge.configured && (
         <p className="text-xs text-muted-foreground">
           Colle d’abord la configuration MCP d’Aura ou d’un autre serveur (

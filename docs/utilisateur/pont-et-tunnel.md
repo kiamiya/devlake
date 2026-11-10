@@ -2,6 +2,8 @@
 
 Les agents de jeu tournent dans GitHub Actions, mais l'éditeur Unity ou Unreal est sur ton poste. Le **pont Aura** relaie le serveur MCP d'Aura vers les agents, à travers un **tunnel** HTTPS ; un seul agent tient l'éditeur à la fois.
 
+**Dans le cockpit** : sous chaque éditeur, **Réglages → Éditeurs et Aura** propose l'encadré « Comment brancher un serveur MCP » (étapes et exemples de configuration), et chaque pont du panneau « Pont Aura » affiche une **vérification du branchement** cochée d'après l'état réel : configuration collée, pont démarré, serveurs connectés (avec l'erreur sinon), outils autorisés, dossier des clones, éditeur ouvert sur le clone (à vérifier toi-même) et tunnel.
+
 ## Prérequis
 
 - Aura installé dans l'éditeur, avec son écran **MCP Configuration**.

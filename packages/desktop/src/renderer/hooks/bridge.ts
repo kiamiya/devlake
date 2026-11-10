@@ -3,6 +3,13 @@ import { invoke } from '../lib/ipc.js';
 
 import type { EditorId } from 'shared';
 
+/** Libellés des éditeurs dans le cockpit. */
+export const EDITOR_LABELS: Record<EditorId, string> = {
+  unity: 'Unity',
+  unreal: 'Unreal',
+  blender: 'Blender',
+};
+
 export type Editor = EditorId;
 
 const KEY = ['bridge'] as const;
