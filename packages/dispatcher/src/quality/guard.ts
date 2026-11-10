@@ -50,6 +50,8 @@ export async function runTestsGuard(
   github: GitHubPort,
   ref: RepoRef,
   prNumber: number,
+  /** Compte de Kia, seul à pouvoir autoriser ; absent = propriétaire du dépôt. */
+  account: string = ref.owner,
 ): Promise<GuardResult> {
   const pr = await github.getPullRequest(ref, prNumber);
   const files = await github.listPullRequestFiles(ref, prNumber);
@@ -63,7 +65,7 @@ export async function runTestsGuard(
     if (issue === null) {
       reasons.push(`Tests existants modifiés sans tâche liée : ${list.join(', ')}.`);
     } else {
-      const decision = await guardAnswer(github, ref, issue, prNumber);
+      const decision = await guardAnswer(github, ref, issue, prNumber, account);
       if (decision === 'refused') {
         reasons.push(`Kia a refusé la modification des tests existants : ${list.join(', ')}.`);
         await refuse(github, ref, issue, pr.number, pr.headSha, list);
@@ -97,6 +99,7 @@ async function guardAnswer(
   ref: RepoRef,
   issue: number,
   prNumber: number,
+  account: string,
 ): Promise<'authorized' | 'refused' | 'pending' | null> {
   const id = guardQuestionId(prNumber);
   const comments = await github.listComments(ref, issue);
@@ -107,7 +110,7 @@ async function guardAnswer(
   if (asked === -1) return null;
   const answers = comments
     .slice(asked + 1)
-    .filter((c) => c.author.toLowerCase() === ref.owner.toLowerCase())
+    .filter((c) => c.author.toLowerCase() === account.toLowerCase())
     .map((c) => parseAnswerComment(c.body))
     .flatMap((a) => (a.ok && a.value.id === id ? [guardDecision(a.value.text)] : []))
     .filter((d) => d !== null);

@@ -31,6 +31,8 @@ export interface PrepareInput {
   profileEnv?: ProfileEnv;
   /** Fichier, hors du dépôt, où le CLI écrira la configuration MCP. */
   mcpConfigPath?: string;
+  /** Compte de Kia (variable AGENTLAKE_OWNER) ; absent = propriétaire du dépôt. */
+  account?: string;
 }
 
 export interface PrepareDeps {
@@ -98,6 +100,7 @@ export async function prepareAgent(input: PrepareInput, deps: PrepareDeps): Prom
     reason: input.reason,
     branch,
     attempt: input.attempt,
+    ...(input.account !== undefined ? { account: input.account } : {}),
   });
   // Réponse promue en décision : ajoutée à decisions.md sur la branche de la tâche,
   // avant la lecture du contexte (l'agent la voit) ; elle arrive sur main avec la PR.
@@ -154,5 +157,10 @@ async function qualityGate(
   const parsed = ProjectConfigSchema.safeParse(parse(text));
   if (!parsed.success) return undefined;
   const profile = parsed.data.qualityProfile;
-  return { profile, checks: ciChecksFor(profile), templatesDir: `${templatesRoot}/${profile}/` };
+  return {
+    profile,
+    checks: ciChecksFor(profile),
+    templatesDir: `${templatesRoot}/${profile}/`,
+    ...(parsed.data.adopted === true ? { adopted: true } : {}),
+  };
 }

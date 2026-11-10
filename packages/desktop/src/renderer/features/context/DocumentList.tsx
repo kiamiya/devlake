@@ -100,19 +100,25 @@ export function DocumentList(props: DocumentListProps) {
             <span className="text-xs text-muted-foreground">
               {formatDate(entry.importedAt)} · {formatSize(entry.size)}
             </span>
-            <select
-              aria-label={`Rôle de ${entry.source}`}
-              className="ml-auto h-8 rounded-md border border-input bg-transparent px-2 text-sm"
-              value={entry.role}
-              disabled={busy}
-              onChange={(e) => {
-                props.onRole(entry.path, e.target.value as DocumentRole);
-              }}
-            >
-              <option value="brief">Brief</option>
-              <option value="gdd">GDD</option>
-              <option value="annex">Annexe</option>
-            </select>
+            {entry.role === 'inventory' ? (
+              <span className="ml-auto rounded-md border border-border px-2 py-1 text-sm">
+                État des lieux
+              </span>
+            ) : (
+              <select
+                aria-label={`Rôle de ${entry.source}`}
+                className="ml-auto h-8 rounded-md border border-input bg-transparent px-2 text-sm"
+                value={entry.role}
+                disabled={busy}
+                onChange={(e) => {
+                  props.onRole(entry.path, e.target.value as DocumentRole);
+                }}
+              >
+                <option value="brief">Brief</option>
+                <option value="gdd">GDD</option>
+                <option value="annex">Annexe</option>
+              </select>
+            )}
             <Button
               size="sm"
               variant="outline"

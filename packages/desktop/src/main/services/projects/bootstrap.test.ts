@@ -59,6 +59,7 @@ describe('bootstrap d’un projet', () => {
       'files',
       'branch-protection',
       'secrets',
+      'variables',
     ]);
     expect(report.steps.every((s) => s.status !== 'unchanged')).toBe(true);
 
@@ -98,6 +99,7 @@ describe('bootstrap d’un projet', () => {
       requiredChecks: requiredChecksFor('web'),
       enforceAdmins: false,
       requirePullRequest: true,
+      requiredApprovals: 0,
     });
     expect(github.secretValue(ref, 'CLAUDE_CODE_OAUTH_TOKEN')).toBe(CLAUDE_TOKEN);
     expect(github.secretValue(ref, 'AURA_BRIDGE_SECRET')).toBeUndefined();
@@ -137,6 +139,7 @@ describe('bootstrap d’un projet', () => {
       { step: 'files', status: 'unchanged' },
       { step: 'branch-protection', status: 'created' },
       { step: 'secrets', status: 'created' },
+      { step: 'variables', status: 'created' },
     ]);
     expect(github.state(ref).commits.size).toBe(commits);
     expect(protect).toHaveBeenCalledTimes(2);
@@ -234,10 +237,79 @@ describe('bootstrap d’un projet', () => {
     expect(await auraBridgeSecret(vault)).toBe(secret);
   });
 
+  it('compte de Kia publié dans AGENTLAKE_OWNER', async () => {
+    const { github, deps } = await setup();
+    await bootstrapProject(web, deps);
+    expect(await github.getRepositoryVariable(ref, 'AGENTLAKE_OWNER')).toBe('kiamiya');
+    const again = await bootstrapProject(web, deps);
+    expect(again.steps.find((s) => s.step === 'variables')?.status).toBe('unchanged');
+  });
+
   it('refuse de commencer sans jeton Claude Code', async () => {
     const { github, deps } = await setup({ claudeToken: false });
     await expect(bootstrapProject(web, deps)).rejects.toBeInstanceOf(ClaudeTokenMissingError);
     expect(await github.listRepositories()).toEqual([]);
+  });
+});
+
+describe('bootstrap d’un projet repris', () => {
+  const studio = { owner: 'studio', repo: 'jeu' };
+  const jeu: BootstrapInput = {
+    name: 'jeu',
+    owner: 'studio',
+    type: 'unity',
+    private: true,
+    qualityProfile: 'unity',
+    adopted: true,
+  };
+
+  it('dépôt d’organisation : jamais créé, CI et .gitattributes existants gardés', async () => {
+    const { github, deps } = await setup();
+    await expect(bootstrapProject(jeu, deps)).rejects.toThrow(
+      'Dépôt introuvable ou inaccessible : studio/jeu.',
+    );
+    expect(await github.listAdministrableRepositories()).toEqual([]);
+
+    github.seedRepository(studio, { admin: true, private: true });
+    await github.commitFiles(studio, {
+      branch: 'main',
+      message: 'existant',
+      changes: [
+        { path: '.gitattributes', content: '*.psd filter=lfs diff=lfs merge=lfs -text\n' },
+        { path: '.github/workflows/ci.yml', content: 'name: CI\n' },
+      ],
+    });
+    github.seedBranchProtection(studio, 'main', {
+      requiredChecks: ['build'],
+      requiredApprovals: 2,
+    });
+
+    const report = await bootstrapProject(jeu, deps);
+    expect(report.repository).toEqual(studio);
+    expect(report.steps.find((s) => s.step === 'repository')?.status).toBe('unchanged');
+
+    const attributes = (await github.getFile(studio, '.gitattributes'))?.content ?? '';
+    expect(attributes.startsWith('*.psd filter=lfs diff=lfs merge=lfs -text\n')).toBe(true);
+    expect(attributes).toContain('*.blend filter=lfs');
+    expect(attributes.match(/\*\.psd filter=lfs/g)).toHaveLength(1);
+    expect((await github.getFile(studio, '.github/workflows/ci.yml'))?.content).toBe('name: CI\n');
+
+    const protection = await github.getBranchProtection(studio, 'main');
+    expect(protection?.requiredApprovals).toBe(0);
+    expect([...(protection?.requiredChecks ?? [])].sort()).toEqual(
+      [...new Set(['build', ...requiredChecksFor('unity')])].sort(),
+    );
+    expect(protection?.requiredChecks).toContain('build');
+
+    const config = ProjectConfigSchema.parse(
+      parse((await github.getFile(studio, '.agentlake/project.yml'))?.content ?? ''),
+    );
+    expect(config.adopted).toBe(true);
+    // Le compte de Kia, pas l'organisation, déclenche le planificateur et répond aux agents.
+    expect(await github.getRepositoryVariable(studio, 'AGENTLAKE_OWNER')).toBe('kiamiya');
+
+    const again = await bootstrapProject(jeu, deps);
+    expect(again.steps.every((s) => s.status === 'unchanged')).toBe(true);
   });
 });
 

@@ -11,6 +11,7 @@ export interface Prompts {
   clarification: string;
   decoupe: string;
   correction: string;
+  inventaire: string;
   types: Record<ProjectType, string>;
 }
 
@@ -24,6 +25,7 @@ export async function loadPrompts(dir: string = DEFAULT_PROMPTS_DIR): Promise<Pr
     clarification: await read('clarification.md'),
     decoupe: await read('decoupe.md'),
     correction: await read('correction.md'),
+    inventaire: await read('inventaire.md'),
     types: Object.fromEntries(types) as Record<ProjectType, string>,
   };
 }

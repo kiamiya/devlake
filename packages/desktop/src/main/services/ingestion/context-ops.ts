@@ -67,6 +67,10 @@ export async function setDocumentRole(
   const index = await readContextIndex(github, ref, MAIN);
   const entry = documentEntry(index, path);
   if (entry.role === role) return null;
+  if (entry.role === 'inventory')
+    throw new Error(
+      'L’état des lieux garde son rôle : le retirer puis le relancer pour le refaire.',
+    );
 
   const files = new Map(index.files.map((f) => [f.path, f]));
   const moves: { from: ContextEntry; to: string; role: ImportRole }[] = [];

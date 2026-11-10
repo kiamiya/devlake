@@ -91,6 +91,8 @@ export interface DispatcherDeps {
   log: (line: string) => void;
   /** Projet en pause (variable AGENTLAKE_PAUSED du dépôt). */
   paused?: boolean;
+  /** Compte de Kia (variable AGENTLAKE_OWNER) ; absent = propriétaire du dépôt. */
+  account?: string;
 }
 
 export class NotAProjectError extends Error {
@@ -215,7 +217,10 @@ async function readQuestionThreads(
   const { ref, deps } = ctx;
   for (const view of views) {
     if (!view.open || (view.state !== 'awaiting-answer' && view.state !== 'escalated')) continue;
-    const thread = readThread(await deps.github.listComments(ref, view.number), ref.owner);
+    const thread = readThread(
+      await deps.github.listComments(ref, view.number),
+      deps.account ?? ref.owner,
+    );
     // Aucune question bloquante dans le fil : état incohérent, corrigé par le rattrapage.
     view.questionMissing = thread.pending === null;
     const label = `#${String(view.number)} ${view.task.id}`;
@@ -230,7 +235,7 @@ async function readQuestionThreads(
       await deps.github.createComment(
         ref,
         view.number,
-        reminderComment(ref.owner, thread.pending.question, reminderHours),
+        reminderComment(deps.account ?? ref.owner, thread.pending.question, reminderHours),
       );
       deps.log(`${label} : rappel posté pour ${thread.pending.question.id}.`);
     }
@@ -426,7 +431,7 @@ async function alertUnprotectedMain(
     cadrage.number,
     [
       PROTECTION_ALERT_MARKER,
-      `@${ref.owner} **Protection de \`main\` incomplète** : ${problems.join(' ; ')}.`,
+      `@${deps.account ?? ref.owner} **Protection de \`main\` incomplète** : ${problems.join(' ; ')}.`,
       '',
       'Aucun agent n’est lancé tant qu’elle n’est pas rétablie. Relance le bootstrap du projet depuis le cockpit (il repose la protection), ou rétablis-la dans les réglages du dépôt.',
     ].join('\n'),

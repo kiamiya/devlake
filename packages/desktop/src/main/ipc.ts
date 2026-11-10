@@ -12,7 +12,13 @@ import {
 import { DroppedFilesSchema, IPC_CONTRACT } from '../shared/ipc-contract.js';
 import { NoTokenError, type CockpitService } from './cockpit-service.js';
 import { NotAProjectError, UnknownProjectError, type ProjectsService } from './projects-service.js';
-import { BootstrapStepError, ClaudeTokenMissingError } from './services/projects/bootstrap.js';
+import {
+  BootstrapStepError,
+  ClaudeTokenMissingError,
+  RepositoryNotFoundError,
+} from './services/projects/bootstrap.js';
+import { AdoptionError, type AdoptionService } from './services/projects/adoption.js';
+import { InventoryError, type InventoryService } from './services/projects/inventory.js';
 import type { ProjectCreationService } from './services/projects/creation-service.js';
 import {
   PlannerModelMissingError,
@@ -55,6 +61,8 @@ export function serviceHandlers(services: {
   bridge: BridgeService;
   tunnel: TunnelService;
   adhoc: AdhocTaskService;
+  adoption: AdoptionService;
+  inventory: InventoryService;
 }): Record<IpcChannel, Handler> {
   const {
     cockpit: service,
@@ -68,6 +76,8 @@ export function serviceHandlers(services: {
     bridge,
     tunnel,
     adhoc,
+    adoption,
+    inventory,
   } = services;
   const input = <C extends IpcChannel>(_channel: C, value: unknown) =>
     value as z.output<(typeof IPC_CONTRACT)[C]['input']>;
@@ -91,6 +101,17 @@ export function serviceHandlers(services: {
     'claude-token:set': (value) => service.setClaudeToken(input('claude-token:set', value).token),
     'claude-token:clear': () => service.clearClaudeToken(),
     'projects:create': (value) => creation.create(input('projects:create', value)),
+    'projects:adoptable': () => adoption.candidates(),
+    'projects:detect': (value) => {
+      const { owner, repo, type } = input('projects:detect', value);
+      return adoption.detect({ owner, repo }, type);
+    },
+    'projects:adopt': (value) => adoption.adopt(input('projects:adopt', value)),
+    'inventory:get': (value) => inventory.get(input('inventory:get', value).projectId),
+    'inventory:validate': (value) => {
+      const { projectId, version } = input('inventory:validate', value);
+      return inventory.validate(projectId, version);
+    },
     'context:choose-files': (value) =>
       context.chooseFiles(input('context:choose-files', value).projectId),
     'context:import': (value) => context.import(input('context:import', value)),
@@ -205,6 +226,9 @@ export function toIpcError(error: unknown): IpcErrorPayload {
     [AuraConfigError, 'BRIDGE_CONFIG'],
     [TunnelError, 'TUNNEL_ERROR'],
     [EditorSyncError, 'EDITOR_SYNC'],
+    [AdoptionError, 'ADOPTION_ERROR'],
+    [RepositoryNotFoundError, 'REPOSITORY_NOT_FOUND'],
+    [InventoryError, 'INVENTORY_ERROR'],
   ];
   for (const [type, code] of known)
     if (error instanceof type) return { code, message: error.message };

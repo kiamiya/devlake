@@ -37,6 +37,48 @@ export function describeGitHubContract(
         fake.seedRepository({ owner: 'quelquun', repo: 'pas-a-moi' });
         expect((await port.listRepositories()).map((r) => r.name)).toEqual(['autre', 'contrat']);
       });
+
+      it('liste les dépôts administrés, organisations comprises, sans les archivés', async () => {
+        fake.seedRepository({ owner: 'studio', repo: 'jeu' }, { admin: true });
+        fake.seedRepository({ owner: 'studio', repo: 'lecture' }, { admin: false });
+        fake.seedRepository({ owner: 'kiamiya', repo: 'vieux' }, { archived: true });
+        expect(
+          (await port.listAdministrableRepositories()).map((r) => `${r.owner}/${r.name}`),
+        ).toEqual(['kiamiya/contrat', 'studio/jeu']);
+      });
+    });
+
+    describe('arbre et branches', () => {
+      it('liste les fichiers d’une branche avec leur taille', async () => {
+        await port.commitFiles(ref, {
+          branch: 'main',
+          message: 'f',
+          changes: [{ path: 'Assets/Art/caisse.fbx', content: 'x'.repeat(2048) }],
+        });
+        const tree = await port.listTree(ref, 'main');
+        expect(tree.truncated).toBe(false);
+        expect(tree.entries).toContainEqual({ path: 'Assets/Art/caisse.fbx', size: 2048 });
+        expect(tree.entries.map((e) => e.path)).toContain('README.md');
+      });
+
+      it('renomme une branche ; sa protection suit, ainsi que la branche par défaut', async () => {
+        const legacy = { owner: 'kiamiya', repo: 'ancien' };
+        fake.seedRepository(legacy, { defaultBranch: 'master' });
+        fake.seedBranchProtection(legacy, 'master', {
+          requiredApprovals: 2,
+          requiredChecks: ['ci'],
+        });
+        expect(await port.getBranchProtection(legacy, 'master')).toMatchObject({
+          requiredApprovals: 2,
+          requiredChecks: ['ci'],
+        });
+        await port.renameBranch(legacy, 'master', 'main');
+        expect(await port.branchExists(legacy, 'master')).toBe(false);
+        expect((await port.getRepository(legacy)).defaultBranch).toBe('main');
+        expect(await port.getBranchProtection(legacy, 'main')).toMatchObject({
+          requiredApprovals: 2,
+        });
+      });
     });
 
     describe('dépôts', () => {
@@ -79,6 +121,7 @@ export function describeGitHubContract(
           requiredChecks: ['lint', 'tests'],
           enforceAdmins: true,
           requirePullRequest: true,
+          requiredApprovals: 0,
         });
         // Vue d'un jeton en lecture (dispatcher) : protégée, avec ses checks.
         expect(await port.getBranchProtectionSummary(ref, 'main')).toEqual({

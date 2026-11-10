@@ -20,7 +20,7 @@ export class PlannerLaunchService {
 
   async start(input: {
     projectId: string;
-    mode: 'auto' | 'regenerate';
+    mode: 'auto' | 'regenerate' | 'inventory';
     instruction?: string | undefined;
   }): Promise<{ dispatched: true }> {
     const project = this.repos.projects.list().find((p) => p.id === input.projectId);

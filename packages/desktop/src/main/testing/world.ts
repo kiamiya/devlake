@@ -87,6 +87,7 @@ const NO_PROMPTS: Prompts = {
   clarification: '',
   decoupe: '',
   correction: '',
+  inventaire: '',
   types: Object.fromEntries(PROJECT_TYPES.map((t) => [t, ''])) as Prompts['types'],
 };
 

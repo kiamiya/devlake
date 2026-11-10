@@ -12,7 +12,7 @@ import { Card, CardDescription, CardTitle, Input, Label } from '../components/ui
 import { useTabs } from '../features/tabs/store.js';
 import { useCreateProject } from '../hooks/projects.js';
 
-const TYPE_LABELS: Record<ProjectType, string> = {
+export const TYPE_LABELS: Record<ProjectType, string> = {
   web: 'Web (React, Supabase, Vercel)',
   backend: 'Backend',
   mobile: 'Mobile',
@@ -30,6 +30,7 @@ const STEP_LABELS: Record<string, string> = {
   files: 'project.yml, workflows d’appel, Git LFS',
   'branch-protection': 'Protection de main',
   secrets: 'Secrets',
+  variables: 'Variable AGENTLAKE_OWNER (ton compte)',
 };
 
 const STATUS_LABELS = { created: 'créé', updated: 'complété', unchanged: 'déjà en place' } as const;

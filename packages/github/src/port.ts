@@ -24,6 +24,7 @@ import type {
   PullRequestFile,
   RepoRef,
   Repository,
+  RepositoryTree,
   UpdateIssueInput,
   UpdatePullRequestInput,
   WorkflowJob,
@@ -40,6 +41,11 @@ export interface GitHubPort {
   getAuthenticatedUser(): Promise<AuthenticatedUser>;
   /** Dépôts dont le compte authentifié est propriétaire. */
   listRepositories(): Promise<Repository[]>;
+  /**
+   * Dépôts non archivés que le compte administre : les siens et ceux des organisations
+   * dont il est administrateur du dépôt (droits nécessaires au bootstrap).
+   */
+  listAdministrableRepositories(): Promise<Repository[]>;
 
   // Dépôts
   createRepository(input: CreateRepositoryInput): Promise<Repository>;
@@ -48,6 +54,8 @@ export interface GitHubPort {
   configureMergeSettings(ref: RepoRef): Promise<Repository>;
   protectBranch(ref: RepoRef, branch: string, input: BranchProtectionInput): Promise<void>;
   getBranchProtection(ref: RepoRef, branch: string): Promise<BranchProtection | null>;
+  /** Renomme une branche (GitHub redirige l'ancien nom et repointe les PR ouvertes). */
+  renameBranch(ref: RepoRef, branch: string, newName: string): Promise<void>;
   /** Protection lisible avec `contents: read` (dispatcher) ; null si la branche n'existe pas. */
   getBranchProtectionSummary(ref: RepoRef, branch: string): Promise<BranchProtectionSummary | null>;
   getCapabilities(ref: RepoRef): Promise<Capabilities>;
@@ -57,6 +65,8 @@ export interface GitHubPort {
 
   // Fichiers
   branchExists(ref: RepoRef, branch: string): Promise<boolean>;
+  /** Fichiers d'une branche, récursivement. */
+  listTree(ref: RepoRef, branch: string): Promise<RepositoryTree>;
   getFile(ref: RepoRef, path: string, branch?: string): Promise<FileContent | null>;
   /** Plusieurs fichiers en un seul commit ; renvoie le SHA du commit. */
   commitFiles(ref: RepoRef, input: CommitFilesInput): Promise<string>;

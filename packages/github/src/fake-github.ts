@@ -29,6 +29,7 @@ import type {
   Artifact,
   RepoRef,
   Repository,
+  RepositoryTree,
   UpdateIssueInput,
   UpdatePullRequestInput,
   WorkflowJob,
@@ -51,6 +52,9 @@ type FakePullRequest = PullRequest;
 
 export interface FakeRepoState {
   repository: Repository;
+  /** Le compte authentifié administre le dépôt. */
+  admin: boolean;
+  archived: boolean;
   issues: Map<number, FakeIssue>;
   pulls: Map<number, FakePullRequest>;
   nextNumber: number;
@@ -166,7 +170,18 @@ export class FakeGitHub implements GitHubPort {
   // Préparation et inspection
 
   /** Crée un dépôt avec une branche `main` contenant un README. */
-  seedRepository(ref: RepoRef, options: { private?: boolean } = {}): FakeRepoState {
+  seedRepository(
+    ref: RepoRef,
+    options: {
+      private?: boolean;
+      /** Droits d'administration du compte ; vrai par défaut pour ses propres dépôts. */
+      admin?: boolean;
+      archived?: boolean;
+      /** Branche par défaut (main par défaut). */
+      defaultBranch?: string;
+    } = {},
+  ): FakeRepoState {
+    const branch = options.defaultBranch ?? 'main';
     const sha = newSha();
     const files: FileTree = new Map([
       ['README.md', Buffer.from(`# ${ref.repo}\n`).toString('base64')],
@@ -176,7 +191,7 @@ export class FakeGitHub implements GitHubPort {
         owner: ref.owner,
         name: ref.repo,
         private: options.private ?? false,
-        defaultBranch: 'main',
+        defaultBranch: branch,
         allowAutoMerge: false,
         allowSquashMerge: true,
         allowMergeCommit: true,
@@ -189,7 +204,9 @@ export class FakeGitHub implements GitHubPort {
       labels: new Map(),
       comments: new Map(),
       blockedBy: new Map(),
-      branches: new Map([['main', { sha, files }]]),
+      admin: options.admin ?? ref.owner === this.actor,
+      archived: options.archived ?? false,
+      branches: new Map([[branch, { sha, files }]]),
       commits: new Map([[sha, new Map(files)]]),
       protections: new Map(),
       checkRuns: new Map(),
@@ -300,6 +317,27 @@ export class FakeGitHub implements GitHubPort {
   }
 
   /** Retire la protection d'une branche (geste manuel dans les réglages GitHub). */
+  /** États de tous les dépôts (émulateur HTTP). */
+  allRepositoryStates(): Iterable<FakeRepoState> {
+    return this.repos.values();
+  }
+
+  /** Protection posée hors du cockpit (relectures exigées, checks d'une CI existante…). */
+  seedBranchProtection(
+    ref: RepoRef,
+    branch: string,
+    protection: Partial<Omit<BranchProtection, 'branch'>> = {},
+  ): void {
+    this.state(ref).protections.set(branch, {
+      branch,
+      requiredChecks: [],
+      enforceAdmins: false,
+      requirePullRequest: true,
+      requiredApprovals: 0,
+      ...protection,
+    });
+  }
+
   unprotectBranch(ref: RepoRef, branch: string): void {
     this.state(ref).protections.delete(branch);
   }
@@ -355,6 +393,16 @@ export class FakeGitHub implements GitHubPort {
     return Promise.resolve(clone(this.seedRepository(ref, { private: input.private }).repository));
   }
 
+  listAdministrableRepositories(): Promise<Repository[]> {
+    return Promise.resolve(
+      [...this.repos.values()]
+        .filter((s) => s.admin && !s.archived)
+        .map((s) => s.repository)
+        .sort((a, b) => `${a.owner}/${a.name}`.localeCompare(`${b.owner}/${b.name}`))
+        .map(clone),
+    );
+  }
+
   getRepository(ref: RepoRef): Promise<Repository> {
     return this.run(() => clone(this.state(ref).repository));
   }
@@ -382,7 +430,28 @@ export class FakeGitHub implements GitHubPort {
         requiredChecks: [...input.requiredChecks],
         enforceAdmins: input.enforceAdmins,
         requirePullRequest: true,
+        requiredApprovals: 0,
       });
+    });
+  }
+
+  renameBranch(ref: RepoRef, branch: string, newName: string): Promise<void> {
+    return this.run(() => {
+      const state = this.state(ref);
+      const current = state.branches.get(branch);
+      if (!current) throw notFound(`branche ${branch}`);
+      if (state.branches.has(newName))
+        throw new GitHubError('validation', `La branche ${newName} existe déjà.`, 422);
+      state.branches.delete(branch);
+      state.branches.set(newName, current);
+      const protection = state.protections.get(branch);
+      if (protection) {
+        state.protections.delete(branch);
+        state.protections.set(newName, { ...protection, branch: newName });
+      }
+      for (const pr of state.pulls.values())
+        if (pr.state === 'open' && pr.base === branch) pr.base = newName;
+      if (state.repository.defaultBranch === branch) state.repository.defaultBranch = newName;
     });
   }
 
@@ -430,6 +499,19 @@ export class FakeGitHub implements GitHubPort {
 
   branchExists(ref: RepoRef, branch: string): Promise<boolean> {
     return this.run(() => this.state(ref).branches.has(branch));
+  }
+
+  listTree(ref: RepoRef, branch: string): Promise<RepositoryTree> {
+    return this.run(() => {
+      const target = this.state(ref).branches.get(branch);
+      if (!target) throw notFound(`branche ${branch}`);
+      return {
+        entries: [...target.files.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([path, content]) => ({ path, size: Buffer.from(content, 'base64').length })),
+        truncated: false,
+      };
+    });
   }
 
   getFile(ref: RepoRef, path: string, branch?: string): Promise<FileContent | null> {

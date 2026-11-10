@@ -68,6 +68,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           AGENTLAKE_CONFIG_TOKEN: ${{ secrets.AGENTLAKE_CONFIG_TOKEN }}
           AGENTLAKE_BILLING_TOKEN: ${{ secrets.AGENTLAKE_BILLING_TOKEN }}
+          # Compte de Kia (dépôt d'organisation), posé au bootstrap.
+          AGENTLAKE_OWNER: ${{ vars.AGENTLAKE_OWNER }}
           # Pont Aura : URL du tunnel, variable du projet.
           AURA_BRIDGE_URL: ${{ vars.AURA_BRIDGE_URL }}
           BLENDER_BRIDGE_URL: ${{ vars.BLENDER_BRIDGE_URL }}

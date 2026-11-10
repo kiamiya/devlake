@@ -8,7 +8,7 @@ on:
   workflow_call:
     inputs:
       mode:
-        description: 'auto (questions puis plan) ou regenerate (nouveau plan)'
+        description: 'auto (questions puis plan), regenerate (nouveau plan) ou inventory (état des lieux d’un projet repris)'
         type: string
         default: auto
       model:
@@ -44,6 +44,8 @@ jobs:
     permissions:
       contents: write
       issues: write
+      # État des lieux : liste des PR ouvertes.
+      pull-requests: read
     env:
       RUNTIME: .agentlake-runtime
     steps:

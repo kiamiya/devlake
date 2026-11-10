@@ -12,6 +12,7 @@ export function seedProtectedMain(
     requiredChecks: requiredChecksFor(profile),
     enforceAdmins: false,
     requirePullRequest: true,
+    requiredApprovals: 0,
   });
 }
 

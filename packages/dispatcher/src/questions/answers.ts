@@ -40,6 +40,8 @@ export async function traceIgnoredAnswer(
   github: GitHubPort,
   ref: RepoRef,
   event: AnswerEvent,
+  /** Compte de Kia, seul à pouvoir répondre. */
+  account: string = ref.owner,
 ): Promise<string | null> {
   const parsed = parseAnswerComment(event.body);
   if (!parsed.ok) return null;
@@ -47,14 +49,14 @@ export async function traceIgnoredAnswer(
   // L'issue « Cadrage » a son propre circuit (planificateur).
   if (!issue.labels.includes(TASK_LABEL)) return null;
   const comments = await github.listComments(ref, event.issueNumber);
-  const thread = readThread(comments, ref.owner);
+  const thread = readThread(comments, account);
   // Réponse valide, déjà prise en compte ou en passe de l'être : rien à tracer.
   if (thread.answer?.commentId === event.commentId) return null;
   const reason =
     ignoredAnswerReason({
       answer: parsed.value,
       author: event.author,
-      owner: ref.owner,
+      owner: account,
       awaiting: issue.state === 'open' && issue.labels.includes(stateLabel('awaiting-answer')),
       pending: thread.pending?.question ?? null,
     }) ?? 'une réponse plus récente a déjà été donnée';

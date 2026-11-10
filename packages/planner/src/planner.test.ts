@@ -12,7 +12,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { stringify } from 'yaml';
 import { renderCadrageBody } from './cadrage.js';
 import { FakeClaude } from './claude/fake-claude.js';
-import { MAX_ATTEMPTS, PLAN_PATH, runPlanner, type PlannerDeps } from './planner.js';
+import { MAX_ATTEMPTS, PLAN_PATH, runPlanner, T00_NEW, type PlannerDeps } from './planner.js';
 import { loadPrompts, renderPrompt, PromptError, type Prompts } from './prompts.js';
 
 interface Reference {
@@ -89,6 +89,7 @@ describe('prompts', () => {
         PROJECT: 'kiamiya/projet (web)',
         TYPE_GUIDANCE: prompts.types.web,
         DOCUMENTS: '- `brief.md`',
+        REPRISE: '',
       }),
     ).toMatchSnapshot();
     expect(
@@ -100,6 +101,7 @@ describe('prompts', () => {
         INSTRUCTION: '_Aucune consigne particulière._',
         TEST_CATEGORIES: 'unit, e2e',
         PROFILES: 'architect, unity',
+        FIRST_TASK_RULE: T00_NEW,
       }),
     ).toMatchSnapshot();
   });
@@ -289,5 +291,65 @@ describe('planificateur', () => {
     await runPlanner(input, deps);
     expect(claude.requests[0]?.prompt).toContain('Aucun document versé');
     expect(renderCadrageBody({ model: 'm', maxAgents: 2 })).toContain('ignored=true');
+  });
+});
+
+describe('projet repris', () => {
+  const web = reference('web');
+  const adopt = (files: Record<string, string>) => {
+    files['.agentlake/project.yml'] = `${files['.agentlake/project.yml'] ?? ''}adopted: true\n`;
+  };
+
+  it('état des lieux : issues et PR ouvertes données à Claude, document sur etat-des-lieux/v1', async () => {
+    const { github, claude, deps, files } = setup('web', web.brief);
+    adopt(files);
+    await github.createIssue(ref, { title: 'Bug du formulaire', body: '', labels: ['bug'] });
+    await github.createIssue(ref, { title: 'T01', body: '', labels: ['agentlake:task'] });
+    const markdown = `# État des lieux\n\n${'Le dépôt contient une application React. '.repeat(10)}`;
+    claude.push(FakeClaude.structured({ markdown }));
+    const outcome = await runPlanner({ ...input, mode: 'inventory' }, deps);
+    expect(outcome).toMatchObject({ phase: 'inventory', version: 1, branch: 'etat-des-lieux/v1' });
+    const prompt = claude.requests[0]?.prompt ?? '';
+    expect(prompt).toContain('Bug du formulaire [bug]');
+    expect(prompt).not.toContain('T01');
+    expect(claude.requests[0]?.allowedTools).toEqual(['Read', 'Glob', 'Grep']);
+    expect(
+      (await github.getFile(ref, '.agentlake/context/etat-des-lieux.md', 'etat-des-lieux/v1'))
+        ?.content,
+    ).toBe(`${markdown.trim()}\n`);
+    expect((await cadrageComments(github, outcome.issueNumber)).at(-1)).toContain(
+      'État des lieux v1 prêt',
+    );
+    // Réponse trop courte : échec visible.
+    claude.push(FakeClaude.structured({ markdown: 'court' }));
+    expect((await runPlanner({ ...input, mode: 'inventory' }, deps)).phase).toBe('failed');
+  });
+
+  it('pas de plan avant l’état des lieux validé ; ensuite T00 d’audit et brief facultatif', async () => {
+    const { claude, deps, files } = setup('web', web.brief);
+    adopt(files);
+    await expect(runPlanner(input, deps)).rejects.toThrow('lancer l’état des lieux');
+    const index = JSON.parse(files[CONTEXT_INDEX_PATH] ?? '{}') as { files: object[] };
+    index.files.push({
+      path: '.agentlake/context/etat-des-lieux.md',
+      role: 'inventory',
+      source: 'etat-des-lieux/v1 (planificateur)',
+      sha256: 'b'.repeat(64),
+      size: 10,
+      importedAt: '2026-11-10T10:00:00.000Z',
+    });
+    files[CONTEXT_INDEX_PATH] = JSON.stringify(index);
+    claude.push(FakeClaude.structured({ questions: [] }), FakeClaude.structured(web.plan));
+    expect(await runPlanner(input, deps)).toMatchObject({ phase: 'plan' });
+    expect(claude.requests[0]?.prompt).toContain('## Projet repris');
+    expect(claude.requests[1]?.prompt).toContain('audit et la remise au vert');
+    expect(claude.requests[1]?.prompt).not.toContain('bootstrap du dépôt par le profil');
+  });
+
+  it('état des lieux refusé pour un projet créé par AgentLake', async () => {
+    const { deps } = setup('web', web.brief);
+    await expect(runPlanner({ ...input, mode: 'inventory' }, deps)).rejects.toThrow(
+      'réservé aux projets repris',
+    );
   });
 });

@@ -25,7 +25,7 @@ export const PlannerEnvSchema = z.object({
   GITHUB_WORKSPACE: z.string().min(1),
   GH_TOKEN: z.string().min(1, 'GH_TOKEN manquant.'),
   CLAUDE_CODE_OAUTH_TOKEN: z.string().min(1, 'Secret CLAUDE_CODE_OAUTH_TOKEN manquant.'),
-  MODE: z.enum(['auto', 'regenerate']).default('auto'),
+  MODE: z.enum(['auto', 'regenerate', 'inventory']).default('auto'),
   MODEL: optional(z.string()),
   MAX_AGENTS: optional(z.coerce.number().int().min(1, 'MAX_AGENTS doit être au moins 1.')),
   INSTRUCTION: optional(z.string()),
@@ -47,6 +47,8 @@ export function describeOutcome(outcome: PlannerOutcome): string {
       return `En attente de réponses dans l’issue #${String(outcome.issueNumber)} : ${outcome.pending.join(', ')}.`;
     case 'plan':
       return `Plan v${String(outcome.version)} sur ${outcome.branch} : ${String(outcome.tasks)} tâches, ${String(outcome.agents)} agent(s).`;
+    case 'inventory':
+      return `État des lieux v${String(outcome.version)} sur ${outcome.branch} (issue #${String(outcome.issueNumber)}).`;
     case 'failed':
       return `Planification en échec (issue #${String(outcome.issueNumber)}) :\n${outcome.errors}`;
   }

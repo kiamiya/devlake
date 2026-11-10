@@ -2,6 +2,9 @@ import type { GitHubPort, RepoRef } from 'github';
 import {
   CADRAGE_LABEL,
   DEFAULT_RUNNER_CAP,
+  INVENTORY_BRANCH_PREFIX,
+  INVENTORY_PATH,
+  TASK_LABEL,
   proposeAgents,
   CONTEXT_INDEX_PATH,
   ContextIndexSchema,
@@ -40,8 +43,11 @@ export const READ_ONLY_TOOLS = ['Read', 'Glob', 'Grep'];
 
 export interface PlannerInput {
   ref: RepoRef;
-  /** `auto` : questions puis plan quand tout est répondu ; `regenerate` : nouveau plan tout de suite. */
-  mode: 'auto' | 'regenerate';
+  /**
+   * `auto` : questions puis plan quand tout est répondu ; `regenerate` : nouveau plan tout de
+   * suite ; `inventory` : état des lieux d'un projet repris, sur `etat-des-lieux/vN`.
+   */
+  mode: 'auto' | 'regenerate' | 'inventory';
   /** Modèle et plafond global : fournis par le cockpit, sinon relus dans l'issue Cadrage. */
   model?: string | undefined;
   maxAgents?: number | undefined;
@@ -70,6 +76,7 @@ export type PlannerOutcome =
       agents: number;
       tasks: number;
     }
+  | { phase: 'inventory'; issueNumber: number; version: number; branch: string }
   | { phase: 'failed'; issueNumber: number; errors: string };
 
 export class PlannerError extends Error {
@@ -78,6 +85,28 @@ export class PlannerError extends Error {
     this.name = 'PlannerError';
   }
 }
+
+const InventoryOutputSchema = z.object({
+  markdown: z.string().min(200, 'État des lieux trop court.'),
+});
+
+/** Première tâche d'un nouveau projet, ou d'un projet repris (audit et remise au vert). */
+export const T00_NEW =
+  '- La première tâche (`T00`) est le bootstrap du dépôt par le profil `architect`, sans dépendance : structure, conventions, CI complète.';
+export const T00_ADOPTED = [
+  "- Projet repris : la première tâche (`T00`), profil `architect`, sans dépendance, est l'audit et la remise au vert du dépôt, sans réécrire l'existant : CI du projet qui passe sur `main`, checks de la porte qualité ajoutés, conventions constatées notées dans `decisions.md`.",
+  "- Les tâches suivantes ne planifient que ce qui reste à faire, d'après l'état des lieux, le brief s'il existe et les réponses du cadrage. Elles respectent la structure et les conventions existantes et ne refont pas ce qui marche.",
+  '- Une issue ou une PR ouverte reprise par une tâche est citée (#numéro) dans sa description.',
+].join('\n');
+export const REPRISE = [
+  '## Projet repris',
+  '',
+  "Le dépôt contient déjà du code : l'état des lieux (`" +
+    INVENTORY_PATH +
+    "`) décrit ce qui existe. Le brief est facultatif : sans brief, pose tes questions sur la suite (objectifs restants, priorités, ce qui ne doit pas changer). Ne pose pas de question dont la réponse figure dans l'état des lieux ou dans le code.",
+  '',
+  '',
+].join('\n');
 
 const QuestionsOutputSchema = z.object({
   questions: z.array(QuestionSchema.omit({ id: true })),
@@ -91,6 +120,13 @@ async function projectConfig(readFile: PlannerDeps['readFile']): Promise<Project
   if (!parsed.success)
     throw new PlannerError(`${PROJECT_CONFIG_PATH} invalide :\n${formatZodError(parsed.error)}`);
   return parsed.data;
+}
+
+async function hasInventory(readFile: PlannerDeps['readFile']): Promise<boolean> {
+  const text = await readFile(CONTEXT_INDEX_PATH);
+  if (text === null) return false;
+  const index = ContextIndexSchema.safeParse(JSON.parse(text));
+  return index.success && index.data.files.some((f) => f.role === 'inventory');
 }
 
 async function documentsList(readFile: PlannerDeps['readFile']): Promise<string> {
@@ -149,18 +185,17 @@ function resolveSettings(
 export async function runPlanner(input: PlannerInput, deps: PlannerDeps): Promise<PlannerOutcome> {
   const { github, ref } = { github: deps.github, ref: input.ref };
   const config = await projectConfig(deps.readFile);
-  let issue = await findCadrageIssue(github, ref);
-  const settings = resolveSettings(input, issue ? readCadrageSettings(issue) : null);
-
-  if (!issue) {
-    issue = await github.createIssue(ref, {
-      title: 'Cadrage',
-      body: renderCadrageBody(settings),
-      labels: [CADRAGE_LABEL],
-    });
-  } else if (JSON.stringify(readCadrageSettings(issue)) !== JSON.stringify(settings)) {
-    issue = await github.updateIssue(ref, issue.number, { body: renderCadrageBody(settings) });
+  if (input.mode === 'inventory') {
+    if (config.adopted !== true)
+      throw new PlannerError('L’état des lieux est réservé aux projets repris.');
+    return runInventory(input, deps, config);
   }
+  if (config.adopted === true && !(await hasInventory(deps.readFile)))
+    throw new PlannerError(
+      'Projet repris : lancer l’état des lieux et le valider dans le cockpit avant le planificateur.',
+    );
+  const { issueNumber, settings } = await cadrage(input, github);
+  let issue = await github.getIssue(ref, issueNumber);
 
   const typeGuidance = deps.prompts.types[config.type];
   const documents = await documentsList(deps.readFile);
@@ -178,6 +213,7 @@ export async function runPlanner(input: PlannerInput, deps: PlannerDeps): Promis
         PROJECT: project,
         TYPE_GUIDANCE: typeGuidance,
         DOCUMENTS: documents,
+        REPRISE: config.adopted === true ? REPRISE : '',
       }),
       systemPrompt: deps.prompts.system,
       model: settings.model,
@@ -255,6 +291,7 @@ async function decoupe(
     INSTRUCTION: input.instruction?.trim() || '_Aucune consigne particulière._',
     TEST_CATEGORIES: TEST_CATEGORIES.join(', '),
     PROFILES: PROFILE_IDS.join(', '),
+    FIRST_TASK_RULE: ctx.config.adopted === true ? T00_ADOPTED : T00_NEW,
   });
   const schema = z.toJSONSchema(PlanDraftSchema, { io: 'input' }) as Record<string, unknown>;
 
@@ -319,6 +356,96 @@ async function decoupe(
     ].join('\n'),
   );
   return { phase: 'failed', issueNumber: ctx.issueNumber, errors };
+}
+
+/** Issue Cadrage du projet (créée au besoin) et réglages du planificateur. */
+async function cadrage(
+  input: PlannerInput,
+  github: GitHubPort,
+): Promise<{ issueNumber: number; settings: CadrageSettings }> {
+  let issue = await findCadrageIssue(github, input.ref);
+  const settings = resolveSettings(input, issue ? readCadrageSettings(issue) : null);
+  if (!issue) {
+    issue = await github.createIssue(input.ref, {
+      title: 'Cadrage',
+      body: renderCadrageBody(settings),
+      labels: [CADRAGE_LABEL],
+    });
+  } else if (JSON.stringify(readCadrageSettings(issue)) !== JSON.stringify(settings)) {
+    issue = await github.updateIssue(input.ref, issue.number, {
+      body: renderCadrageBody(settings),
+    });
+  }
+  return { issueNumber: issue.number, settings };
+}
+
+const listing = (items: readonly string[], none: string) =>
+  items.length === 0 ? none : items.join('\n');
+
+/**
+ * État des lieux d'un projet repris : Claude parcourt le dépôt (lecture seule), le document
+ * est proposé sur `etat-des-lieux/vN` ; Kia le relit et le valide dans le cockpit.
+ */
+async function runInventory(
+  input: PlannerInput,
+  deps: PlannerDeps,
+  config: ProjectConfig,
+): Promise<PlannerOutcome> {
+  const { github, ref } = { github: deps.github, ref: input.ref };
+  const { issueNumber, settings } = await cadrage(input, github);
+  const issues = (await github.listIssues(ref, { state: 'open' })).filter(
+    (i) => !i.labels.includes(TASK_LABEL) && !i.labels.includes(CADRAGE_LABEL),
+  );
+  const pulls = await github.listPullRequests(ref, { state: 'open' });
+  const response = await deps.claude.run({
+    prompt: renderPrompt(deps.prompts.inventaire, {
+      PROJECT: `${ref.owner}/${ref.repo} (${config.type})`,
+      TYPE_GUIDANCE: deps.prompts.types[config.type],
+      ISSUES: listing(
+        issues.map(
+          (i) =>
+            `- #${String(i.number)} ${i.title}${i.labels.length > 0 ? ` [${i.labels.join(', ')}]` : ''}`,
+        ),
+        '_Aucune._',
+      ),
+      PULLS: listing(
+        pulls.map((p) => `- #${String(p.number)} ${p.title} (${p.head} → ${p.base})`),
+        '_Aucune._',
+      ),
+      INSTRUCTION: input.instruction?.trim() || '_Aucune consigne particulière._',
+    }),
+    systemPrompt: deps.prompts.system,
+    model: settings.model,
+    jsonSchema: z.toJSONSchema(InventoryOutputSchema, { io: 'input' }),
+    allowedTools: READ_ONLY_TOOLS,
+    cwd: deps.workspace,
+  });
+  const parsed = InventoryOutputSchema.safeParse(response.structured);
+  if (!parsed.success) {
+    const errors = formatZodError(parsed.error);
+    await github.createComment(
+      ref,
+      issueNumber,
+      `**État des lieux impossible** : réponse invalide.\n\n${errors}`,
+    );
+    return { phase: 'failed', issueNumber, errors };
+  }
+  let version = 1;
+  while (await github.branchExists(ref, `${INVENTORY_BRANCH_PREFIX}${String(version)}`))
+    version += 1;
+  const branch = `${INVENTORY_BRANCH_PREFIX}${String(version)}`;
+  await github.commitFiles(ref, {
+    branch,
+    baseBranch: 'main',
+    message: `docs(context): état des lieux v${String(version)}`,
+    changes: [{ path: INVENTORY_PATH, content: `${parsed.data.markdown.trim()}\n` }],
+  });
+  await github.createComment(
+    ref,
+    issueNumber,
+    `**État des lieux v${String(version)} prêt** sur la branche \`${branch}\`. À relire et valider dans le cockpit, avant de lancer le planificateur.`,
+  );
+  return { phase: 'inventory', issueNumber, version, branch };
 }
 
 async function publish(

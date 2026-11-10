@@ -59,6 +59,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ inputs.pr_number }}
+          # Compte de Kia (dépôt d'organisation), posé au bootstrap.
+          AGENTLAKE_OWNER: ${{ vars.AGENTLAKE_OWNER }}
         run: node "$RUNTIME/packages/dispatcher/dist/quality/cli.js" tests-guard
 
   review:

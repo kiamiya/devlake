@@ -49,14 +49,19 @@ const GAME_LFS = ['fbx', 'glb', 'obj', 'blend', 'tga', 'exr', 'hdr', 'tif', 'tif
 const UNREAL_LFS = ['uasset', 'umap'];
 const UNITY_LFS = ['unitypackage', 'cubemap', 'aif'];
 
-/** `.gitattributes` : binaires en Git LFS ; fins de ligne normalisées. */
-export function gitattributes(type: ProjectType): string {
-  const extensions = [
+/** Extensions suivies par Git LFS pour un type de projet. */
+export function lfsExtensions(type: ProjectType): string[] {
+  return [
     ...COMMON_LFS,
     ...(type === 'unity' || type === 'unreal' ? GAME_LFS : []),
     ...(type === 'unity' ? UNITY_LFS : []),
     ...(type === 'unreal' ? UNREAL_LFS : []),
   ];
+}
+
+/** `.gitattributes` : binaires en Git LFS ; fins de ligne normalisées. */
+export function gitattributes(type: ProjectType): string {
+  const extensions = lfsExtensions(type);
   const lines = [
     '# Généré par AgentLake : binaires dans Git LFS.',
     '* text=auto',

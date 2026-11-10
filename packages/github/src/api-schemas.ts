@@ -46,7 +46,23 @@ export const RepositoryApi = z
 export const BranchProtectionApi = z.object({
   required_status_checks: z.object({ contexts: z.array(z.string()) }).nullish(),
   enforce_admins: z.object({ enabled: z.boolean() }).nullish(),
-  required_pull_request_reviews: z.object({}).loose().nullish(),
+  required_pull_request_reviews: z
+    .object({ required_approving_review_count: z.number().optional() })
+    .loose()
+    .nullish(),
+});
+
+/** Dépôt de `GET /user/repos`, avec les droits du compte et l'archivage. */
+export const RepositoryWithAccessApi = z.object({
+  repository: RepositoryApi,
+  admin: z.boolean(),
+  archived: z.boolean(),
+});
+
+/** `GET /git/trees/{sha}?recursive=1`. */
+export const TreeApi = z.object({
+  truncated: z.boolean().optional(),
+  tree: z.array(z.object({ path: z.string(), type: z.string(), size: z.number().optional() })),
 });
 
 /** `GET /branches/{branch}` : résumé de protection lisible avec `contents: read`. */

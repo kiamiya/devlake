@@ -15,6 +15,7 @@ import { finalizeAgent, type FinalizeResult } from './finalize.js';
 import { systemGit, type Git } from './git.js';
 import { prepareAgent, type Prepared } from './prepare.js';
 import { profileEnvFrom } from './profile.js';
+import { AccountEnvSchema, accountOf } from '../account.js';
 import { RESUME_REASONS } from './resume.js';
 import { BRIDGE_TOKEN_TTL_SECONDS, signBridgeToken } from 'shared/bridge-token';
 
@@ -42,6 +43,7 @@ export const PrepareEnvSchema = z.object({
   PROFILE: z.string().min(1, 'PROFILE manquant.'),
   ATTEMPT: positive('ATTEMPT').default(1),
   RESUME_REASON: z.enum(RESUME_REASONS).default('none'),
+  AGENTLAKE_OWNER: AccountEnvSchema,
 });
 
 export const FinalizeEnvSchema = z.object({
@@ -131,6 +133,7 @@ export async function runPrepare(env: NodeJS.ProcessEnv, deps: CliDeps): Promise
       reason: e.RESUME_REASON,
       profileEnv: profileEnvFrom(withBridgeToken(env, deps.now?.() ?? new Date())),
       mcpConfigPath,
+      account: accountOf(e.GITHUB_REPOSITORY, e.AGENTLAKE_OWNER),
     },
     {
       github: deps.github(e.GH_TOKEN),

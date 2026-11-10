@@ -352,6 +352,18 @@ describe('préparation et finalisation', () => {
     expect(architect.prompt).toContain('## Porte qualité (profil `web`)');
     expect(architect.prompt).toContain('`.agentlake-runtime/templates/quality/web/`');
     expect(architect.prompt).toContain('`e2e`');
+    expect(architect.prompt).not.toContain('Projet repris');
+    // Projet repris : la CI existante est gardée, pas remplacée par le gabarit.
+    files['.agentlake/project.yml'] = stringify(
+      makeProjectConfig({ qualityProfile: 'web', adopted: true }),
+    );
+    const adopted = await prepareAgent(
+      { ref, issueNumber, profileId: 'architect', attempt: 1, reason: 'none' },
+      deps,
+    );
+    expect(adopted.prompt).toContain('Projet repris : sa CI existante reste en place');
+    expect(adopted.prompt).not.toContain('Copie `ci.yml` dans `.github/workflows/ci.yml`');
+    files['.agentlake/project.yml'] = stringify(makeProjectConfig({ qualityProfile: 'web' }));
     const frontend = await prepareAgent(
       { ref, issueNumber, profileId: 'frontend', attempt: 1, reason: 'none' },
       deps,
