@@ -52,8 +52,10 @@ async function otherProjectsAgents(
 export async function readGlobalCap(
   configGithub: GitHubPort | null,
   current: RepoRef,
+  /** Compte de Kia, propriétaire de devlake-config (dépôt d'organisation : pas le propriétaire). */
+  account: string = current.owner,
 ): Promise<GlobalCap> {
-  const owner = current.owner;
+  const owner = account;
   const fallback = (why: string): GlobalCap => ({
     cap: DEFAULT_GLOBAL_CAP,
     note: `Plafond global par défaut (${String(DEFAULT_GLOBAL_CAP)}) : ${why}`,
@@ -91,6 +93,7 @@ export async function readMinutesRemaining(
   ref: RepoRef,
   billingToken: string | null,
   fetchFn: Fetch,
+  account: string = ref.owner,
 ): Promise<{ minutes: number | null; note?: string }> {
   const repository = await github.getRepository(ref);
   if (!repository.private) return { minutes: null };
@@ -101,7 +104,10 @@ export async function readMinutesRemaining(
     };
   try {
     const response = await fetchFn(
-      `https://api.github.com/users/${encodeURIComponent(ref.owner)}/settings/billing/actions`,
+      // Dépôt d'organisation : minutes facturées à l'organisation.
+      account.toLowerCase() === ref.owner.toLowerCase()
+        ? `https://api.github.com/users/${encodeURIComponent(ref.owner)}/settings/billing/actions`
+        : `https://api.github.com/orgs/${encodeURIComponent(ref.owner)}/settings/billing/actions`,
       {
         headers: {
           authorization: `Bearer ${billingToken}`,

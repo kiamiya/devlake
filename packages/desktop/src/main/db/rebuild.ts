@@ -33,9 +33,9 @@ export async function rebuildFromGitHub(
   return { issues: issues.length, runs: runs.length };
 }
 
-/** Projets du compte : dépôts qui contiennent `.agentlake/project.yml`. */
+/** Projets du compte et des organisations administrées : dépôts avec `.agentlake/project.yml`. */
 export async function discoverProjects(github: GitHubPort): Promise<RepoRef[]> {
-  const repositories = await github.listRepositories();
+  const repositories = await github.listAdministrableRepositories();
   const found: RepoRef[] = [];
   for (const repository of repositories) {
     const ref = { owner: repository.owner, repo: repository.name };

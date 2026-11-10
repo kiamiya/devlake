@@ -84,6 +84,55 @@ export const BootstrapReportSchema = z.object({
 });
 export type BootstrapReportView = z.infer<typeof BootstrapReportSchema>;
 
+/** Dépôt administré par Kia, candidat à la reprise. */
+export const AdoptableRepositorySchema = z.object({
+  owner: z.string(),
+  repo: z.string(),
+  private: z.boolean(),
+  defaultBranch: z.string(),
+});
+export type AdoptableRepository = z.infer<typeof AdoptableRepositorySchema>;
+
+/** Rapport de détection d'un projet existant, à confirmer avant la reprise. */
+export const AdoptionReportSchema = z.object({
+  repository: AdoptableRepositorySchema,
+  /** Le dépôt a déjà `.agentlake/project.yml` : il suffit de l'ouvrir. */
+  alreadyAgentLake: z.boolean(),
+  detectedType: ProjectTypeSchema,
+  type: ProjectTypeSchema,
+  qualityProfile: QualityProfileSchema,
+  /** Empêchent la reprise (moteur en sous-dossier, branche main en conflit…). */
+  blockers: z.array(z.string()),
+  /** Réglages du dépôt qui vont changer : à confirmer. */
+  changes: z.array(z.string()),
+  warnings: z.array(z.string()),
+  heavyOutsideLfs: z.array(z.object({ path: z.string(), size: z.number() })),
+  heavyOutsideLfsCount: z.number(),
+  blendFiles: z.number(),
+  /** Workflows existants, gardés tels quels. */
+  workflows: z.array(z.string()),
+  /** Checks déjà exigés sur la branche par défaut, gardés. */
+  requiredChecks: z.array(z.string()),
+  openIssues: z.number(),
+  openPullRequests: z.number(),
+  /** MCP du moteur (Aura…) configuré dans le cockpit ; null hors jeu. */
+  engineConfigured: z.boolean().nullable(),
+  /** MCP Blender configuré dans le cockpit ; null hors jeu. */
+  blenderConfigured: z.boolean().nullable(),
+});
+export type AdoptionReport = z.infer<typeof AdoptionReportSchema>;
+
+/** État des lieux d'un projet repris. */
+export const InventoryStateSchema = z.object({
+  adopted: z.boolean(),
+  /** Versions proposées par le planificateur (`etat-des-lieux/vN`), la plus récente en dernier. */
+  versions: z.array(z.object({ version: z.number().int().min(1), branch: z.string() })),
+  latest: z.object({ version: z.number().int().min(1), content: z.string() }).nullable(),
+  /** État des lieux validé, versé dans le contexte. */
+  validated: z.boolean(),
+});
+export type InventoryState = z.infer<typeof InventoryStateSchema>;
+
 export const DepositResultSchema = z.object({
   committed: z.boolean(),
   commitSha: z.string().nullable(),
@@ -308,6 +357,28 @@ export const IPC_CONTRACT = {
     input: CreateProjectSchema,
     output: z.object({ project: ProjectSummarySchema, report: BootstrapReportSchema }),
   },
+  'projects:adoptable': { input: NoInput, output: z.array(AdoptableRepositorySchema) },
+  'projects:detect': {
+    input: RepoRefSchema.extend({ type: ProjectTypeSchema.optional() }),
+    output: AdoptionReportSchema,
+  },
+  'projects:adopt': {
+    input: RepoRefSchema.extend({
+      type: ProjectTypeSchema,
+      qualityProfile: QualityProfileSchema,
+      acceptChanges: z.boolean(),
+    }),
+    output: z.object({
+      project: ProjectSummarySchema,
+      report: BootstrapReportSchema.nullable(),
+      renamedBranch: z.string().nullable(),
+    }),
+  },
+  'inventory:get': { input: z.object({ projectId: z.string() }), output: InventoryStateSchema },
+  'inventory:validate': {
+    input: z.object({ projectId: z.string(), version: z.number().int().min(1) }),
+    output: z.object({ commitSha: z.string() }),
+  },
   'context:choose-files': { input: z.object({ projectId: z.string() }), output: ChosenFilesSchema },
   'context:import': {
     input: z.object({
@@ -392,7 +463,7 @@ export const IPC_CONTRACT = {
   'planner:start': {
     input: z.object({
       projectId: z.string(),
-      mode: z.enum(['auto', 'regenerate']),
+      mode: z.enum(['auto', 'regenerate', 'inventory']),
       instruction: z
         .string()
         .max(4000, 'Consigne trop longue (4 000 caractères au plus).')

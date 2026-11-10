@@ -18,7 +18,7 @@ Projet : {{PROJECT}}
 
 ## Règles du plan
 
-- La première tâche (`T00`) est le bootstrap du dépôt par le profil `architect`, sans dépendance : structure, conventions, CI complète.
+{{FIRST_TASK_RULE}}
 - Identifiants stables `Txx` (deux chiffres au moins), uniques ; dépendances existantes et sans cycle.
 - Chaque tâche est réalisable par un agent en une PR : objectif clair, critères d'acceptation vérifiables, zones de code.
 - Chaque tâche de type `code` exige au moins un test ; catégories de tests : {{TEST_CATEGORIES}}.

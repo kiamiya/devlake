@@ -182,7 +182,17 @@ export function githubEmulator(fake: FakeGitHub): HttpHandler[] {
     ),
     http.get(
       `${API}/user/repos`,
-      handle(async ({ url }) => json(page((await fake.listRepositories()).map(repoJson), url))),
+      handle(async ({ url }) => {
+        if (!(url.searchParams.get('affiliation') ?? '').includes('organization_member'))
+          return json(page((await fake.listRepositories()).map(repoJson), url));
+        // Toutes les affiliations : droits et archivage de chaque dépôt, comme l'API.
+        const all = [...fake.allRepositoryStates()].map((s) => ({
+          ...repoJson(s.repository),
+          permissions: { admin: s.admin },
+          archived: s.archived,
+        }));
+        return json(page(all, url));
+      }),
     ),
 
     // Dépôts
@@ -221,6 +231,25 @@ export function githubEmulator(fake: FakeGitHub): HttpHandler[] {
         return json({});
       }),
     ),
+    http.post(
+      `${R}/branches/:branch/rename`,
+      handle(async ({ params, body }) => {
+        await fake.renameBranch(refOf(params), param(params, 'branch'), str(body.new_name));
+        return json({ name: str(body.new_name) }, 201);
+      }),
+    ),
+    http.get(
+      `${R}/git/trees/:sha`,
+      handle(async ({ params, url }) => {
+        if (url.searchParams.get('recursive') !== '1')
+          return json({ message: 'recursive attendu' }, 422);
+        const tree = await fake.listTree(refOf(params), param(params, 'sha'));
+        return json({
+          truncated: tree.truncated,
+          tree: tree.entries.map((e) => ({ path: e.path, type: 'blob', size: e.size })),
+        });
+      }),
+    ),
     http.get(
       `${R}/branches/:branch/protection`,
       handle(async ({ params }) => {
@@ -230,7 +259,7 @@ export function githubEmulator(fake: FakeGitHub): HttpHandler[] {
           required_status_checks: { contexts: p.requiredChecks },
           enforce_admins: { enabled: p.enforceAdmins },
           required_pull_request_reviews: p.requirePullRequest
-            ? { required_approving_review_count: 0 }
+            ? { required_approving_review_count: p.requiredApprovals }
             : null,
         });
       }),

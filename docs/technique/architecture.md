@@ -17,8 +17,9 @@ Vérifié par dependency-cruiser (`npm run depcruise`) : seul `desktop` importe 
 
 ## Flux
 
-1. **Bootstrap** (cockpit) : dépôt, réglages, labels, `.agentlake/`, profils, workflows d'appel épinglés sur `kiamiya/devlake@v1`, protection de `main`, secrets.
-2. **Planificateur** (`agentlake-planner.yml` → `planner.yml`) : questions dans l'issue Cadrage, puis plan validé par `ProjectPlanSchema` sur `plan/vN`. Le cockpit le valide : plan sur `main`, une issue par tâche, dépendances.
+1. **Bootstrap** (cockpit) : dépôt, réglages, labels, `.agentlake/`, profils, workflows d'appel épinglés sur `kiamiya/devlake@v1`, protection de `main`, secrets, variable `AGENTLAKE_OWNER` (compte de Kia).
+   - **Reprise** d'un dépôt existant (`AdoptionService`) : dépôts administrés, perso et organisations (`listAdministrableRepositories`) ; détection sur l'arbre de la branche par défaut (`listTree`) : moteur à la racine seulement, binaires hors LFS, réglages qui vont changer ; branche par défaut renommée en `main` (`renameBranch`) une fois acceptée ; bootstrap `adopted` : dépôt jamais créé, `.gitattributes` complété, checks existants gardés dans la protection, `adopted: true` dans `project.yml`.
+2. **Planificateur** (`agentlake-planner.yml` → `planner.yml`) : questions dans l'issue Cadrage, puis plan validé par `ProjectPlanSchema` sur `plan/vN`. Le cockpit le valide : plan sur `main`, une issue par tâche, dépendances. Projet repris : mode `inventory` d'abord (état des lieux en lecture seule sur `etat-des-lieux/vN`, validé par le cockpit dans le contexte, rôle `inventory`) ; sans lui, pas de plan. La première tâche devient l'audit et la remise au vert.
 3. **Dispatcher** (`agentlake-dispatcher.yml` → `dispatcher.yml`), à chaque événement du propriétaire et toutes les 10 minutes. Passe pure `planPass` puis application :
    - rattrapage des incohérences (événement manqué) ;
    - dépendances mergées → tâche prête ;
@@ -33,7 +34,7 @@ Vérifié par dependency-cruiser (`npm run depcruise`) : seul `desktop` importe 
 
 - Label `agentlake:task`, état `agentlake:state/<état>` (`queued`, `ready`, `running`, `awaiting-answer`, `waiting-editor`, `fixing`, `escalated`).
 - Corps de l'issue : bloc `<!-- agentlake:task {…} -->` (la tâche du plan), bloc `<!-- agentlake:dispatch {…} -->` (tentatives, lancements, échec traité, résumé).
-- Questions et réponses : commentaires au format du protocole (`shared/questions.ts`) ; seules les réponses du propriétaire comptent.
+- Questions et réponses : commentaires au format du protocole (`shared/questions.ts`) ; seules les réponses de Kia comptent : variable `AGENTLAKE_OWNER` (dépôt d'organisation), sinon le propriétaire du dépôt. Même règle pour le déclenchement du dispatcher et du planificateur, la garde des tests et `devlake-config` (lu chez Kia). Minutes Actions d'un dépôt d'organisation : facturation de l'organisation.
 - `devlake-config/config.yml` (dépôt privé de Kia) : plafond global, pause globale, liste des projets.
 
 ## Cockpit

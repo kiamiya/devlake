@@ -152,6 +152,8 @@ jobs:
           # Pont Blender (profil Artiste 3D), même tunnel et même secret.
           BLENDER_BRIDGE_URL: ${{ vars.BLENDER_BRIDGE_URL }}
           AURA_BRIDGE_SECRET: ${{ secrets.AURA_BRIDGE_SECRET }}
+          # Compte de Kia (dépôt d'organisation), posé au bootstrap.
+          AGENTLAKE_OWNER: ${{ vars.AGENTLAKE_OWNER }}
         run: node "$RUNTIME/packages/dispatcher/dist/agent-context/cli.js" prepare
 
       - name: Claude Code

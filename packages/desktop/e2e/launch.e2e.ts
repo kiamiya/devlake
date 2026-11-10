@@ -238,7 +238,8 @@ test.describe('cockpit', () => {
 
     await page.getByRole('button', { name: 'Relancer le bootstrap' }).click();
     const steps = page.getByRole('list', { name: 'Étapes du bootstrap' }).getByRole('listitem');
-    await expect(steps).toHaveCount(7);
+    // Sept étapes, plus la variable AGENTLAKE_OWNER (compte de Kia).
+    await expect(steps).toHaveCount(8);
     for (const step of await steps.allTextContents()) expect(step).toContain('déjà en place');
     await app.close();
   });

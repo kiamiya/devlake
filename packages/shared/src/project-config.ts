@@ -32,6 +32,11 @@ export const ProjectConfigSchema = z.object({
     .refine((p) => new Set(p).size === p.length, 'Un profil est listé deux fois.'),
   exclusiveResources: z.array(cleanLine('Une ressource exclusive')).default([]),
   bridgeRequired: z.boolean({ error: 'bridgeRequired doit valoir true ou false.' }),
+  /**
+   * Projet repris (dépôt qui existait avant AgentLake) : état des lieux avant le plan,
+   * première tâche d'audit et de remise au vert au lieu de la mise en place du dépôt.
+   */
+  adopted: z.boolean({ error: 'adopted doit valoir true ou false.' }).optional(),
 });
 export type ProjectConfig = z.infer<typeof ProjectConfigSchema>;
 

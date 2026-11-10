@@ -11,6 +11,7 @@ import { pathToFileURL } from 'node:url';
 import { formatZodError } from 'shared';
 import { z } from 'zod';
 import { formatOutputs } from '../agent-context/cli.js';
+import { AccountEnvSchema, accountOf } from '../account.js';
 import { formatGuardResult, runTestsGuard } from './guard.js';
 import { finalizeReview, prepareReview } from './review.js';
 
@@ -30,6 +31,7 @@ export const QualityEnvSchema = z.object({
   GITHUB_OUTPUT: z.string().default(''),
   CONCLUSION: z.string().default('failure'),
   STRUCTURED_OUTPUT: z.string().default(''),
+  AGENTLAKE_OWNER: AccountEnvSchema,
 });
 
 export interface QualityCliDeps {
@@ -51,7 +53,12 @@ export async function runQualityCli(
   const github = deps.github(e.GH_TOKEN);
   switch (command) {
     case 'tests-guard': {
-      const result = await runTestsGuard(github, e.GITHUB_REPOSITORY, e.PR_NUMBER);
+      const result = await runTestsGuard(
+        github,
+        e.GITHUB_REPOSITORY,
+        e.PR_NUMBER,
+        accountOf(e.GITHUB_REPOSITORY, e.AGENTLAKE_OWNER),
+      );
       deps.log(formatGuardResult(result));
       return result.ok ? 0 : 1;
     }

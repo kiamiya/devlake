@@ -8,7 +8,7 @@ on:
       mode:
         description: Mode
         type: choice
-        options: [auto, regenerate]
+        options: [auto, regenerate, inventory]
         default: auto
       model:
         description: Modèle du planificateur
@@ -33,14 +33,16 @@ permissions: {}
 
 jobs:
   plan:
-    # Seul le propriétaire du dépôt déclenche le planificateur, et seulement depuis l'issue Cadrage.
+    # Seul Kia (AGENTLAKE_OWNER, ou le propriétaire du dépôt) déclenche le planificateur,
+    # et seulement depuis l'issue Cadrage.
     if: >-
-      github.event.sender.login == github.repository_owner &&
+      github.event.sender.login == (vars.AGENTLAKE_OWNER || github.repository_owner) &&
       (github.event_name == 'workflow_dispatch' ||
       contains(github.event.issue.labels.*.name, 'agentlake:cadrage'))
     permissions:
       contents: write
       issues: write
+      pull-requests: read
     uses: __DEVLAKE_REPOSITORY__/.github/workflows/planner.yml@__DEVLAKE_REF__
     with:
       mode: ${{ inputs.mode || 'auto' }}

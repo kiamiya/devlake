@@ -37,6 +37,21 @@ export interface BranchProtectionInput {
 export interface BranchProtection extends BranchProtectionInput {
   branch: string;
   requirePullRequest: boolean;
+  /** Relectures approuvées exigées avant de fusionner une PR (0 : aucune). */
+  requiredApprovals: number;
+}
+
+/** Fichier de l'arbre d'une branche. */
+export interface TreeEntry {
+  path: string;
+  /** Taille en octets (celle du pointeur pour un fichier Git LFS). */
+  size: number;
+}
+
+export interface RepositoryTree {
+  entries: TreeEntry[];
+  /** Arbre trop grand : GitHub n'en a renvoyé qu'une partie. */
+  truncated: boolean;
 }
 
 /**

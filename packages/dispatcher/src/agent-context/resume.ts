@@ -21,20 +21,28 @@ const MAX_LOG_PER_JOB = 8_000;
 export async function gatherResume(
   github: GitHubPort,
   ref: RepoRef,
-  input: { issueNumber: number; reason: ResumeReason; branch: string; attempt: number },
+  input: {
+    issueNumber: number;
+    reason: ResumeReason;
+    branch: string;
+    attempt: number;
+    /** Compte de Kia ; absent = propriétaire du dépôt. */
+    account?: string;
+  },
 ): Promise<Resume> {
+  const account = input.account ?? ref.owner;
   if (input.reason === 'none') return { kind: 'none' };
 
   if (input.reason === 'answer') {
     // Même règle que le dispatcher : réponse du propriétaire à la dernière question bloquante.
-    const thread = readThread(await github.listComments(ref, input.issueNumber), ref.owner);
+    const thread = readThread(await github.listComments(ref, input.issueNumber), account);
     if (!thread.pending)
       throw new ResumeError(
         'Reprise après réponse demandée, mais aucune question bloquante sur l’issue.',
       );
     if (!thread.answer)
       throw new ResumeError(
-        `Reprise après réponse demandée, mais la question ${thread.pending.question.id} n’a pas de réponse de ${ref.owner}.`,
+        `Reprise après réponse demandée, mais la question ${thread.pending.question.id} n’a pas de réponse de ${account}.`,
       );
     const { commentId: _comment, ...answer } = thread.answer;
     return { kind: 'answer', question: thread.pending.question, answer };

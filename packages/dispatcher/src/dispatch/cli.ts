@@ -8,6 +8,7 @@ import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { formatZodError, isPausedValue } from 'shared';
 import { z } from 'zod';
+import { AccountEnvSchema, accountOf } from '../account.js';
 import {
   checkBridgeHealth,
   eventAllowed,
@@ -41,6 +42,8 @@ export const DispatchEnvSchema = z.object({
   AGENTLAKE_PAUSED: optional,
   AURA_BRIDGE_SECRET: optional,
   GITHUB_RUN_ID: optional,
+  /** Compte de Kia (dépôt d'organisation) ; absent = propriétaire du dépôt. */
+  AGENTLAKE_OWNER: AccountEnvSchema,
 });
 
 export interface DispatchCliDeps {
@@ -61,6 +64,7 @@ export async function runDispatchCli(
     throw new Error(`Variables d’environnement invalides :\n${formatZodError(parsed.error)}`);
   const e = parsed.data;
   const ref = e.GITHUB_REPOSITORY;
+  const account = accountOf(ref, e.AGENTLAKE_OWNER);
 
   const payload: unknown =
     e.GITHUB_EVENT_PATH === null ? {} : JSON.parse(await deps.readText(e.GITHUB_EVENT_PATH));
@@ -68,12 +72,12 @@ export async function runDispatchCli(
   // Toute réponse qui ne relance rien est tracée, y compris celle d'un autre compte.
   const answer = e.GITHUB_EVENT_NAME === 'issue_comment' ? answerEventFrom(payload) : null;
   if (answer !== null) {
-    const ignored = await traceIgnoredAnswer(github, ref, answer);
+    const ignored = await traceIgnoredAnswer(github, ref, answer, account);
     if (ignored !== null)
       deps.log(`Réponse ignorée sur #${String(answer.issueNumber)} : ${ignored}.`);
   }
 
-  const filter = eventAllowed(e.GITHUB_EVENT_NAME, payload, ref.owner);
+  const filter = eventAllowed(e.GITHUB_EVENT_NAME, payload, account);
   if (!filter.allowed) {
     deps.log(`Passe annulée : ${filter.reason}`);
     return null;
@@ -82,9 +86,11 @@ export async function runDispatchCli(
   const configToken = e.AGENTLAKE_CONFIG_TOKEN;
   const result = await runDispatch(ref, {
     github,
-    globalCap: () => readGlobalCap(configToken === null ? null : deps.github(configToken), ref),
+    account,
+    globalCap: () =>
+      readGlobalCap(configToken === null ? null : deps.github(configToken), ref, account),
     minutesRemaining: () =>
-      readMinutesRemaining(github, ref, e.AGENTLAKE_BILLING_TOKEN, deps.fetch),
+      readMinutesRemaining(github, ref, e.AGENTLAKE_BILLING_TOKEN, deps.fetch, account),
     bridgeHealthy: (editor) =>
       checkBridgeHealth(
         {

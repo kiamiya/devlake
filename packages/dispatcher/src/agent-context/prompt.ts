@@ -62,7 +62,7 @@ export function tail(text: string, budget: number): string {
 
 function contextSection(documents: readonly ContextDocument[]): string {
   if (documents.length === 0) return '_Aucun document versé._';
-  const order = ['brief', 'gdd', 'annex'];
+  const order = ['brief', 'gdd', 'inventory', 'annex'];
   const sorted = [...documents].sort((a, b) => order.indexOf(a.role) - order.indexOf(b.role));
   const parts: string[] = [];
   let used = 0;
@@ -119,6 +119,8 @@ export interface QualityGate {
   checks: readonly string[];
   /** Dossier des gabarits dans le runner (copie de devlake). */
   templatesDir: string;
+  /** Projet repris : sa CI existante est gardée, la porte qualité s'y ajoute. */
+  adopted?: boolean;
 }
 
 function qualitySection(gate: QualityGate): string {
@@ -126,7 +128,9 @@ function qualitySection(gate: QualityGate): string {
     `## Porte qualité (profil \`${gate.profile}\`)`,
     '',
     `Les gabarits sont dans \`${gate.templatesDir}\` (copie de devlake, hors du dépôt) : lis son \`README.md\`.`,
-    `- Copie \`ci.yml\` dans \`.github/workflows/ci.yml\` et adapte les commandes à la stack du projet (scripts \`package.json\`, configurations de lint, de types et de couverture à 80 % des lignes).`,
+    gate.adopted === true
+      ? '- Projet repris : sa CI existante reste en place et ses checks restent obligatoires. Ne la remplace pas et ne réécris pas le code existant. Ajoute les jobs manquants de `ci.yml` (adaptés à la stack réelle du projet) dans `.github/workflows/ci.yml` s’il n’existe pas, sinon dans `.github/workflows/qualite.yml`. Commence par remettre au vert ce qui échoue déjà sur `main`, et note les conventions constatées dans `.agentlake/decisions.md`.'
+      : `- Copie \`ci.yml\` dans \`.github/workflows/ci.yml\` et adapte les commandes à la stack du projet (scripts \`package.json\`, configurations de lint, de types et de couverture à 80 % des lignes).`,
     `- Garde exactement ces noms de jobs, ce sont les checks obligatoires de \`main\` : ${gate.checks.map((c) => `\`${c}\``).join(', ')}.`,
     '- Aucun job vide, sauté ou non bloquant. Chaque check doit passer au vert sur ta PR : tant qu’ils ne sont pas tous verts sur `main`, aucune autre tâche du plan ne démarre.',
   ].join('\n');

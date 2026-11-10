@@ -24,6 +24,13 @@ export interface BootstrapInput {
   type: ProjectType;
   private: boolean;
   qualityProfile: QualityProfile;
+  /** Propriétaire du dépôt (organisation) ; absent = compte du jeton. */
+  owner?: string | undefined;
+  /**
+   * Projet repris : le dépôt doit exister (jamais créé), sa protection de main garde ses
+   * checks, son `.gitattributes` est complété, et project.yml le marque `adopted`.
+   */
+  adopted?: boolean | undefined;
 }
 
 export const BOOTSTRAP_STEPS = [
@@ -34,6 +41,7 @@ export const BOOTSTRAP_STEPS = [
   'files',
   'branch-protection',
   'secrets',
+  'variables',
 ] as const;
 export type BootstrapStep = (typeof BOOTSTRAP_STEPS)[number];
 export type StepStatus = 'created' | 'updated' | 'unchanged';
@@ -95,7 +103,29 @@ export function projectConfigFor(input: BootstrapInput, maxAttempts: number): Pr
     profiles: ['architect', 'reviewer'],
     exclusiveResources: [],
     bridgeRequired: isGameProject(input.type),
+    ...(input.adopted === true ? { adopted: true } : {}),
   };
+}
+
+/** Variable Actions du compte de Kia : les dépôts d'organisation n'appartiennent pas à Kia. */
+export const OWNER_VARIABLE = 'AGENTLAKE_OWNER';
+
+export class RepositoryNotFoundError extends Error {
+  constructor(id: string) {
+    super(`Dépôt introuvable ou inaccessible : ${id}.`);
+    this.name = 'RepositoryNotFoundError';
+  }
+}
+
+/** `.gitattributes` d'un projet repris : l'existant est gardé, les règles manquantes ajoutées. */
+export function mergeGitattributes(current: string | null, wanted: string): string {
+  if (current === null || current.trim() === '') return wanted;
+  const have = new Set(current.split(/\r?\n/).map((l) => l.trim()));
+  const missing = wanted
+    .split('\n')
+    .filter((l) => l.trim() !== '' && !l.startsWith('#') && !have.has(l.trim()));
+  if (missing.length === 0) return current;
+  return `${current.trimEnd()}\n\n# Ajouté par AgentLake : binaires dans Git LFS (fichiers déjà commités inchangés).\n${missing.join('\n')}\n`;
 }
 
 /**
@@ -110,8 +140,10 @@ export async function bootstrapProject(
   const claudeToken = await vault.get('claude-oauth-token');
   if (claudeToken === null) throw new ClaudeTokenMissingError();
 
-  const owner = (await github.getAuthenticatedUser()).login;
+  const login = (await github.getAuthenticatedUser()).login;
+  const owner = input.owner ?? login;
   const ref: RepoRef = { owner, repo: input.name };
+  const adopted = input.adopted === true;
   const steps: BootstrapReport['steps'] = [];
 
   const run = async (step: BootstrapStep, action: () => Promise<StepStatus>) => {
@@ -128,6 +160,7 @@ export async function bootstrapProject(
       return 'unchanged';
     } catch (error) {
       if (!isGitHubError(error, 'not-found')) throw error;
+      if (adopted || owner !== login) throw new RepositoryNotFoundError(`${owner}/${input.name}`);
       await github.createRepository({
         name: input.name,
         private: input.private,
@@ -183,7 +216,15 @@ export async function bootstrapProject(
         repository: DEVLAKE_REPOSITORY,
         ref: deps.workflowsRef,
       }),
-      ['.gitattributes', gitattributes(input.type)],
+      [
+        '.gitattributes',
+        adopted
+          ? mergeGitattributes(
+              (await github.getFile(ref, '.gitattributes', MAIN))?.content ?? null,
+              gitattributes(input.type),
+            )
+          : gitattributes(input.type),
+      ],
     ]);
     const changes: FileChange[] = [];
     for (const [path, content] of desired) {
@@ -214,12 +255,19 @@ export async function bootstrapProject(
   });
 
   await run('branch-protection', async () => {
-    const wanted = requiredChecksFor(input.qualityProfile);
     const current = await github.getBranchProtection(ref, MAIN);
+    // Projet repris : les checks de sa CI restent exigés, ceux de la porte qualité s'ajoutent.
+    const wanted = [
+      ...new Set([
+        ...(adopted ? (current?.requiredChecks ?? []) : []),
+        ...requiredChecksFor(input.qualityProfile),
+      ]),
+    ];
     const same =
       current !== null &&
       current.requirePullRequest &&
       !current.enforceAdmins &&
+      current.requiredApprovals === 0 &&
       [...current.requiredChecks].sort().join() === [...wanted].sort().join();
     if (same) return 'unchanged';
     // Kia (administrateur) reste exempté : le cockpit commite le contexte et le plan.
@@ -239,6 +287,13 @@ export async function bootstrapProject(
       added.push('AURA_BRIDGE_SECRET');
     }
     return added.length === 0 ? 'unchanged' : present.size === 0 ? 'created' : 'updated';
+  });
+
+  await run('variables', async () => {
+    const current = await github.getRepositoryVariable(ref, OWNER_VARIABLE);
+    if (current === login) return 'unchanged';
+    await github.setRepositoryVariable(ref, OWNER_VARIABLE, login);
+    return current === null ? 'created' : 'updated';
   });
 
   return { repository: ref, steps };

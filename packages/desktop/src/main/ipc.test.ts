@@ -30,6 +30,8 @@ import {
   type QuestionNotification,
 } from './services/questions/questions-service.js';
 import { renderQuestionComment, stateLabel, TASK_LABEL } from 'shared';
+import { AdoptionService } from './services/projects/adoption.js';
+import { InventoryService } from './services/projects/inventory.js';
 
 /** Faux jeton de test, sans valeur réelle. */
 const FAKE_TOKEN = 'ghp_abcdefghijklmnop1234'; // gitleaks:allow
@@ -55,6 +57,14 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
   const service = new CockpitService({ repos, vault, github: () => github });
   const bridges = new BridgeService({ repos, vault });
   const projects = new ProjectsService(repos, () => service.githubPort());
+  const creation = new ProjectCreationService({
+    repos,
+    vault,
+    github: () => service.githubPort(),
+    projects,
+    callerTemplates: { 'agentlake-x.yml': 'uses: __DEVLAKE_REPOSITORY__@__DEVLAKE_REF__' },
+    profileTemplates: {},
+  });
   const context = new ContextService({
     repos,
     github: () => service.githubPort(),
@@ -70,14 +80,7 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
     handlers: serviceHandlers({
       cockpit: service,
       projects,
-      creation: new ProjectCreationService({
-        repos,
-        vault,
-        github: () => service.githubPort(),
-        projects,
-        callerTemplates: { 'agentlake-x.yml': 'uses: __DEVLAKE_REPOSITORY__@__DEVLAKE_REF__' },
-        profileTemplates: {},
-      }),
+      creation,
       context,
       planner: new PlannerLaunchService(repos, () => service.githubPort()),
       plan: new PlanService(repos, () => service.githubPort()),
@@ -96,6 +99,13 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
       bridge: bridges,
       tunnel: new TunnelService({ repos, github: () => service.githubPort(), bridges }),
       adhoc: new AdhocTaskService(repos, () => service.githubPort()),
+      adoption: new AdoptionService({
+        repos,
+        github: () => service.githubPort(),
+        creation,
+        projects,
+      }),
+      inventory: new InventoryService(repos, () => service.githubPort()),
     }),
     vault,
     repos,

@@ -8,7 +8,7 @@ Projet : {{PROJECT}}
 
 {{DOCUMENTS}}
 
-## Consigne
+{{REPRISE}}## Consigne
 
 Lis tous les documents ci-dessus. Liste les questions dont les réponses changent la découpe en tâches : périmètre, choix techniques imposés, priorités, contraintes, critères de réussite.
 

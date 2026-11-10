@@ -18,7 +18,9 @@ import {
   PullRequestApi,
   RefApi,
   RepositoryApi,
+  RepositoryWithAccessApi,
   SecretsApi,
+  TreeApi,
   ShaApi,
   WorkflowRunApi,
   WorkflowRunsApi,
@@ -62,6 +64,7 @@ import type {
   Artifact,
   RepoRef,
   Repository,
+  RepositoryTree,
   UpdateIssueInput,
   UpdatePullRequestInput,
   WorkflowJob,
@@ -141,6 +144,23 @@ export class OctokitGitHub implements GitHubPort {
     );
   }
 
+  async listAdministrableRepositories(): Promise<Repository[]> {
+    const item = z.unknown().transform((raw) => {
+      const r = raw as { permissions?: { admin?: boolean }; archived?: boolean };
+      return RepositoryWithAccessApi.parse({
+        repository: raw,
+        admin: r.permissions?.admin ?? false,
+        archived: r.archived ?? false,
+      });
+    });
+    const all = await this.paginate(
+      'GET /user/repos',
+      { affiliation: 'owner,organization_member', sort: 'full_name' },
+      item,
+    );
+    return all.filter((r) => r.admin && !r.archived).map((r) => r.repository);
+  }
+
   // Dépôts
 
   async createRepository(input: CreateRepositoryInput): Promise<Repository> {
@@ -194,11 +214,20 @@ export class OctokitGitHub implements GitHubPort {
         requiredChecks: p.required_status_checks?.contexts ?? [],
         enforceAdmins: p.enforce_admins?.enabled ?? false,
         requirePullRequest: p.required_pull_request_reviews != null,
+        requiredApprovals: p.required_pull_request_reviews?.required_approving_review_count ?? 0,
       };
     } catch (error) {
       if (isGitHubError(error, 'not-found')) return null;
       throw error;
     }
+  }
+
+  async renameBranch(ref: RepoRef, branch: string, newName: string): Promise<void> {
+    await this.http.raw('POST /repos/{owner}/{repo}/branches/{branch}/rename', {
+      ...repoParams(ref),
+      branch,
+      new_name: newName,
+    });
   }
 
   async getBranchProtectionSummary(
@@ -306,6 +335,20 @@ export class OctokitGitHub implements GitHubPort {
       if (isGitHubError(error, 'not-found')) return false;
       throw error;
     }
+  }
+
+  async listTree(ref: RepoRef, branch: string): Promise<RepositoryTree> {
+    const tree = await this.http.request(
+      'GET /repos/{owner}/{repo}/git/trees/{tree_sha}',
+      { ...repoParams(ref), tree_sha: branch, recursive: '1' },
+      TreeApi,
+    );
+    return {
+      entries: tree.tree
+        .filter((e) => e.type === 'blob')
+        .map((e) => ({ path: e.path, size: e.size ?? 0 })),
+      truncated: tree.truncated ?? false,
+    };
   }
 
   async getFile(ref: RepoRef, path: string, branch?: string): Promise<FileContent | null> {

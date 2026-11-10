@@ -9,7 +9,7 @@ import {
   type ProjectsService,
 } from '../../projects-service.js';
 import type { SecretVault } from '../../vault.js';
-import { bootstrapProject, type BootstrapReport } from './bootstrap.js';
+import { bootstrapProject, type BootstrapInput, type BootstrapReport } from './bootstrap.js';
 import { PROJECT_CONFIG_PATH } from './files.js';
 
 export interface CreationDeps {
@@ -25,7 +25,7 @@ export interface CreationDeps {
 export class ProjectCreationService {
   constructor(private readonly deps: CreationDeps) {}
 
-  private async bootstrap(input: CreateProjectInput): Promise<BootstrapReport> {
+  async bootstrap(input: BootstrapInput): Promise<BootstrapReport> {
     const settings = this.deps.repos.settings.get();
     return bootstrapProject(input, {
       github: await this.deps.github(),
@@ -57,9 +57,11 @@ export class ProjectCreationService {
     const repository = await github.getRepository(ref);
     return this.bootstrap({
       name: project.repo,
+      owner: project.owner,
       type: config.type,
       private: repository.private,
       qualityProfile: config.qualityProfile,
+      adopted: config.adopted,
     });
   }
 }

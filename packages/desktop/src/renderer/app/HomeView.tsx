@@ -7,6 +7,7 @@ import { ActivityIndicator, QuestionsBadge } from '../features/tabs/TabBar.js';
 import { useDiscoverProjects, useOpenProject } from '../hooks/projects.js';
 import { QuestionsInbox } from '../features/questions/QuestionsInbox.js';
 import { NewProjectWizard } from './NewProjectWizard.js';
+import { AdoptProjectWizard } from './AdoptProjectWizard.js';
 import { AdhocTaskForm } from '../features/tasks/AdhocTaskForm.js';
 
 function ExistingRepositories() {
@@ -74,6 +75,7 @@ function ExistingRepositories() {
 export function HomeView({ projects }: { projects: readonly ProjectSummary[] }) {
   const openTab = useTabs((s) => s.open);
   const [creating, setCreating] = useState(false);
+  const [adopting, setAdopting] = useState(false);
   const [addingTask, setAddingTask] = useState(false);
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6">
@@ -120,6 +122,24 @@ export function HomeView({ projects }: { projects: readonly ProjectSummary[] }) 
                 }}
               >
                 Nouveau projet
+              </Button>
+            </div>
+          )}
+          {adopting ? (
+            <AdoptProjectWizard
+              onClose={() => {
+                setAdopting(false);
+              }}
+            />
+          ) : (
+            <div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setAdopting(true);
+                }}
+              >
+                Reprendre un projet existant
               </Button>
             </div>
           )}

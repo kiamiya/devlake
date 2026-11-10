@@ -5,11 +5,16 @@ import { safeParseWith, type ParseResult } from './common.js';
 export const CONTEXT_DIR = '.agentlake/context';
 export const CONTEXT_INDEX_PATH = `${CONTEXT_DIR}/context.json`;
 
-export const CONTEXT_ROLES = ['brief', 'gdd', 'annex', 'asset'] as const;
+export const CONTEXT_ROLES = ['brief', 'gdd', 'annex', 'asset', 'inventory'] as const;
 export const ContextRoleSchema = z.enum(CONTEXT_ROLES, {
   error: `Rôle inconnu. Valeurs possibles : ${CONTEXT_ROLES.join(', ')}.`,
 });
 export type ContextRole = z.infer<typeof ContextRoleSchema>;
+
+/** État des lieux d'un projet repris, écrit par le planificateur et validé dans le cockpit. */
+export const INVENTORY_PATH = `${CONTEXT_DIR}/etat-des-lieux.md`;
+/** Branches où le planificateur propose l'état des lieux : `etat-des-lieux/vN`. */
+export const INVENTORY_BRANCH_PREFIX = 'etat-des-lieux/v';
 
 export const ContextEntrySchema = z.object({
   /** Chemin dans le dépôt. */

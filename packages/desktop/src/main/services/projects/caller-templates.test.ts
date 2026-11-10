@@ -118,9 +118,12 @@ describe('gabarit d’appel du planificateur', () => {
     jobs: { plan: { if: string; with: Record<string, string> } };
   };
 
-  it('se lance depuis le cockpit ou sur une réponse dans l’issue Cadrage, par le propriétaire seulement', () => {
+  it('se lance depuis le cockpit ou sur une réponse dans l’issue Cadrage, par Kia seulement', () => {
     expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch', 'issue_comment']);
-    expect(workflow.jobs.plan.if).toContain('github.event.sender.login == github.repository_owner');
+    // Dépôt d'organisation : le compte de Kia est dans AGENTLAKE_OWNER.
+    expect(workflow.jobs.plan.if).toContain(
+      'github.event.sender.login == (vars.AGENTLAKE_OWNER || github.repository_owner)',
+    );
     expect(workflow.jobs.plan.if).toContain(
       "contains(github.event.issue.labels.*.name, 'agentlake:cadrage')",
     );

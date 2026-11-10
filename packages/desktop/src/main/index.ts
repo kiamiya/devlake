@@ -20,6 +20,8 @@ import { registerDroppedFiles, registerIpc, serviceHandlers } from './ipc.js';
 import { ProjectsService } from './projects-service.js';
 import { CALLER_TEMPLATES, PROFILE_TEMPLATES } from './services/projects/caller-templates.js';
 import { ProjectCreationService } from './services/projects/creation-service.js';
+import { AdoptionService } from './services/projects/adoption.js';
+import { InventoryService } from './services/projects/inventory.js';
 import { ContextService } from './services/ingestion/context-service.js';
 import { PlannerLaunchService } from './services/planner/planner-launch.js';
 import { PlanService } from './services/plan/plan-service.js';
@@ -198,6 +200,13 @@ async function start(): Promise<void> {
       creation,
       context,
       planner: new PlannerLaunchService(repos, () => service.githubPort()),
+      adoption: new AdoptionService({
+        repos,
+        github: () => service.githubPort(),
+        creation,
+        projects,
+      }),
+      inventory: new InventoryService(repos, () => service.githubPort()),
       plan: new PlanService(repos, () => service.githubPort()),
       questions: new QuestionsService({
         repos,
