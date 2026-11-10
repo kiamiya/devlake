@@ -320,6 +320,62 @@ function SettingsForm({ initial }: { initial: Settings }) {
       </Card>
 
       <Card>
+        <CardTitle>Assets possédés</CardTitle>
+        <CardDescription>
+          Où le cockpit cherche tes assets pour les projets de jeu. Caches vides : emplacements par
+          défaut de Unity et du launcher Epic.
+        </CardDescription>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="unityStoreCache">Cache de l’Asset Store (Unity)</Label>
+            <Input
+              id="unityStoreCache"
+              placeholder="%APPDATA%\Unity\Asset Store-5.x"
+              value={form.assets.unityStoreCache ?? ''}
+              onChange={(e) => {
+                set('assets', {
+                  ...form.assets,
+                  unityStoreCache: e.target.value.trim() === '' ? null : e.target.value,
+                });
+              }}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="epicVaultCache">VaultCache du launcher Epic (Fab, Unreal)</Label>
+            <Input
+              id="epicVaultCache"
+              placeholder="C:\ProgramData\Epic\EpicGamesLauncher\VaultCache"
+              value={form.assets.epicVaultCache ?? ''}
+              onChange={(e) => {
+                set('assets', {
+                  ...form.assets,
+                  epicVaultCache: e.target.value.trim() === '' ? null : e.target.value,
+                });
+              }}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="assetFolders">Dossiers d’assets (un par ligne)</Label>
+            <Textarea
+              id="assetFolders"
+              className="font-mono text-xs"
+              value={form.assets.folders.join('\n')}
+              onChange={(e) => {
+                set('assets', {
+                  ...form.assets,
+                  folders: e.target.value.split(/\r?\n/).filter((l) => l.trim() !== ''),
+                });
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Chaque sous-dossier est un asset, ainsi que chaque fichier reconnu (modèle, texture,
+              son, .blend, .unitypackage).
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
         <CardTitle>Éditeurs et Aura</CardTitle>
         <CardDescription>
           Blocs JSON copiés depuis l’écran « MCP Configuration » d’Aura, collés tels quels.

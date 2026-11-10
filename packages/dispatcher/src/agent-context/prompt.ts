@@ -19,6 +19,8 @@ export interface ProjectContext {
   instructions: string | null;
   decisions: string | null;
   documents: ContextDocument[];
+  /** Bibliothèque d'assets (projet de jeu), en Markdown ; null sans `.agentlake/assets.json`. */
+  assets?: string | null;
 }
 
 /** Raison d'un lancement : premier passage, reprise après une réponse, reprise après un échec de CI. */
@@ -171,6 +173,15 @@ export function buildPrompt(input: PromptInput): string {
     `## Instructions du projet (CLAUDE.md)\n\n${input.context.instructions?.trim() || '_Aucun CLAUDE.md._'}`,
     `## Décisions du projet\n\n${input.context.decisions?.trim() || '_Aucune décision._'}`,
     `## Contexte du projet\n\n${contextSection(input.context.documents)}`,
+    input.context.assets != null
+      ? [
+          '## Bibliothèque d’assets du projet',
+          '',
+          'Assets choisis par Kia (déjà versés dans le dépôt, ou à acquérir). Utilise-les plutôt que d’en créer de factices. S’il te manque un asset indispensable (modèle, texture, son…), pose une question bloquante qui le décrit précisément : Kia en choisira un dans le cockpit (possédé, en boutique ou gratuit) et te répondra où il a été versé.',
+          '',
+          input.context.assets,
+        ].join('\n')
+      : null,
   ];
   return `${sections.filter((s): s is string => s !== null).join('\n\n')}\n`;
 }

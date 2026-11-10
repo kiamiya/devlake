@@ -8,7 +8,7 @@ Projet : {{PROJECT}}
 
 {{DOCUMENTS}}
 
-## Questions et réponses du cadrage
+{{ASSETS}}## Questions et réponses du cadrage
 
 {{ANSWERS}}
 

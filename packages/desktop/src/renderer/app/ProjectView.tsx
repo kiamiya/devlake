@@ -4,6 +4,7 @@ import { PlanSection } from '../features/plan/PlanSection.js';
 import { QuestionsInbox } from '../features/questions/QuestionsInbox.js';
 import { Dashboard } from '../features/dashboard/Dashboard.js';
 import { RunsView } from '../features/runs/RunsView.js';
+import { AssetsSection } from '../features/assets/AssetsSection.js';
 import { PrepareClone } from '../features/bridge/PrepareClone.js';
 import { useRebootstrap } from '../hooks/projects.js';
 import { cn } from '../lib/utils.js';
@@ -16,6 +17,7 @@ const SECTION_LABELS: Record<ProjectSection, string> = {
   execution: 'Exécution',
   questions: 'Questions',
   runs: 'Runs',
+  assets: 'Assets',
 };
 
 /** Coque d'un projet : barre latérale ; le contenu des vues arrive avec les tâches suivantes. */
@@ -78,6 +80,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
           <QuestionsInbox projectId={projectId} />
         ) : section === 'execution' ? (
           <Dashboard projectId={projectId} />
+        ) : section === 'assets' ? (
+          <AssetsSection projectId={projectId} />
         ) : (
           <RunsView projectId={projectId} />
         )}

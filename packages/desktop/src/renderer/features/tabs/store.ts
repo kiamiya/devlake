@@ -12,7 +12,14 @@ import {
   type TabsModel,
 } from './model.js';
 
-export const PROJECT_SECTIONS = ['context', 'plan', 'execution', 'questions', 'runs'] as const;
+export const PROJECT_SECTIONS = [
+  'context',
+  'plan',
+  'execution',
+  'questions',
+  'runs',
+  'assets',
+] as const;
 export type ProjectSection = (typeof PROJECT_SECTIONS)[number];
 
 export interface TabsStore extends TabsModel {

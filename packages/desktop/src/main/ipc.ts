@@ -19,6 +19,13 @@ import {
 } from './services/projects/bootstrap.js';
 import { AdoptionError, type AdoptionService } from './services/projects/adoption.js';
 import { InventoryError, type InventoryService } from './services/projects/inventory.js';
+import {
+  AssetError,
+  AssetLicenseError,
+  type AssetService,
+} from './services/assets/asset-service.js';
+import { UnityPackageError } from './services/assets/unitypackage.js';
+import { FreeLibraryError } from './services/assets/free.js';
 import type { ProjectCreationService } from './services/projects/creation-service.js';
 import {
   PlannerModelMissingError,
@@ -63,6 +70,7 @@ export function serviceHandlers(services: {
   adhoc: AdhocTaskService;
   adoption: AdoptionService;
   inventory: InventoryService;
+  assets: AssetService;
 }): Record<IpcChannel, Handler> {
   const {
     cockpit: service,
@@ -78,6 +86,7 @@ export function serviceHandlers(services: {
     adhoc,
     adoption,
     inventory,
+    assets,
   } = services;
   const input = <C extends IpcChannel>(_channel: C, value: unknown) =>
     value as z.output<(typeof IPC_CONTRACT)[C]['input']>;
@@ -108,6 +117,19 @@ export function serviceHandlers(services: {
     },
     'projects:adopt': (value) => adoption.adopt(input('projects:adopt', value)),
     'inventory:get': (value) => inventory.get(input('inventory:get', value).projectId),
+    'assets:library': (value) => assets.library(input('assets:library', value).projectId),
+    'assets:owned': () => assets.owned(),
+    'assets:measure': (value) => assets.measure(input('assets:measure', value).key),
+    'assets:search': (value) => {
+      const { source, query, type } = input('assets:search', value);
+      return assets.search(source, query, type);
+    },
+    'assets:add-link': (value) => assets.addLink(input('assets:add-link', value)),
+    'assets:remove': (value) => {
+      const { projectId, id } = input('assets:remove', value);
+      return assets.remove(projectId, id);
+    },
+    'assets:import': (value) => assets.import(input('assets:import', value)),
     'inventory:validate': (value) => {
       const { projectId, version } = input('inventory:validate', value);
       return inventory.validate(projectId, version);
@@ -229,6 +251,10 @@ export function toIpcError(error: unknown): IpcErrorPayload {
     [AdoptionError, 'ADOPTION_ERROR'],
     [RepositoryNotFoundError, 'REPOSITORY_NOT_FOUND'],
     [InventoryError, 'INVENTORY_ERROR'],
+    [AssetLicenseError, 'ASSET_LICENSE_PUBLIC'],
+    [AssetError, 'ASSET_ERROR'],
+    [UnityPackageError, 'ASSET_ERROR'],
+    [FreeLibraryError, 'FREE_LIBRARY_ERROR'],
   ];
   for (const [type, code] of known)
     if (error instanceof type) return { code, message: error.message };

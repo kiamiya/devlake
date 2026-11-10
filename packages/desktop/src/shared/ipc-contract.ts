@@ -1,4 +1,7 @@
 import {
+  AssetEntrySchema,
+  AssetLibrarySchema,
+  AssetLicenseSchema,
   ContextEntrySchema,
   EditorIdSchema,
   ProfileIdSchema,
@@ -121,6 +124,81 @@ export const AdoptionReportSchema = z.object({
   blenderConfigured: z.boolean().nullable(),
 });
 export type AdoptionReport = z.infer<typeof AdoptionReportSchema>;
+
+/** Asset possédé sur le poste (caches des boutiques, dossiers déclarés). */
+export const OwnedAssetSchema = z.object({
+  /** Clé opaque, revérifiée par le cockpit contre les dossiers réglés. */
+  key: z.string(),
+  name: z.string(),
+  origin: z.enum(['unity-store-cache', 'epic-vault', 'folder']),
+  kind: z.enum(['unitypackage', 'unreal-content', 'files', 'file']),
+  /** Moteur imposé par le format (package Unity, contenu Unreal) ; null : tous. */
+  engine: z.enum(['unity', 'unreal']).nullable(),
+  path: z.string(),
+  /** Taille connue sans parcourir l'asset (fichier) ; null sinon. */
+  size: z.number().nullable(),
+  publisher: z.string().nullable(),
+});
+export type OwnedAsset = z.infer<typeof OwnedAssetSchema>;
+
+export const FREE_SOURCES = ['polyhaven', 'ambientcg'] as const;
+export const FreeSourceSchema = z.enum(FREE_SOURCES);
+export type FreeSource = z.infer<typeof FreeSourceSchema>;
+export const FreeAssetTypeSchema = z.enum(['model', 'texture', 'hdri']);
+export type FreeAssetType = z.infer<typeof FreeAssetTypeSchema>;
+
+/** Résultat de recherche dans une bibliothèque gratuite (CC0). */
+export const FreeAssetSchema = z.object({
+  source: FreeSourceSchema,
+  id: z.string(),
+  name: z.string(),
+  type: FreeAssetTypeSchema,
+  thumbnail: z.string().nullable(),
+  url: z.string(),
+});
+export type FreeAsset = z.infer<typeof FreeAssetSchema>;
+
+export const AssetImportSourceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('owned'), key: z.string().min(1) }),
+  z.object({
+    kind: z.literal('free'),
+    source: FreeSourceSchema,
+    id: z.string().min(1),
+    type: FreeAssetTypeSchema,
+    resolution: z.enum(['1k', '2k', '4k']).default('2k'),
+  }),
+]);
+
+export const AssetImportInputSchema = z.object({
+  projectId: z.string(),
+  from: AssetImportSourceSchema,
+  name: z.string().trim().min(1, 'Nom d’asset vide.').max(200),
+  license: AssetLicenseSchema,
+  attribution: z.string().trim().max(1000).optional(),
+  url: z.url({ message: 'URL invalide.' }).optional(),
+  /** Lien de boutique (`wanted`) que cet asset possédé vient remplir. */
+  replaces: z.string().optional(),
+  /** Dépôt public et licence restreinte : versement confirmé malgré l'avertissement. */
+  acknowledgePublicLicense: z.boolean().default(false),
+});
+export type AssetImportInput = z.infer<typeof AssetImportInputSchema>;
+
+export const AssetImportResultSchema = z.object({
+  entry: AssetEntrySchema,
+  commitSha: z.string(),
+  task: z.object({ taskId: z.string(), issueNumber: z.number(), url: z.string() }).nullable(),
+  warnings: z.array(z.string()),
+});
+export type AssetImportResult = z.infer<typeof AssetImportResultSchema>;
+
+export const AssetLibraryViewSchema = z.object({
+  type: ProjectTypeSchema,
+  /** Projet de jeu (Unity ou Unreal) : seul cas où la bibliothèque sert. */
+  game: z.boolean(),
+  private: z.boolean(),
+  library: AssetLibrarySchema,
+});
+export type AssetLibraryView = z.infer<typeof AssetLibraryViewSchema>;
 
 /** État des lieux d'un projet repris. */
 export const InventoryStateSchema = z.object({
@@ -375,6 +453,38 @@ export const IPC_CONTRACT = {
     }),
   },
   'inventory:get': { input: z.object({ projectId: z.string() }), output: InventoryStateSchema },
+  'assets:library': { input: z.object({ projectId: z.string() }), output: AssetLibraryViewSchema },
+  'assets:owned': {
+    input: NoInput,
+    output: z.object({ assets: z.array(OwnedAssetSchema), notes: z.array(z.string()) }),
+  },
+  'assets:measure': {
+    input: z.object({ key: z.string() }),
+    output: z.object({ files: z.number(), size: z.number() }),
+  },
+  'assets:search': {
+    input: z.object({
+      source: FreeSourceSchema,
+      query: z.string().trim().max(200),
+      type: FreeAssetTypeSchema,
+    }),
+    output: z.array(FreeAssetSchema),
+  },
+  'assets:add-link': {
+    input: z.object({
+      projectId: z.string(),
+      url: z.url({ message: 'URL invalide.' }),
+      name: z.string().trim().min(1, 'Nom d’asset vide.').max(200),
+      license: AssetLicenseSchema.default('store'),
+      note: z.string().trim().max(2000).optional(),
+    }),
+    output: AssetEntrySchema,
+  },
+  'assets:remove': {
+    input: z.object({ projectId: z.string(), id: z.string() }),
+    output: z.object({ commitSha: z.string() }),
+  },
+  'assets:import': { input: AssetImportInputSchema, output: AssetImportResultSchema },
   'inventory:validate': {
     input: z.object({ projectId: z.string(), version: z.number().int().min(1) }),
     output: z.object({ commitSha: z.string() }),

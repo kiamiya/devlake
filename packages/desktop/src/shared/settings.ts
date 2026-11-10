@@ -113,6 +113,12 @@ export const SettingsSchema = z.object({
     unreal: BridgeSettingsSchema,
     blender: BridgeSettingsSchema,
   }),
+  /** Assets possédés : caches des boutiques (null : emplacement par défaut) et dossiers. */
+  assets: z.object({
+    unityStoreCache: z.string().trim().min(1, 'Chemin vide.').nullable(),
+    epicVaultCache: z.string().trim().min(1, 'Chemin vide.').nullable(),
+    folders: z.array(z.string().trim().min(1, 'Chemin vide.')).max(50, 'Au plus 50 dossiers.'),
+  }),
   /** Tunnel HTTPS vers la passerelle des ponts. */
   tunnel: z.object({
     provider: z.enum(['tailscale', 'cloudflare']),
@@ -147,6 +153,7 @@ export const DEFAULT_SETTINGS: Settings = {
     unreal: { port: 8766, allowedTools: [] },
     blender: { port: 8767, allowedTools: [] },
   },
+  assets: { unityStoreCache: null, epicVaultCache: null, folders: [] },
   tunnel: { provider: 'tailscale', gatewayPort: 8764, autoExpose: true },
 };
 

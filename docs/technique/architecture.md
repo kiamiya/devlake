@@ -32,6 +32,8 @@ Vérifié par dependency-cruiser (`npm run depcruise`) : seul `desktop` importe 
 
 ## Données sur GitHub
 
+- `.agentlake/assets.json` (projets de jeu) : bibliothèque d'assets (`shared/assets.ts`), écrite par le cockpit (`AssetService`), résumée dans les prompts du planificateur et des agents. Versement en un commit : binaires en Git LFS, `.unitypackage` décompressé dans le cockpit, contenu Unreal sous `Content/`, sources sous `Assets/ThirdParty/` (Unity) ou `SourceArt/ThirdParty/` (Unreal), puis tâche ad hoc d'intégration.
+
 - Label `agentlake:task`, état `agentlake:state/<état>` (`queued`, `ready`, `running`, `awaiting-answer`, `waiting-editor`, `fixing`, `escalated`).
 - Corps de l'issue : bloc `<!-- agentlake:task {…} -->` (la tâche du plan), bloc `<!-- agentlake:dispatch {…} -->` (tentatives, lancements, échec traité, résumé).
 - Questions et réponses : commentaires au format du protocole (`shared/questions.ts`) ; seules les réponses de Kia comptent : variable `AGENTLAKE_OWNER` (dépôt d'organisation), sinon le propriétaire du dépôt. Même règle pour le déclenchement du dispatcher et du planificateur, la garde des tests et `devlake-config` (lu chez Kia). Minutes Actions d'un dépôt d'organisation : facturation de l'organisation.
