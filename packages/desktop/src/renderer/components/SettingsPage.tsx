@@ -1,10 +1,5 @@
 import { EDITORS, PROFILE_IDS, type EditorId as Editor, type ProfileId } from 'shared';
 
-const EDITOR_LABELS: Record<Editor, string> = {
-  unity: 'Unity',
-  unreal: 'Unreal',
-  blender: 'Blender',
-};
 import { useEffect, useState, type FormEvent } from 'react';
 import type { Settings } from '../../shared/settings.js';
 import {
@@ -16,6 +11,8 @@ import {
   useUpdateSettings,
 } from '../hooks/queries.js';
 import { BridgePanel } from '../features/bridge/BridgePanel.js';
+import { McpGuide } from '../features/bridge/McpGuide.js';
+import { EDITOR_LABELS } from '../hooks/bridge.js';
 import { ClaudeTokenSection } from './ClaudeTokenSection.js';
 import { Button } from './ui/button.js';
 import { Card, CardDescription, CardTitle, Input, Label, Textarea } from './ui/primitives.js';
@@ -407,6 +404,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
           </div>
           {EDITORS.map((editor) => (
             <div key={editor} className="flex flex-col gap-2">
+              <McpGuide editor={editor} />
               <Label htmlFor={`aura-${editor}`}>
                 {editor === 'blender'
                   ? 'Configuration MCP Blender (blender-mcp)'
