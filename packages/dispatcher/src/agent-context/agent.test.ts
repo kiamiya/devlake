@@ -115,7 +115,37 @@ describe('contexte et reprise', () => {
       instructions: '# Projet',
       decisions: null,
       documents: [{ path: '.agentlake/context/brief.md', role: 'brief', content: '# Brief' }],
+      assets: null,
     });
+    // Projet de jeu : la bibliothèque d'assets est résumée pour le prompt.
+    files['.agentlake/assets.json'] = JSON.stringify({
+      version: 1,
+      assets: [
+        {
+          id: 'caisse',
+          name: 'Caisse en bois',
+          origin: 'polyhaven',
+          status: 'imported',
+          license: 'cc0',
+          path: 'Assets/ThirdParty/caisse',
+          addedAt: '2026-11-10T10:00:00.000Z',
+        },
+        {
+          id: 'foret',
+          name: 'Forêt stylisée',
+          origin: 'store-link',
+          status: 'wanted',
+          license: 'store',
+          url: 'https://assetstore.unity.com/packages/3d/foret',
+          addedAt: '2026-11-10T10:00:00.000Z',
+        },
+      ],
+    });
+    const game = await readProjectContext((p) => Promise.resolve(files[p] ?? null));
+    expect(game.assets).toContain(
+      '**Caisse en bois** (`caisse`, polyhaven, cc0) : versé dans `Assets/ThirdParty/caisse`',
+    );
+    expect(game.assets).toContain('à acquérir (https://assetstore.unity.com/packages/3d/foret)');
     expect((await readProjectContext(() => Promise.resolve(null))).documents).toEqual([]);
   });
 

@@ -1,5 +1,8 @@
 import type { GitHubPort, RepoRef } from 'github';
 import {
+  ASSET_LIBRARY_PATH,
+  AssetLibrarySchema,
+  renderAssetLibrary,
   CADRAGE_LABEL,
   DEFAULT_RUNNER_CAP,
   INVENTORY_BRANCH_PREFIX,
@@ -122,6 +125,19 @@ async function projectConfig(readFile: PlannerDeps['readFile']): Promise<Project
   return parsed.data;
 }
 
+/** Bibliothèque d'assets du projet (jeu), en section de prompt ; vide sans `assets.json`. */
+async function assetsSection(readFile: PlannerDeps['readFile']): Promise<string> {
+  const text = await readFile(ASSET_LIBRARY_PATH);
+  if (text === null) return '';
+  try {
+    const library = AssetLibrarySchema.safeParse(JSON.parse(text));
+    if (!library.success) return '';
+    return `## Bibliothèque d'assets du projet\n\nAssets choisis par Kia ; les tâches qui en ont besoin s'appuient dessus (chemins versés), et un asset « à acquérir » n'est pas encore dans le dépôt.\n\n${renderAssetLibrary(library.data)}\n\n`;
+  } catch {
+    return '';
+  }
+}
+
 async function hasInventory(readFile: PlannerDeps['readFile']): Promise<boolean> {
   const text = await readFile(CONTEXT_INDEX_PATH);
   if (text === null) return false;
@@ -213,7 +229,7 @@ export async function runPlanner(input: PlannerInput, deps: PlannerDeps): Promis
         PROJECT: project,
         TYPE_GUIDANCE: typeGuidance,
         DOCUMENTS: documents,
-        REPRISE: config.adopted === true ? REPRISE : '',
+        REPRISE: `${config.adopted === true ? REPRISE : ''}${await assetsSection(deps.readFile)}`,
       }),
       systemPrompt: deps.prompts.system,
       model: settings.model,
@@ -292,6 +308,7 @@ async function decoupe(
     TEST_CATEGORIES: TEST_CATEGORIES.join(', '),
     PROFILES: PROFILE_IDS.join(', '),
     FIRST_TASK_RULE: ctx.config.adopted === true ? T00_ADOPTED : T00_NEW,
+    ASSETS: await assetsSection(deps.readFile),
   });
   const schema = z.toJSONSchema(PlanDraftSchema, { io: 'input' }) as Record<string, unknown>;
 

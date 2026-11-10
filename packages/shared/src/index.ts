@@ -11,3 +11,4 @@ export * from './quality.js';
 export * from './context.js';
 export * from './agents.js';
 export * from './dispatch.js';
+export * from './assets.js';

@@ -22,6 +22,7 @@ import { CALLER_TEMPLATES, PROFILE_TEMPLATES } from './services/projects/caller-
 import { ProjectCreationService } from './services/projects/creation-service.js';
 import { AdoptionService } from './services/projects/adoption.js';
 import { InventoryService } from './services/projects/inventory.js';
+import { AssetService } from './services/assets/asset-service.js';
 import { ContextService } from './services/ingestion/context-service.js';
 import { PlannerLaunchService } from './services/planner/planner-launch.js';
 import { PlanService } from './services/plan/plan-service.js';
@@ -192,6 +193,7 @@ async function start(): Promise<void> {
     readFile: async (path) => new Uint8Array(await readFile(path)),
     fileSize: async (path) => (await stat(path)).size,
   });
+  const adhoc = new AdhocTaskService(repos, () => service.githubPort());
   registerIpc(
     ipcMain,
     serviceHandlers({
@@ -207,6 +209,7 @@ async function start(): Promise<void> {
         projects,
       }),
       inventory: new InventoryService(repos, () => service.githubPort()),
+      assets: new AssetService({ repos, github: () => service.githubPort(), adhoc }),
       plan: new PlanService(repos, () => service.githubPort()),
       questions: new QuestionsService({
         repos,
@@ -217,7 +220,7 @@ async function start(): Promise<void> {
       dashboard: new DashboardService({ repos, github: () => service.githubPort() }),
       bridge,
       tunnel,
-      adhoc: new AdhocTaskService(repos, () => service.githubPort()),
+      adhoc,
     }),
     isTrustedUrl,
   );

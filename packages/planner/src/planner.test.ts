@@ -102,6 +102,7 @@ describe('prompts', () => {
         TEST_CATEGORIES: 'unit, e2e',
         PROFILES: 'architect, unity',
         FIRST_TASK_RULE: T00_NEW,
+        ASSETS: '',
       }),
     ).toMatchSnapshot();
   });
