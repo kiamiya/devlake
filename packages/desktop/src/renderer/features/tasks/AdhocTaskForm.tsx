@@ -90,6 +90,8 @@ export function AdhocTaskForm({
   const [tests, setTests] = useState('');
   const [testCategory, setTestCategory] = useState<AdhocTaskInput['testCategory']>('unit');
   const [codeZones, setCodeZones] = useState('');
+  const [scopePaths, setScopePaths] = useState('');
+  const [scopeTools, setScopeTools] = useState('');
   const [dependencies, setDependencies] = useState<string[]>([]);
   const [priority, setPriority] = useState(false);
 
@@ -106,6 +108,8 @@ export function AdhocTaskForm({
       tests,
       testCategory,
       codeZones,
+      scopePaths,
+      scopeTools,
       dependencies,
       priority,
     });
@@ -252,6 +256,34 @@ export function AdhocTaskForm({
             setCodeZones(e.target.value);
           }}
         />
+      </div>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="adhoc-scope-paths">Fichiers modifiables (un motif par ligne)</Label>
+          <Textarea
+            id="adhoc-scope-paths"
+            placeholder={'src/api/**\nAssets/Scripts/Joueur/*.cs'}
+            value={scopePaths}
+            onChange={(e) => {
+              setScopePaths(e.target.value);
+            }}
+          />
+          <p className="text-xs text-muted-foreground">
+            Seuls ces fichiers (et leurs tests) pourront être modifiés par l’agent ; vide : règles
+            du profil du projet.
+          </p>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="adhoc-scope-tools">Outils d’éditeur (un par ligne, facultatif)</Label>
+          <Textarea
+            id="adhoc-scope-tools"
+            placeholder={'unity__manage_scene\nunity__*'}
+            value={scopeTools}
+            onChange={(e) => {
+              setScopeTools(e.target.value);
+            }}
+          />
+        </div>
       </div>
       {projectId !== '' && (
         <fieldset className="flex flex-col gap-1">

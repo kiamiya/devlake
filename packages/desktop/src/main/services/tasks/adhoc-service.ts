@@ -101,6 +101,14 @@ export class AdhocTaskService {
       acceptanceCriteria: lines(input.acceptanceCriteria),
       requiredTests: tests.length > 0 ? { [input.testCategory]: tests } : {},
       codeZones: lines(input.codeZones),
+      ...(lines(input.scopePaths).length > 0
+        ? {
+            scope: {
+              paths: lines(input.scopePaths),
+              ...(lines(input.scopeTools).length > 0 ? { tools: lines(input.scopeTools) } : {}),
+            },
+          }
+        : {}),
       exclusiveResources: [],
       dependencies: [...new Set(input.dependencies)],
       adhoc: true,

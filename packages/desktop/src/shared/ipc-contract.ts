@@ -325,6 +325,10 @@ export const AdhocTaskInputSchema = z.object({
   tests: z.string().max(10_000),
   testCategory: z.enum(['unit', 'integration', 'contract', 'e2e', 'regression']),
   codeZones: z.string().max(5_000).default(''),
+  /** Fichiers modifiables, un motif par ligne ; vide : règles du profil seulement. */
+  scopePaths: z.string().max(5_000).default(''),
+  /** Outils d'éditeur, un par ligne ; vide : ceux autorisés pour l'éditeur. */
+  scopeTools: z.string().max(5_000).default(''),
   dependencies: z.array(z.string()).default([]),
   priority: z.boolean().default(false),
 });

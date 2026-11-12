@@ -2,6 +2,10 @@ import type { GitHubPort, RepoRef } from 'github';
 import {
   ASSET_LIBRARY_PATH,
   AssetLibrarySchema,
+  AVAILABLE_TOOLS_PATH,
+  AvailableToolsSchema,
+  toolAllowed,
+  type AvailableTools,
   renderAssetLibrary,
   CADRAGE_LABEL,
   DEFAULT_RUNNER_CAP,
@@ -123,6 +127,69 @@ async function projectConfig(readFile: PlannerDeps['readFile']): Promise<Project
   if (!parsed.success)
     throw new PlannerError(`${PROJECT_CONFIG_PATH} invalide :\n${formatZodError(parsed.error)}`);
   return parsed.data;
+}
+
+/** Outils d'éditeur autorisés sur le poste (publiés par le cockpit) ; null s'ils sont inconnus. */
+async function availableTools(readFile: PlannerDeps['readFile']): Promise<AvailableTools | null> {
+  const text = await readFile(AVAILABLE_TOOLS_PATH);
+  if (text === null) return null;
+  try {
+    const parsed = AvailableToolsSchema.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Règles de périmètre du plan, avec les outils disponibles par éditeur. */
+export function scopeRulesText(tools: AvailableTools | null): string {
+  const editors = Object.entries(tools?.editors ?? {}).filter(([, list]) => list.length > 0);
+  return [
+    "- Chaque tâche porte un périmètre `scope` : `paths`, les motifs des seuls fichiers que son agent peut modifier (`src/api/**`, `Assets/Scripts/Joueur/*.cs`, un dossier ou un fichier), aussi étroits que possible et jamais `**` seul (sauf `T00`, la mise en place du dépôt). Les tests de ces fichiers, les `.meta` Unity et les lockfiles de leurs manifestes sont permis d'office.",
+    '- Une tâche = un métier : la documentation est une tâche du profil `docs`, les assets 3D du profil `blender`, etc. Un agent ne modifie rien hors de son périmètre.',
+    editors.length > 0
+      ? `- Tâches de jeu (profils \`unity\`, \`unreal\`, \`blender\`) : \`scope.tools\` liste les seuls outils d'éditeur nécessaires, choisis parmi ceux autorisés (ou \`serveur__*\` pour tout un serveur) :\n${editors.map(([editor, list]) => `  - ${editor} : ${list.map((t) => `\`${t}\``).join(', ')}`).join('\n')}`
+      : "- Outils d'éditeur inconnus : n'indique pas `scope.tools`.",
+  ].join('\n');
+}
+
+/** Erreurs de périmètre d'un plan : tâche sans périmètre, motif trop large, outil inconnu. */
+export function scopeErrors(
+  tasks: readonly {
+    id: string;
+    profile: string;
+    scope?: { paths: string[]; tools?: string[] | undefined } | undefined;
+  }[],
+  tools: AvailableTools | null,
+): string[] {
+  const errors: string[] = [];
+  for (const task of tasks) {
+    if (task.scope === undefined) {
+      errors.push(`${task.id} : périmètre \`scope.paths\` manquant.`);
+      continue;
+    }
+    // La tâche de mise en place (T00, architecte) couvre tout le dépôt ; les autres, une partie.
+    const bootstrap = task.id === 'T00' && task.profile === 'architect';
+    if (
+      !bootstrap &&
+      task.scope.paths.some((p) => ['**', '**/*', '*', '/', '.'].includes(p.trim()))
+    )
+      errors.push(
+        `${task.id} : périmètre trop large (\`**\`) ; liste les dossiers ou fichiers de la tâche.`,
+      );
+    const available = tools?.editors[task.profile as 'unity' | 'unreal' | 'blender'];
+    for (const tool of task.scope.tools ?? []) {
+      if (available === undefined) {
+        errors.push(
+          `${task.id} : outil \`${tool}\` sans liste d'outils disponible pour ce profil.`,
+        );
+        continue;
+      }
+      if (!available.some((a) => toolAllowed(a, [tool])))
+        errors.push(`${task.id} : outil \`${tool}\` inconnu ou non autorisé pour ${task.profile}.`);
+    }
+  }
+  return errors;
 }
 
 /** Bibliothèque d'assets du projet (jeu), en section de prompt ; vide sans `assets.json`. */
@@ -309,7 +376,9 @@ async function decoupe(
     PROFILES: PROFILE_IDS.join(', '),
     FIRST_TASK_RULE: ctx.config.adopted === true ? T00_ADOPTED : T00_NEW,
     ASSETS: await assetsSection(deps.readFile),
+    SCOPE_RULES: scopeRulesText(await availableTools(deps.readFile)),
   });
+  const tools = await availableTools(deps.readFile);
   const schema = z.toJSONSchema(PlanDraftSchema, { io: 'input' }) as Record<string, unknown>;
 
   let errors = '';
@@ -347,6 +416,11 @@ async function decoupe(
     const plan = ProjectPlanSchema.safeParse({ ...draft.data, proposedAgents: proposal.agents });
     if (!plan.success) {
       errors = formatZodError(plan.error);
+      continue;
+    }
+    const scoped = scopeErrors(plan.data.tasks, tools);
+    if (scoped.length > 0) {
+      errors = scoped.join('\n');
       continue;
     }
     return publish(deps, ref, ctx.issueNumber, plan.data, proposal.width);

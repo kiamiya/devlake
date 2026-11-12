@@ -221,6 +221,12 @@ describe('jeton du pont Aura', () => {
     });
   });
 
+  it('outils du périmètre de la tâche signés dans le jeton', () => {
+    const env = withBridgeToken(base, now, ['unitymcp__manage_scene', 'unitymcp__read_*']);
+    const check = verifyBridgeToken(env.AURA_BRIDGE_TOKEN ?? '', 'secret-du-pont', now);
+    expect(check.ok && check.payload.tools).toEqual(['unitymcp__manage_scene', 'unitymcp__read_*']);
+  });
+
   it('rien pour un autre profil, sans secret, ou si un jeton est déjà fourni', () => {
     expect(
       withBridgeToken({ ...base, PROFILE: 'frontend' }, now).AURA_BRIDGE_TOKEN,

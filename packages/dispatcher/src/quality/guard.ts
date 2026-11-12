@@ -1,6 +1,15 @@
 import { checkBlenderExports } from './assets.js';
 import type { GitHubPort, RepoRef } from 'github';
-import { parseAnswerComment, parseQuestionComment, renderQuestionComment } from 'shared';
+import {
+  effectiveScope,
+  filesOutsideScope,
+  parseAnswerComment,
+  parseQuestionComment,
+  parseTaskIssueBody,
+  ProjectConfigSchema,
+  renderQuestionComment,
+} from 'shared';
+import { parse } from 'yaml';
 import { setTaskState } from '../agent-context/resume.js';
 import { analyzeTestChanges, type TestAnalysis } from './test-files.js';
 
@@ -12,8 +21,35 @@ export function guardQuestionId(prNumber: number): string {
   return `tests-pr${String(prNumber)}`;
 }
 
+/** Identifiant de la question posée quand une PR modifie des fichiers hors du périmètre. */
+export function scopeQuestionId(prNumber: number): string {
+  return `scope-pr${String(prNumber)}`;
+}
+
+/** Question de la garde : tests existants modifiés, ou fichiers hors du périmètre. */
 export function isGuardQuestion(id: string): boolean {
-  return /^tests-pr\d+$/.test(id);
+  return /^(tests|scope)-pr\d+$/.test(id);
+}
+
+export function isScopeQuestion(id: string): boolean {
+  return /^scope-pr\d+$/.test(id);
+}
+
+/** Fichiers de la PR hors du périmètre de sa tâche (périmètre + règles du profil) ; [] sinon. */
+export async function scopeViolations(
+  github: GitHubPort,
+  ref: RepoRef,
+  issue: number,
+  files: readonly string[],
+): Promise<string[]> {
+  const task = parseTaskIssueBody((await github.getIssue(ref, issue)).body);
+  if (!task.ok) return [];
+  const file = await github.getFile(ref, '.agentlake/project.yml', 'main');
+  const config =
+    file === null ? undefined : ProjectConfigSchema.safeParse(parse(file.content)).data;
+  const scope = effectiveScope(task.value, config?.scopeRules);
+  // Tâche sans périmètre (anciens plans) : non contrôlée.
+  return scope === null ? [] : filesOutsideScope(files, scope);
 }
 
 /** Décision de Kia sur une question de la garde : la réponse commence par l'option choisie. */
@@ -88,6 +124,28 @@ export async function runTestsGuard(
       `Du code applicatif est modifié sans aucun test ajouté ni complété : ${analysis.applicationCode.join(', ')}.`,
     );
   }
+  // Périmètre de la tâche : fichiers hors zone soumis à l'accord de Kia.
+  if (issue !== null) {
+    const outside = await scopeViolations(
+      github,
+      ref,
+      issue,
+      files.map((f) => f.filename),
+    );
+    if (outside.length > 0) {
+      const id = scopeQuestionId(prNumber);
+      const decision = await guardAnswer(github, ref, issue, prNumber, account, id);
+      if (decision === 'refused') {
+        reasons.push(`Kia a refusé les modifications hors du périmètre : ${outside.join(', ')}.`);
+        await refuseScope(github, ref, issue, pr.number, pr.headSha, outside);
+      } else if (decision !== 'authorized') {
+        reasons.push(
+          `Fichiers hors du périmètre de la tâche : ${outside.join(', ')}. Accord de Kia demandé sur l’issue #${String(issue)}.`,
+        );
+        if (decision === null) await askScope(github, ref, issue, prNumber, outside);
+      }
+    }
+  }
   // Livrables Blender : chaque .blend avec son export valide.
   reasons.push(...(await checkBlenderExports(github, ref, pr.head, files)));
   return { ok: reasons.length === 0, reasons, analysis };
@@ -100,8 +158,8 @@ async function guardAnswer(
   issue: number,
   prNumber: number,
   account: string,
+  id: string = guardQuestionId(prNumber),
 ): Promise<'authorized' | 'refused' | 'pending' | null> {
-  const id = guardQuestionId(prNumber);
   const comments = await github.listComments(ref, issue);
   const asked = comments.findIndex((c) => {
     const q = parseQuestionComment(c.body);
@@ -136,6 +194,46 @@ async function ask(
     }),
   );
   await setTaskState(github, ref, issue, 'awaiting-answer');
+}
+
+async function askScope(
+  github: GitHubPort,
+  ref: RepoRef,
+  issue: number,
+  prNumber: number,
+  outside: string[],
+): Promise<void> {
+  await github.createComment(
+    ref,
+    issue,
+    renderQuestionComment({
+      id: scopeQuestionId(prNumber),
+      blocking: true,
+      text: `La PR #${String(prNumber)} modifie des fichiers hors du périmètre de la tâche. Autoriser ces modifications ?`,
+      context: `Fichiers hors périmètre :\n${outside.map((f) => `- ${f}`).join('\n')}\n\nChaque tâche est confiée à un agent pour une partie du projet. « Autoriser » relance le check ; « Refuser » renvoie la tâche en correction pour retirer ces modifications (le travail hors périmètre revient à l’agent du bon profil).`,
+      options: [AUTHORIZE, REFUSE],
+    }),
+  );
+  await setTaskState(github, ref, issue, 'awaiting-answer');
+}
+
+async function refuseScope(
+  github: GitHubPort,
+  ref: RepoRef,
+  issue: number,
+  prNumber: number,
+  sha: string,
+  outside: string[],
+): Promise<void> {
+  const marker = `<!-- agentlake:scope-refused pr=${String(prNumber)} sha=${sha} -->`;
+  const comments = await github.listComments(ref, issue);
+  if (comments.some((c) => c.body.includes(marker))) return;
+  await github.createComment(
+    ref,
+    issue,
+    `${marker}\n**Hors périmètre** : Kia a refusé les modifications de la PR #${String(prNumber)} hors du périmètre de la tâche (${outside.join(', ')}). Rétablis ces fichiers tels qu’ils sont sur \`main\` et reste dans ton périmètre.`,
+  );
+  await setTaskState(github, ref, issue, 'fixing');
 }
 
 async function refuse(

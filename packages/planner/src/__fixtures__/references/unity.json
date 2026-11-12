@@ -24,10 +24,15 @@
         "profile": "architect",
         "complexity": "L",
         "acceptanceCriteria": ["La CI construit le joueur"],
-        "requiredTests": { "unit": ["Test EditMode trivial"] },
+        "requiredTests": {
+          "unit": ["Test EditMode trivial"]
+        },
         "codeZones": ["/"],
         "exclusiveResources": ["editor-unity"],
-        "dependencies": []
+        "dependencies": [],
+        "scope": {
+          "paths": ["**"]
+        }
       },
       {
         "id": "T01",
@@ -37,10 +42,15 @@
         "profile": "unity",
         "complexity": "M",
         "acceptanceCriteria": ["Ajouter et retirer un objet"],
-        "requiredTests": { "unit": ["EditMode : inventaire"] },
+        "requiredTests": {
+          "unit": ["EditMode : inventaire"]
+        },
         "codeZones": ["Assets/Scripts/Inventory/"],
         "exclusiveResources": [],
-        "dependencies": ["T00"]
+        "dependencies": ["T00"],
+        "scope": {
+          "paths": ["Assets/Scripts/Inventory/**"]
+        }
       },
       {
         "id": "T02",
@@ -50,10 +60,15 @@
         "profile": "unity",
         "complexity": "L",
         "acceptanceCriteria": ["Un combat se termine"],
-        "requiredTests": { "unit": ["EditMode : combat"] },
+        "requiredTests": {
+          "unit": ["EditMode : combat"]
+        },
         "codeZones": ["Assets/Scripts/Combat/"],
         "exclusiveResources": [],
-        "dependencies": ["T00"]
+        "dependencies": ["T00"],
+        "scope": {
+          "paths": ["Assets/Scripts/Combat/**"]
+        }
       },
       {
         "id": "T03",
@@ -63,10 +78,15 @@
         "profile": "unity",
         "complexity": "M",
         "acceptanceCriteria": ["Le joueur se déplace dans la station"],
-        "requiredTests": { "e2e": ["PlayMode : déplacement"] },
+        "requiredTests": {
+          "e2e": ["PlayMode : déplacement"]
+        },
         "codeZones": ["Assets/Scenes/"],
         "exclusiveResources": ["editor-unity"],
-        "dependencies": ["T00"]
+        "dependencies": ["T00"],
+        "scope": {
+          "paths": ["Assets/Scenes/**"]
+        }
       },
       {
         "id": "T04",
@@ -76,10 +96,15 @@
         "profile": "unity",
         "complexity": "M",
         "acceptanceCriteria": ["L'inventaire s'ouvre en jeu"],
-        "requiredTests": { "e2e": ["PlayMode : ouverture"] },
+        "requiredTests": {
+          "e2e": ["PlayMode : ouverture"]
+        },
         "codeZones": ["Assets/UI/"],
         "exclusiveResources": ["editor-unity"],
-        "dependencies": ["T01"]
+        "dependencies": ["T01"],
+        "scope": {
+          "paths": ["Assets/UI/**"]
+        }
       },
       {
         "id": "T05",
@@ -92,13 +117,25 @@
         "requiredTests": {},
         "codeZones": ["docs/"],
         "exclusiveResources": [],
-        "dependencies": ["T03"]
+        "dependencies": ["T03"],
+        "scope": {
+          "paths": ["docs/**"]
+        }
       }
     ],
     "profiles": [
-      { "profile": "architect", "justification": "Bootstrap." },
-      { "profile": "unity", "justification": "Gameplay et éditeur." },
-      { "profile": "docs", "justification": "Guide de jeu." }
+      {
+        "profile": "architect",
+        "justification": "Bootstrap."
+      },
+      {
+        "profile": "unity",
+        "justification": "Gameplay et éditeur."
+      },
+      {
+        "profile": "docs",
+        "justification": "Guide de jeu."
+      }
     ]
   },
   "expectedAgents": 3

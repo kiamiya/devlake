@@ -23,7 +23,7 @@ import {
 } from 'shared';
 import { parse } from 'yaml';
 import { setTaskState } from '../agent-context/resume.js';
-import { guardDecision, isGuardQuestion, REFUSE } from '../quality/guard.js';
+import { guardDecision, isGuardQuestion, isScopeQuestion, REFUSE } from '../quality/guard.js';
 import { analyzeTestChanges } from '../quality/test-files.js';
 import {
   readThread,
@@ -253,6 +253,7 @@ async function answerGuard(
   const label = `#${String(view.number)} ${view.task.id}`;
   const pr = ctx.openPrs.get(view.task.id);
   const decision = guardDecision(answer);
+  const scope = isScopeQuestion(question.question.id);
   if (decision === 'authorized' && pr) {
     const runs = await deps.github.listWorkflowRuns(ref, {
       workflow: REVIEW_WORKFLOW,
@@ -266,21 +267,29 @@ async function answerGuard(
     view.meta = { ...view.meta, failedSha: pr.headSha };
     if (latest) await deps.github.rerunFailedJobs(ref, latest.id);
     deps.log(
-      `${label} : modification des tests autorisée (${question.question.id}), check relancé.`,
+      `${label} : ${scope ? 'modification hors périmètre' : 'modification des tests'} autorisée (${question.question.id}), check relancé.`,
     );
     return;
   }
-  // Refus, réponse illisible ou PR disparue : l'agent reprend pour restaurer les tests.
+  // Refus, réponse illisible ou PR disparue : l'agent reprend pour corriger.
+  const refusal =
+    decision === 'refused'
+      ? 'Kia a refusé'
+      : `réponse non reconnue (attendu « Autoriser » ou « ${REFUSE} »), considérée comme un refus de`;
   await deps.github.createComment(
     ref,
     view.number,
     decision === 'authorized'
-      ? `**Garde des tests** : autorisation reçue, mais aucune PR ouverte pour ${view.task.id} ; la tâche repart en correction.`
-      : `**Tests à restaurer** : ${decision === 'refused' ? 'Kia a refusé' : `réponse non reconnue (attendu « Autoriser » ou « ${REFUSE} »), considérée comme un refus de`} la modification des tests existants. Restaure-les tels qu’ils sont sur \`main\`, puis corrige le code pour qu’ils passent.`,
+      ? `**Garde** : autorisation reçue, mais aucune PR ouverte pour ${view.task.id} ; la tâche repart en correction.`
+      : scope
+        ? `**Hors périmètre** : ${refusal} la modification de fichiers hors du périmètre de la tâche. Rétablis-les tels qu’ils sont sur \`main\` et reste dans ton périmètre.`
+        : `**Tests à restaurer** : ${refusal} la modification des tests existants. Restaure-les tels qu’ils sont sur \`main\`, puis corrige le code pour qu’ils passent.`,
   );
   await setTaskState(deps.github, ref, view.number, 'fixing');
   view.state = 'fixing';
-  deps.log(`${label} : modification des tests refusée, correction.`);
+  deps.log(
+    `${label} : ${scope ? 'modification hors périmètre' : 'modification des tests'} refusée, correction.`,
+  );
 }
 
 async function updateMeta(

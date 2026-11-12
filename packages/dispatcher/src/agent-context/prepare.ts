@@ -1,9 +1,11 @@
 import type { GitHubPort, RepoRef } from 'github';
 import {
   ciChecksFor,
+  effectiveScope,
   needsEditor,
   parseTaskIssueBody,
   ProjectConfigSchema,
+  type EffectiveScope,
   type TaskIssue,
 } from 'shared';
 import { parse } from 'yaml';
@@ -123,6 +125,7 @@ export async function prepareAgent(input: PrepareInput, deps: PrepareDeps): Prom
     }
   }
   const context = await readProjectContext(deps.readFile);
+  const scope = await scopeOfTask(task, deps.readFile);
   const quality =
     profile.id === 'architect' ? await qualityGate(deps.readFile, deps.templatesDir) : undefined;
   return {
@@ -136,6 +139,7 @@ export async function prepareAgent(input: PrepareInput, deps: PrepareDeps): Prom
       branch,
       context,
       resume,
+      scope,
       ...(quality ? { quality } : {}),
       ...(Object.keys(profile.mcpServers).length > 0 && !usesEditor ? { withoutEditor: true } : {}),
     }),
@@ -163,4 +167,14 @@ async function qualityGate(
     templatesDir: `${templatesRoot}/${profile}/`,
     ...(parsed.data.adopted === true ? { adopted: true } : {}),
   };
+}
+
+/** Périmètre effectif d'une tâche : le sien plus les règles de son profil (project.yml). */
+export async function scopeOfTask(
+  task: Pick<TaskIssue, 'profile' | 'scope'>,
+  readFile: ReadFile,
+): Promise<EffectiveScope | null> {
+  const text = await readFile('.agentlake/project.yml');
+  const config = text === null ? undefined : ProjectConfigSchema.safeParse(parse(text)).data;
+  return effectiveScope(task, config?.scopeRules);
 }

@@ -74,6 +74,33 @@ describe('éditeur de tâche', () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ dependencies: [] }));
   });
 
+  it('périmètre : fichiers puis outils ; fichiers vidés → périmètre retiré', () => {
+    const onChange = editor({ ...(plan.tasks[1] as PlanTask), scope: undefined });
+    fireEvent.change(screen.getByLabelText('Fichiers modifiables (un motif par ligne)'), {
+      target: { value: 'src/auth/**\n' },
+    });
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ scope: { paths: ['src/auth/**'] } }),
+    );
+    cleanup();
+    const withScope = editor({ ...(plan.tasks[1] as PlanTask), scope: { paths: ['src/auth/**'] } });
+    fireEvent.change(
+      screen.getByLabelText(
+        'Outils d’éditeur (un par ligne ; vide : ceux autorisés pour l’éditeur)',
+      ),
+      { target: { value: 'unity__manage_scene' } },
+    );
+    expect(withScope).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        scope: { paths: ['src/auth/**'], tools: ['unity__manage_scene'] },
+      }),
+    );
+    fireEvent.change(screen.getByLabelText('Fichiers modifiables (un motif par ligne)'), {
+      target: { value: '' },
+    });
+    expect(withScope).toHaveBeenLastCalledWith(expect.objectContaining({ scope: undefined }));
+  });
+
   it('garde les lignes en cours de frappe et transmet la liste nettoyée', () => {
     const onChange = editor();
     const criteria = screen.getByLabelText<HTMLTextAreaElement>(

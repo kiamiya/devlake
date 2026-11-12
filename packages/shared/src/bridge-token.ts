@@ -23,6 +23,8 @@ export const BridgePayloadSchema = z.object({
    * d'automatisation lancés par la CI (gabarit Unreal).
    */
   scope: z.enum(['mcp', 'health', 'ci']).default('mcp'),
+  /** Outils d'éditeur du périmètre de la tâche (motifs) ; absent : liste blanche de l'éditeur. */
+  tools: z.array(z.string().min(1)).max(500).optional(),
 });
 export type BridgePayload = z.infer<typeof BridgePayloadSchema>;
 export type BridgePayloadInput = z.input<typeof BridgePayloadSchema>;

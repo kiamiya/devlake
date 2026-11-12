@@ -64,5 +64,9 @@ _Aucune consigne particulière._
 - Découpe par zones de code pour limiter les conflits entre tâches parallèles.
 - Épopées et jalons facultatifs ; une tâche ne renvoie qu'à une épopée ou un jalon défini.
 - Ne fixe pas le nombre d'agents : il est calculé à partir du graphe.
+- Chaque tâche porte un périmètre \`scope\` : \`paths\`, les motifs des seuls fichiers que son agent peut modifier (\`src/api/**\`, \`Assets/Scripts/Joueur/*.cs\`, un dossier ou un fichier), aussi étroits que possible et jamais \`**\` seul (sauf \`T00\`, la mise en place du dépôt). Les tests de ces fichiers, les \`.meta\` Unity et les lockfiles de leurs manifestes sont permis d'office.
+- Une tâche = un métier : la documentation est une tâche du profil \`docs\`, les assets 3D du profil \`blender\`, etc. Un agent ne modifie rien hors de son périmètre.
+- Tâches de jeu (profils \`unity\`, \`unreal\`, \`blender\`) : \`scope.tools\` liste les seuls outils d'éditeur nécessaires, choisis parmi ceux autorisés (ou \`serveur__*\` pour tout un serveur) :
+  - unity : \`unity__manage_scene\`
 "
 `;

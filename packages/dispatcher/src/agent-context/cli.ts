@@ -8,12 +8,12 @@ import { OctokitGitHub, type GitHubPort } from 'github';
 import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { EDITORS, formatZodError, type EditorId } from 'shared';
+import { EDITORS, formatZodError, parseTaskIssueBody, type EditorId } from 'shared';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { finalizeAgent, type FinalizeResult } from './finalize.js';
 import { systemGit, type Git } from './git.js';
-import { prepareAgent, type Prepared } from './prepare.js';
+import { prepareAgent, scopeOfTask, type Prepared } from './prepare.js';
 import { profileEnvFrom } from './profile.js';
 import { AccountEnvSchema, accountOf } from '../account.js';
 import { RESUME_REASONS } from './resume.js';
@@ -94,7 +94,12 @@ export interface CliDeps {
  * Jeton du pont Aura pour un agent Unity ou Unreal : signé ici avec `AURA_BRIDGE_SECRET`
  * (dépôt, run, profil, expiration à 2 h), jamais écrit dans le dépôt.
  */
-export function withBridgeToken(env: NodeJS.ProcessEnv, now: Date): NodeJS.ProcessEnv {
+export function withBridgeToken(
+  env: NodeJS.ProcessEnv,
+  now: Date,
+  /** Outils du périmètre de la tâche, signés dans le jeton ; null : pas de restriction. */
+  tools: readonly string[] | null = null,
+): NodeJS.ProcessEnv {
   const secret = env.AURA_BRIDGE_SECRET ?? '';
   const profile = env.PROFILE;
   const repo = env.GITHUB_REPOSITORY;
@@ -114,6 +119,7 @@ export function withBridgeToken(env: NodeJS.ProcessEnv, now: Date): NodeJS.Proce
       profile: profile as EditorId,
       iat: Math.floor(now.getTime() / 1000),
       exp: Math.floor(now.getTime() / 1000) + BRIDGE_TOKEN_TTL_SECONDS,
+      ...(tools !== null ? { tools: [...tools] } : {}),
     },
     secret,
   );
@@ -124,6 +130,13 @@ export async function runPrepare(env: NodeJS.ProcessEnv, deps: CliDeps): Promise
   const e = parseEnv(PrepareEnvSchema, env);
   // Hors du dépôt : le jeton du pont ne doit jamais être commité.
   const mcpConfigPath = join(e.RUNNER_TEMP, 'agentlake-mcp.json');
+  const github = deps.github(e.GH_TOKEN);
+  const readFile = (path: string) => deps.readText(join(e.GITHUB_WORKSPACE, path));
+  // Outils d'éditeur du périmètre de la tâche, signés dans le jeton du pont.
+  const issue = parseTaskIssueBody(
+    (await github.getIssue(e.GITHUB_REPOSITORY, e.ISSUE_NUMBER)).body,
+  );
+  const scope = issue.ok ? await scopeOfTask(issue.value, readFile) : null;
   const prepared = await prepareAgent(
     {
       ref: e.GITHUB_REPOSITORY,
@@ -131,14 +144,16 @@ export async function runPrepare(env: NodeJS.ProcessEnv, deps: CliDeps): Promise
       profileId: e.PROFILE,
       attempt: e.ATTEMPT,
       reason: e.RESUME_REASON,
-      profileEnv: profileEnvFrom(withBridgeToken(env, deps.now?.() ?? new Date())),
+      profileEnv: profileEnvFrom(
+        withBridgeToken(env, deps.now?.() ?? new Date(), scope?.tools ?? null),
+      ),
       mcpConfigPath,
       account: accountOf(e.GITHUB_REPOSITORY, e.AGENTLAKE_OWNER),
     },
     {
-      github: deps.github(e.GH_TOKEN),
+      github,
       git: deps.git(e.GITHUB_WORKSPACE),
-      readFile: (path) => deps.readText(join(e.GITHUB_WORKSPACE, path)),
+      readFile,
       writeFile: (path, content) => deps.writeText(join(e.GITHUB_WORKSPACE, path), content),
       token: e.GH_TOKEN,
     },

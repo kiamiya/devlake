@@ -7,8 +7,18 @@
   "plan": {
     "summary": "Outil web d'inventaire : articles, mouvements de stock, alertes de rupture, export CSV.",
     "assumptions": ["Deux utilisateurs, sans gestion fine des droits"],
-    "epics": [{ "id": "E1", "title": "Stock" }],
-    "milestones": [{ "id": "J1", "title": "Première version" }],
+    "epics": [
+      {
+        "id": "E1",
+        "title": "Stock"
+      }
+    ],
+    "milestones": [
+      {
+        "id": "J1",
+        "title": "Première version"
+      }
+    ],
     "tasks": [
       {
         "id": "T00",
@@ -18,10 +28,15 @@
         "profile": "architect",
         "complexity": "M",
         "acceptanceCriteria": ["La CI tourne et passe sur main"],
-        "requiredTests": { "unit": ["Test trivial du socle"] },
+        "requiredTests": {
+          "unit": ["Test trivial du socle"]
+        },
         "codeZones": ["/"],
         "exclusiveResources": [],
-        "dependencies": []
+        "dependencies": [],
+        "scope": {
+          "paths": ["**"]
+        }
       },
       {
         "id": "T01",
@@ -31,11 +46,16 @@
         "profile": "backend",
         "complexity": "S",
         "acceptanceCriteria": ["Un article a une référence unique"],
-        "requiredTests": { "unit": ["Unicité de la référence"] },
+        "requiredTests": {
+          "unit": ["Unicité de la référence"]
+        },
         "codeZones": ["src/articles/"],
         "exclusiveResources": [],
         "dependencies": ["T00"],
-        "epic": "E1"
+        "epic": "E1",
+        "scope": {
+          "paths": ["src/articles/**"]
+        }
       },
       {
         "id": "T02",
@@ -45,11 +65,16 @@
         "profile": "backend",
         "complexity": "S",
         "acceptanceCriteria": ["Une sortie ne rend jamais une quantité négative"],
-        "requiredTests": { "unit": ["Sortie supérieure au stock refusée"] },
+        "requiredTests": {
+          "unit": ["Sortie supérieure au stock refusée"]
+        },
         "codeZones": ["src/mouvements/"],
         "exclusiveResources": [],
         "dependencies": ["T00"],
-        "epic": "E1"
+        "epic": "E1",
+        "scope": {
+          "paths": ["src/mouvements/**"]
+        }
       },
       {
         "id": "T03",
@@ -59,11 +84,16 @@
         "profile": "frontend",
         "complexity": "S",
         "acceptanceCriteria": ["L'alerte apparaît dès le passage sous le seuil"],
-        "requiredTests": { "unit": ["Seuil franchi"] },
+        "requiredTests": {
+          "unit": ["Seuil franchi"]
+        },
         "codeZones": ["src/web/alertes/"],
         "exclusiveResources": [],
         "dependencies": ["T00"],
-        "epic": "E1"
+        "epic": "E1",
+        "scope": {
+          "paths": ["src/web/alertes/**"]
+        }
       },
       {
         "id": "T04",
@@ -73,22 +103,42 @@
         "profile": "backend",
         "complexity": "S",
         "acceptanceCriteria": ["Le CSV contient une ligne par article"],
-        "requiredTests": { "unit": ["Échappement des virgules"] },
+        "requiredTests": {
+          "unit": ["Échappement des virgules"]
+        },
         "codeZones": ["src/export/"],
         "exclusiveResources": [],
         "dependencies": ["T00"],
-        "epic": "E1"
+        "epic": "E1",
+        "scope": {
+          "paths": ["src/export/**"]
+        }
       }
     ],
     "profiles": [
-      { "profile": "architect", "justification": "Bootstrap du dépôt et de la CI." },
-      { "profile": "backend", "justification": "Articles, mouvements, export." },
-      { "profile": "frontend", "justification": "Alertes à l'écran." }
+      {
+        "profile": "architect",
+        "justification": "Bootstrap du dépôt et de la CI."
+      },
+      {
+        "profile": "backend",
+        "justification": "Articles, mouvements, export."
+      },
+      {
+        "profile": "frontend",
+        "justification": "Alertes à l'écran."
+      }
     ]
   },
   "agents": {},
   "agentAnswers": {},
   "expected": {
-    "launches": { "T00": 1, "T01": 1, "T02": 1, "T03": 1, "T04": 1 }
+    "launches": {
+      "T00": 1,
+      "T01": 1,
+      "T02": 1,
+      "T03": 1,
+      "T04": 1
+    }
   }
 }

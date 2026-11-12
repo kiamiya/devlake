@@ -78,6 +78,8 @@ describe('nouvelle tâche (hors plan)', () => {
       tests: 'Rappel en hiver',
       testCategory: 'integration',
       codeZones: '',
+      scopePaths: '',
+      scopeTools: '',
       dependencies: ['T01'],
       priority: true,
     });

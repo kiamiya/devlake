@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { cleanLine, cleanText, safeParseWith, type ParseResult } from './common.js';
 import { EDITORS, ProfileIdSchema, TaskIdSchema, type EditorId, type TaskId } from './ids.js';
+import { TaskScopeSchema } from './scope.js';
 
 export const TEST_CATEGORIES = ['unit', 'integration', 'contract', 'e2e', 'regression'] as const;
 export type TestCategory = (typeof TEST_CATEGORIES)[number];
@@ -66,6 +67,8 @@ export const PlanTaskSchema = z.object({
   priority: z.boolean({ error: 'priority doit valoir true ou false.' }).optional(),
   /** Tâche ajoutée hors plan depuis le cockpit (tâche ad hoc). */
   adhoc: z.boolean({ error: 'adhoc doit valoir true ou false.' }).optional(),
+  /** Fichiers modifiables et outils d'éditeur de l'agent ; contrôlés par la porte qualité et le pont. */
+  scope: TaskScopeSchema.optional(),
 });
 export type PlanTask = z.infer<typeof PlanTaskSchema>;
 
