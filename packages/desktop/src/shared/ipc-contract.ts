@@ -200,6 +200,35 @@ export const AssetLibraryViewSchema = z.object({
 });
 export type AssetLibraryView = z.infer<typeof AssetLibraryViewSchema>;
 
+/** Serveur MCP trouvé sur le poste (sans ses secrets, qui restent dans le cockpit). */
+export const DiscoveredMcpSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  editor: EditorIdSchema.nullable(),
+  sources: z.array(z.string()),
+  /** `hint` : piste seulement (paquet ou processus), sans configuration utilisable. */
+  kind: z.enum(['stdio', 'http', 'hint']),
+  summary: z.string(),
+  /** Clés sensibles (env, en-têtes) : rangées au coffre à l'import. */
+  secrets: z.array(z.string()),
+  importable: z.boolean(),
+  reason: z.string().nullable(),
+  /** Déjà configuré pour cet éditeur. */
+  alreadyConfigured: EditorIdSchema.nullable(),
+});
+export type DiscoveredMcp = z.infer<typeof DiscoveredMcpSchema>;
+
+export const McpImportResultSchema = z.object({
+  editor: EditorIdSchema,
+  name: z.string(),
+  slot: z.enum(['primary', 'extra']),
+  connected: z.boolean(),
+  error: z.string().nullable(),
+  /** Outils autorisés aux agents pour ce serveur. */
+  tools: z.number(),
+});
+export type McpImportResult = z.infer<typeof McpImportResultSchema>;
+
 /** État des lieux d'un projet repris. */
 export const InventoryStateSchema = z.object({
   adopted: z.boolean(),
@@ -453,6 +482,21 @@ export const IPC_CONTRACT = {
     }),
   },
   'inventory:get': { input: z.object({ projectId: z.string() }), output: InventoryStateSchema },
+  'mcp:detect': { input: NoInput, output: z.array(DiscoveredMcpSchema) },
+  'mcp:import': {
+    input: z.object({
+      selections: z
+        .array(
+          z.object({
+            id: z.string(),
+            editor: EditorIdSchema,
+            name: z.string().trim().min(1, 'Nom de serveur vide.').max(40),
+          }),
+        )
+        .min(1, 'Aucun serveur choisi.'),
+    }),
+    output: z.array(McpImportResultSchema),
+  },
   'assets:library': { input: z.object({ projectId: z.string() }), output: AssetLibraryViewSchema },
   'assets:owned': {
     input: NoInput,

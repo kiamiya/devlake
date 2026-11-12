@@ -12,6 +12,7 @@ import {
 } from '../hooks/queries.js';
 import { BridgePanel } from '../features/bridge/BridgePanel.js';
 import { McpGuide } from '../features/bridge/McpGuide.js';
+import { McpDetect } from '../features/bridge/McpDetect.js';
 import { EDITOR_LABELS } from '../hooks/bridge.js';
 import { ClaudeTokenSection } from './ClaudeTokenSection.js';
 import { Button } from './ui/button.js';
@@ -375,9 +376,11 @@ function SettingsForm({ initial }: { initial: Settings }) {
       <Card>
         <CardTitle>Éditeurs et Aura</CardTitle>
         <CardDescription>
-          Blocs JSON copiés depuis l’écran « MCP Configuration » d’Aura, collés tels quels.
+          Blocs JSON copiés depuis l’écran « MCP Configuration » d’Aura, collés tels quels, ou
+          trouvés par la détection.
         </CardDescription>
         <div className="flex flex-col gap-4">
+          <McpDetect />
           <div className="flex flex-col gap-2">
             <Label htmlFor="editorClonesDir">Dossier des clones d’éditeur</Label>
             <Input

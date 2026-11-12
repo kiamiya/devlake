@@ -33,6 +33,7 @@ import { renderQuestionComment, stateLabel, TASK_LABEL } from 'shared';
 import { AdoptionService } from './services/projects/adoption.js';
 import { InventoryService } from './services/projects/inventory.js';
 import { AssetService } from './services/assets/asset-service.js';
+import { McpImportService } from './services/bridge/mcp-import.js';
 
 /** Faux jeton de test, sans valeur réelle. */
 const FAKE_TOKEN = 'ghp_abcdefghijklmnop1234'; // gitleaks:allow
@@ -112,6 +113,7 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
         github: () => service.githubPort(),
         adhoc: new AdhocTaskService(repos, () => service.githubPort()),
       }),
+      mcpImport: new McpImportService({ repos, vault, bridges }),
     }),
     vault,
     repos,

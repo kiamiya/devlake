@@ -4,6 +4,18 @@ Les agents de jeu tournent dans GitHub Actions, mais l'éditeur Unity ou Unreal 
 
 **Dans le cockpit** : sous chaque éditeur, **Réglages → Éditeurs et Aura** propose l'encadré « Comment brancher un serveur MCP » (étapes et exemples de configuration), et chaque pont du panneau « Pont Aura » affiche une **vérification du branchement** cochée d'après l'état réel : configuration collée, pont démarré, serveurs connectés (avec l'erreur sinon), outils autorisés, dossier des clones, éditeur ouvert sur le clone (à vérifier toi-même) et tunnel.
 
+## Détection automatique des MCP du poste
+
+**Réglages → Éditeurs et Aura → Détecter les MCP du poste** cherche les serveurs MCP déjà présents :
+
+- dans les configurations des clients MCP : Claude Code (`~/.claude.json`, serveurs globaux et par projet), Claude Desktop, Cursor, VS Code (`mcp.json` et `settings.json`), Windsurf ;
+- dans les clones d'éditeur : `.mcp.json`, paquets Unity (`Packages/manifest.json`) et plugins Unreal (`Plugins/`) dont le nom contient « mcp » ;
+- parmi les serveurs qui tournent : serveurs MCP HTTP locaux qui répondent (ports vus dans les processus et ports courants ; jamais ceux des ponts du cockpit), et processus MCP liés à Unity, Unreal ou Blender.
+
+Chaque serveur trouvé est proposé avec l'éditeur deviné (modifiable), un nom, sa source et sa forme (commande ou HTTP local). Un serveur distant, ou une simple piste (paquet installé, processus lancé par une autre application) ne peut pas être ajouté tel quel : sa configuration est à coller depuis sa documentation. Un serveur déjà configuré est signalé.
+
+**Ajouter la sélection** enregistre les serveurs cochés (le serveur d'Aura, ou blender-mcp pour Blender, devient le serveur principal s'il n'y en a pas encore ; les autres vont dans « Autres serveurs MCP »), range leurs **secrets** (variables d'environnement et en-têtes dont le nom évoque une clé, un jeton ou un mot de passe) dans le **coffre chiffré** du cockpit (la configuration n'y fait que référence), redémarre le pont pour tester la connexion, puis **autorise tous les outils** des serveurs ajoutés aux agents (réglage choisi par Kia). Retirer ensuite les outils trop risqués (exécution de code, suppression) dans la liste blanche du pont.
+
 ## Prérequis
 
 - Aura installé dans l'éditeur, avec son écran **MCP Configuration**.

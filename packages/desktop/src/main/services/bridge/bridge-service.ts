@@ -27,6 +27,7 @@ import type { IntegrationStatus } from '../../../shared/ipc-contract.js';
 import { PROJECT_CONFIG_PATH } from '../../db/rebuild.js';
 import type { Repositories } from '../../db/repositories.js';
 import type { SecretVault } from '../../vault.js';
+import { McpImportError, resolveSecrets } from './mcp-secrets.js';
 
 export const EDITORS: readonly Editor[] = SHARED_EDITORS;
 
@@ -142,15 +143,20 @@ export class BridgeService {
       throw new BridgeConfigError(
         `Aucun serveur MCP pour ${editor} (Aura ou autre) : coller sa configuration dans les réglages.`,
       );
-    const servers: NamedMcpServer[] = configured.map(({ name, config }) => {
+    const servers: NamedMcpServer[] = [];
+    for (const { name, config } of configured) {
       try {
-        return { name, spec: mcpServerFrom(JSON.parse(config) as unknown) };
+        // Secrets importés : rangés au coffre, résolus seulement ici.
+        servers.push({
+          name,
+          spec: await resolveSecrets(mcpServerFrom(JSON.parse(config) as unknown), this.deps.vault),
+        });
       } catch (error) {
         throw new BridgeConfigError(
-          `Serveur MCP « ${name} » (${editor}) : ${error instanceof AuraConfigError ? error.message : String(error)}`,
+          `Serveur MCP « ${name} » (${editor}) : ${error instanceof AuraConfigError || error instanceof McpImportError ? error.message : String(error)}`,
         );
       }
-    });
+    }
     const connect = this.deps.connectUpstream ?? ((spec: McpServerSpec) => connectMcpServer(spec));
     const secret = await this.deps.vault.get('aura-bridge-secret');
     if (secret === null)
