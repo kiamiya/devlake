@@ -111,6 +111,58 @@ describe('boîte de questions (service)', () => {
     });
   });
 
+  it('question chez l’architecte : pas de notification ; notifiée si elle revient à Kia', async () => {
+    const t1 = await waiting('T01');
+    await github.createComment(ref, t1.number, q('base'));
+    await github.createComment(ref, t1.number, '<!-- agentlake:architect-asked id=base -->');
+    await service.syncAll();
+    expect(notified).toEqual([]);
+    expect(service.list({ status: 'pending' })).toHaveLength(1);
+    await github.createComment(ref, t1.number, '<!-- agentlake:architect-escalated id=base -->');
+    await service.syncAll();
+    expect(notified).toHaveLength(1);
+  });
+
+  it('réponse de l’architecte (bot des workflows) : question répondue ; pas depuis un autre compte', async () => {
+    const t1 = await waiting('T01');
+    await github.createComment(ref, t1.number, q('base'));
+    const posted = await github.createComment(
+      ref,
+      t1.number,
+      renderAnswerComment({ id: 'base', decision: false, text: 'Postgres.', by: 'architect' }),
+    );
+    const replace = (author: string) =>
+      github
+        .state(ref)
+        .comments.get(t1.number)
+        ?.splice(-1, 1, { ...posted, author });
+    replace('pirate');
+    await service.syncAll();
+    expect(service.list({ status: 'pending' })).toHaveLength(1);
+    replace('github-actions[bot]');
+    await service.syncAll();
+    expect(service.list({ status: 'answered' })[0]?.answer).toMatchObject({ text: 'Postgres.' });
+  });
+
+  it('dépôt d’organisation : la réponse de Kia (compte du jeton) est reconnue', async () => {
+    const studio = { owner: 'studio', repo: 'jeu' };
+    github.seedRepository(studio, { admin: true });
+    repos.projects.upsert('studio', 'jeu', '2026-11-06T08:00:00.000Z');
+    const t1 = await github.createIssue(studio, {
+      title: 'T01',
+      body: '',
+      labels: [TASK_LABEL, stateLabel('awaiting-answer')],
+    });
+    await github.createComment(studio, t1.number, q('fuseau'));
+    await github.createComment(
+      studio,
+      t1.number,
+      renderAnswerComment({ id: 'fuseau', decision: true, text: 'Paris.' }),
+    );
+    await service.syncAll();
+    expect(service.list({ projectId: 'studio/jeu', status: 'answered' })).toHaveLength(1);
+  });
+
   it('issue sortie de l’attente sans réponse : question close, sans notification', async () => {
     const t1 = await waiting('T01');
     await github.createComment(ref, t1.number, q('fuseau'));

@@ -1,5 +1,7 @@
 import type { Comment, GitHubPort, Issue, RepoRef } from 'github';
 import {
+  ARCHITECT_ASKED_MARKER,
+  ARCHITECT_ESCALATED_MARKER,
   CADRAGE_LABEL,
   parseAnswerComment,
   parseQuestionComment,
@@ -52,25 +54,38 @@ export interface AnswerInput {
 const sameLogin = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 /** Réponse du propriétaire à chaque question du fil (la plus récente, postérieure à la question). */
+/** Auteur des commentaires des workflows du dépôt (agents, architecte). */
+const WORKFLOW_BOT = 'github-actions[bot]';
+
 function readIssueQuestions(comments: readonly Comment[], owner: string) {
   const found: {
     question: ReturnType<typeof parseQuestionComment> & { ok: true };
     at: string;
     answer: (Answer & { at: string }) | null;
+    /** Question chez l'architecte, pas encore revenue à Kia : pas de notification. */
+    withArchitect: boolean;
   }[] = [];
   comments.forEach((comment, index) => {
     const question = parseQuestionComment(comment.body);
     if (!question.ok) return;
+    const after = comments.slice(index + 1);
+    // Réponse de Kia, ou de l'architecte (bot des workflows, marquée by=architect).
     const answer =
-      comments
-        .slice(index + 1)
-        .filter((c) => sameLogin(c.author, owner))
-        .map((c) => ({ parsed: parseAnswerComment(c.body), at: c.createdAt }))
+      after
+        .map((c) => ({ parsed: parseAnswerComment(c.body), at: c.createdAt, author: c.author }))
+        .filter(
+          ({ parsed, author }) =>
+            sameLogin(author, owner) ||
+            (sameLogin(author, WORKFLOW_BOT) && parsed.ok && parsed.value.by === 'architect'),
+        )
         .flatMap(({ parsed, at }) =>
           parsed.ok && parsed.value.id === question.value.id ? [{ ...parsed.value, at }] : [],
         )
         .at(-1) ?? null;
-    found.push({ question, at: comment.createdAt, answer });
+    const withArchitect =
+      after.some((c) => c.body.includes(ARCHITECT_ASKED_MARKER(question.value.id))) &&
+      !after.some((c) => c.body.includes(ARCHITECT_ESCALATED_MARKER(question.value.id)));
+    found.push({ question, at: comment.createdAt, answer, withArchitect });
   });
   return found;
 }
@@ -174,10 +189,12 @@ export class QuestionsService {
     }
 
     let notified = 0;
+    // Compte de Kia (le jeton du cockpit) : dans un dépôt d'organisation, pas le propriétaire.
+    const account = relevant.size > 0 ? (await github.getAuthenticatedUser()).login : ref.owner;
     for (const [number, { issue, source }] of relevant) {
       const comments = await github.listComments(ref, number);
       const title = issue?.title ?? (await github.getIssue(ref, number)).title;
-      for (const { question, at, answer } of readIssueQuestions(comments, ref.owner)) {
+      for (const { question, at, answer, withArchitect } of readIssueQuestions(comments, account)) {
         const q = question.value;
         const key = { projectId, issueNumber: number, questionId: q.id };
         this.deps.repos.questions.insertIfMissing({
@@ -208,7 +225,8 @@ export class QuestionsService {
           !answer &&
           row.answeredAt === null &&
           row.blocking &&
-          !row.notified
+          !row.notified &&
+          !withArchitect
         ) {
           this.deps.notify({
             projectId,

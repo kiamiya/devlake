@@ -25,6 +25,8 @@ export const AnswerSchema = z.object({
   text: cleanText('La réponse'),
   /** Question écartée par Kia : elle ne bloque plus le planificateur. */
   ignored: z.literal(true).optional(),
+  /** Réponse de l'agent architecte (et non de Kia). */
+  by: z.literal('architect').optional(),
 });
 export type Answer = z.infer<typeof AnswerSchema>;
 
@@ -110,9 +112,16 @@ export function parseQuestionComment(body: string): ParseResult<Question> {
   });
 }
 
+/** Question transmise à l'architecte (une fois par question). */
+export const ARCHITECT_ASKED_MARKER = (id: string) => `<!-- agentlake:architect-asked id=${id} -->`;
+/** L'architecte n'a pas tranché : la question revient à Kia. */
+export const ARCHITECT_ESCALATED_MARKER = (id: string) =>
+  `<!-- agentlake:architect-escalated id=${id} -->`;
+
 export function renderAnswerComment(answer: Answer): string {
   const ignored = answer.ignored ? ' ignored=true' : '';
-  return `<!-- agentlake:answer id=${answer.id} decision=${String(answer.decision)}${ignored} -->\n${answer.text}\n`;
+  const by = answer.by ? ` by=${answer.by}` : '';
+  return `<!-- agentlake:answer id=${answer.id} decision=${String(answer.decision)}${ignored}${by} -->\n${answer.text}\n`;
 }
 
 /**
@@ -137,5 +146,6 @@ export function parseAnswerComment(body: string): ParseResult<Answer> {
     // Une question ignorée n'a pas forcément de texte de réponse.
     text: content === '' && ignored.value === true ? 'Question ignorée.' : content,
     ...(ignored.value === true ? { ignored: true } : {}),
+    ...(attributes.get('by') === 'architect' ? { by: 'architect' } : {}),
   });
 }

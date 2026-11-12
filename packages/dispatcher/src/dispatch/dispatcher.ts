@@ -24,6 +24,7 @@ import {
 import { parse } from 'yaml';
 import { setTaskState } from '../agent-context/resume.js';
 import { guardDecision, isGuardQuestion, isScopeQuestion, REFUSE } from '../quality/guard.js';
+import { ARCHITECT_ASKED_MARKER, ARCHITECT_ESCALATED_MARKER } from '../questions/thread.js';
 import { analyzeTestChanges } from '../quality/test-files.js';
 import {
   readThread,
@@ -231,6 +232,37 @@ async function readQuestionThreads(
       }
       view.answered = true;
       deps.log(`${label} : réponse à ${thread.answer.id} reçue, reprise.`);
+    } else if (
+      thread.pending !== null &&
+      view.state === 'awaiting-answer' &&
+      thread.architect !== 'escalated'
+    ) {
+      // Question technique : d'abord l'architecte ; Kia si l'architecte ne tranche pas.
+      if (architectEligible(view, thread.pending.question.id) && thread.architect === null) {
+        await askArchitect(view, thread.pending.question.id, ctx);
+        continue;
+      }
+      if (
+        thread.architect === 'asked' &&
+        thread.architectAskedAt !== null &&
+        deps.now().getTime() - Date.parse(thread.architectAskedAt) > ARCHITECT_TIMEOUT_MS
+      ) {
+        await deps.github.createComment(
+          ref,
+          view.number,
+          `${ARCHITECT_ESCALATED_MARKER(thread.pending.question.id)}\n_L’architecte n’a pas répondu à temps : la question \`${thread.pending.question.id}\` revient à Kia._`,
+        );
+        deps.log(`${label} : architecte sans réponse, question rendue à Kia.`);
+        continue;
+      }
+      if (thread.architect !== 'asked' && reminderDue(thread, deps.now(), reminderHours)) {
+        await deps.github.createComment(
+          ref,
+          view.number,
+          reminderComment(deps.account ?? ref.owner, thread.pending.question, reminderHours),
+        );
+        deps.log(`${label} : rappel posté pour ${thread.pending.question.id}.`);
+      }
     } else if (reminderDue(thread, deps.now(), reminderHours)) {
       await deps.github.createComment(
         ref,
@@ -239,6 +271,42 @@ async function readQuestionThreads(
       );
       deps.log(`${label} : rappel posté pour ${thread.pending.question.id}.`);
     }
+  }
+}
+
+/** Workflow d'appel de l'architecte, posé au bootstrap. */
+export const ARCHITECT_CALLER = 'agentlake-architect.yml';
+/** Au-delà, une question restée chez l'architecte revient à Kia. */
+const ARCHITECT_TIMEOUT_MS = 2 * 3_600_000;
+
+/** Questions que l'architecte peut prendre : pas celles de la garde, ni celles de ses propres tâches. */
+export function architectEligible(view: TaskView, questionId: string): boolean {
+  return !isGuardQuestion(questionId) && view.task.profile !== 'architect';
+}
+
+/** Transmet la question à l'architecte (workflow) ; si c'est impossible, elle reste pour Kia. */
+async function askArchitect(view: TaskView, questionId: string, ctx: PassContext): Promise<void> {
+  const { ref, deps } = ctx;
+  const label = `#${String(view.number)} ${view.task.id}`;
+  try {
+    await deps.github.dispatchWorkflow(ref, {
+      workflow: ARCHITECT_CALLER,
+      ref: 'main',
+      inputs: { issue_number: String(view.number), question_id: questionId },
+    });
+    await deps.github.createComment(
+      ref,
+      view.number,
+      `${ARCHITECT_ASKED_MARKER(questionId)}\n_Question \`${questionId}\` transmise à l’architecte : il répond s’il peut trancher, sinon elle revient à Kia._`,
+    );
+    deps.log(`${label} : question ${questionId} transmise à l’architecte.`);
+  } catch (error) {
+    await deps.github.createComment(
+      ref,
+      view.number,
+      `${ARCHITECT_ESCALATED_MARKER(questionId)}\n_Architecte indisponible (${error instanceof Error ? error.message : String(error)} ; relancer le bootstrap pour poser son workflow) : la question reste pour Kia._`,
+    );
+    deps.log(`${label} : architecte indisponible, question laissée à Kia.`);
   }
 }
 
