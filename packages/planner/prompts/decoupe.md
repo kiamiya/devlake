@@ -28,3 +28,4 @@ Projet : {{PROJECT}}
 - Découpe par zones de code pour limiter les conflits entre tâches parallèles.
 - Épopées et jalons facultatifs ; une tâche ne renvoie qu'à une épopée ou un jalon défini.
 - Ne fixe pas le nombre d'agents : il est calculé à partir du graphe.
+{{SCOPE_RULES}}

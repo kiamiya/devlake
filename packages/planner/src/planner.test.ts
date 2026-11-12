@@ -12,7 +12,15 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { stringify } from 'yaml';
 import { renderCadrageBody } from './cadrage.js';
 import { FakeClaude } from './claude/fake-claude.js';
-import { MAX_ATTEMPTS, PLAN_PATH, runPlanner, T00_NEW, type PlannerDeps } from './planner.js';
+import {
+  MAX_ATTEMPTS,
+  PLAN_PATH,
+  runPlanner,
+  scopeErrors,
+  scopeRulesText,
+  T00_NEW,
+  type PlannerDeps,
+} from './planner.js';
 import { loadPrompts, renderPrompt, PromptError, type Prompts } from './prompts.js';
 
 interface Reference {
@@ -103,6 +111,7 @@ describe('prompts', () => {
         PROFILES: 'architect, unity',
         FIRST_TASK_RULE: T00_NEW,
         ASSETS: '',
+        SCOPE_RULES: scopeRulesText({ version: 1, editors: { unity: ['unity__manage_scene'] } }),
       }),
     ).toMatchSnapshot();
   });
@@ -352,5 +361,54 @@ describe('projet repris', () => {
     await expect(runPlanner({ ...input, mode: 'inventory' }, deps)).rejects.toThrow(
       'réservé aux projets repris',
     );
+  });
+});
+
+describe('périmètre des tâches du plan', () => {
+  const tools = {
+    version: 1 as const,
+    editors: { unity: ['unity__manage_scene', 'unity__read_console'] },
+  };
+
+  it('exigé, pas trop large (sauf T00), outils parmi ceux autorisés', () => {
+    expect(
+      scopeErrors(
+        [
+          { id: 'T00', profile: 'architect', scope: { paths: ['**'] } },
+          { id: 'T01', profile: 'backend' },
+          { id: 'T02', profile: 'frontend', scope: { paths: ['**'] } },
+          {
+            id: 'T03',
+            profile: 'unity',
+            scope: { paths: ['Assets/Scenes/**'], tools: ['unity__*'] },
+          },
+          { id: 'T04', profile: 'unity', scope: { paths: ['Assets/x/**'], tools: ['aura__run'] } },
+          { id: 'T05', profile: 'blender', scope: { paths: ['Art/**'], tools: ['blender__*'] } },
+        ],
+        tools,
+      ),
+    ).toEqual([
+      'T01 : périmètre `scope.paths` manquant.',
+      'T02 : périmètre trop large (`**`) ; liste les dossiers ou fichiers de la tâche.',
+      'T04 : outil `aura__run` inconnu ou non autorisé pour unity.',
+      "T05 : outil `blender__*` sans liste d'outils disponible pour ce profil.",
+    ]);
+    expect(scopeRulesText(null)).toContain("Outils d'éditeur inconnus");
+  });
+
+  it('plan sans périmètre : erreurs renvoyées à Claude, réussi au deuxième essai', async () => {
+    const web = reference('web');
+    const { claude, deps } = setup('web', web.brief);
+    const unscoped = {
+      ...web.plan,
+      tasks: (web.plan.tasks as Record<string, unknown>[]).map(({ scope: _s, ...t }) => t),
+    };
+    claude.push(
+      FakeClaude.structured({ questions: [] }),
+      FakeClaude.structured(unscoped),
+      FakeClaude.structured(web.plan),
+    );
+    expect(await runPlanner(input, deps)).toMatchObject({ phase: 'plan' });
+    expect(claude.requests[2]?.prompt).toContain('périmètre `scope.paths` manquant');
   });
 });

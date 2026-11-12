@@ -4,6 +4,7 @@ import {
   renderAnswerComment,
   renderQuestionComment,
   renderTaskIssueBody,
+  TASK_LABEL,
   stateLabel,
 } from 'shared';
 import { makeAgentProfile, makeProjectConfig, makeTask } from 'shared/test-utils';
@@ -365,6 +366,49 @@ describe('préparation et finalisation', () => {
       deps(again),
     );
     expect(again.commands()).not.toContain('docs(decisions)');
+  });
+
+  it('périmètre de la tâche et règles du profil dans le prompt ; sans périmètre, rien', async () => {
+    const scoped = await github.createIssue(ref, {
+      title: 'T09',
+      body: renderTaskIssueBody(
+        makeTask({
+          id: 'T09',
+          title: 'Écran de réservation',
+          scope: { paths: ['src/booking/**'], tools: ['unity__manage_scene'] },
+        }),
+      ),
+      labels: [TASK_LABEL, stateLabel('ready')],
+    });
+    const files: Record<string, string> = {
+      '.agentlake/profiles/frontend.yml': profileYaml,
+      '.agentlake/project.yml': stringify(
+        makeProjectConfig({ scopeRules: { frontend: { paths: ['public/**'] } } }),
+      ),
+    };
+    const deps = {
+      github,
+      git: new FakeGit(),
+      readFile: (path: string) => Promise.resolve(files[path] ?? null),
+      token: 'jeton',
+    };
+    const prepared = await prepareAgent(
+      { ref, issueNumber: scoped.number, profileId: 'frontend', attempt: 1, reason: 'none' },
+      deps,
+    );
+    expect(prepared.prompt).toContain('## Périmètre');
+    expect(prepared.prompt).toContain('- `src/booking/**`\n- `public/**`');
+    expect(prepared.prompt).toContain('Outils d’éditeur permis : `unity__manage_scene`');
+    expect(prepared.prompt).toContain('relève d’un autre agent');
+    const unscoped = await prepareAgent(
+      { ref, issueNumber, profileId: 'frontend', attempt: 1, reason: 'none' },
+      {
+        ...deps,
+        readFile: (path: string) =>
+          Promise.resolve(path === '.agentlake/profiles/frontend.yml' ? profileYaml : null),
+      },
+    );
+    expect(unscoped.prompt).not.toContain('## Périmètre');
   });
 
   it('architecte : la porte qualité du profil du projet est dans le prompt', async () => {

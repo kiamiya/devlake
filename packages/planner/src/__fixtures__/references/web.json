@@ -18,8 +18,18 @@
   "plan": {
     "summary": "Application de réservation : comptes, agenda des salons, réservation, rappels.",
     "assumptions": ["Pas de paiement en ligne en V1."],
-    "epics": [{ "id": "E1", "title": "Réservation" }],
-    "milestones": [{ "id": "J1", "title": "Première version" }],
+    "epics": [
+      {
+        "id": "E1",
+        "title": "Réservation"
+      }
+    ],
+    "milestones": [
+      {
+        "id": "J1",
+        "title": "Première version"
+      }
+    ],
     "tasks": [
       {
         "id": "T00",
@@ -29,11 +39,16 @@
         "profile": "architect",
         "complexity": "L",
         "acceptanceCriteria": ["La CI tourne sur main"],
-        "requiredTests": { "unit": ["Test trivial"] },
+        "requiredTests": {
+          "unit": ["Test trivial"]
+        },
         "codeZones": ["/"],
         "exclusiveResources": [],
         "dependencies": [],
-        "milestone": "J1"
+        "milestone": "J1",
+        "scope": {
+          "paths": ["**"]
+        }
       },
       {
         "id": "T01",
@@ -43,12 +58,17 @@
         "profile": "data",
         "complexity": "M",
         "acceptanceCriteria": ["Un client ne voit que ses réservations"],
-        "requiredTests": { "integration": ["pgTAP sur les RLS"] },
+        "requiredTests": {
+          "integration": ["pgTAP sur les RLS"]
+        },
         "codeZones": ["supabase/"],
         "exclusiveResources": ["migrations"],
         "dependencies": ["T00"],
         "epic": "E1",
-        "milestone": "J1"
+        "milestone": "J1",
+        "scope": {
+          "paths": ["supabase/**"]
+        }
       },
       {
         "id": "T02",
@@ -58,11 +78,17 @@
         "profile": "frontend",
         "complexity": "M",
         "acceptanceCriteria": ["Un client se connecte"],
-        "requiredTests": { "unit": ["Formulaire"], "e2e": ["Parcours de connexion"] },
+        "requiredTests": {
+          "unit": ["Formulaire"],
+          "e2e": ["Parcours de connexion"]
+        },
         "codeZones": ["src/auth/"],
         "exclusiveResources": [],
         "dependencies": ["T00"],
-        "milestone": "J1"
+        "milestone": "J1",
+        "scope": {
+          "paths": ["src/auth/**"]
+        }
       },
       {
         "id": "T03",
@@ -72,12 +98,18 @@
         "profile": "frontend",
         "complexity": "M",
         "acceptanceCriteria": ["Un créneau publié est visible"],
-        "requiredTests": { "unit": ["Agenda"], "e2e": ["Publication d'un créneau"] },
+        "requiredTests": {
+          "unit": ["Agenda"],
+          "e2e": ["Publication d'un créneau"]
+        },
         "codeZones": ["src/salon/"],
         "exclusiveResources": [],
         "dependencies": ["T01", "T02"],
         "epic": "E1",
-        "milestone": "J1"
+        "milestone": "J1",
+        "scope": {
+          "paths": ["src/salon/**"]
+        }
       },
       {
         "id": "T04",
@@ -87,12 +119,18 @@
         "profile": "frontend",
         "complexity": "M",
         "acceptanceCriteria": ["Un créneau réservé n'est plus libre"],
-        "requiredTests": { "unit": ["Réservation"], "e2e": ["Parcours de réservation"] },
+        "requiredTests": {
+          "unit": ["Réservation"],
+          "e2e": ["Parcours de réservation"]
+        },
         "codeZones": ["src/booking/"],
         "exclusiveResources": [],
         "dependencies": ["T01", "T02"],
         "epic": "E1",
-        "milestone": "J1"
+        "milestone": "J1",
+        "scope": {
+          "paths": ["src/booking/**"]
+        }
       },
       {
         "id": "T05",
@@ -102,18 +140,35 @@
         "profile": "backend",
         "complexity": "S",
         "acceptanceCriteria": ["Un rappel part la veille"],
-        "requiredTests": { "unit": ["Calcul de la date de rappel"] },
+        "requiredTests": {
+          "unit": ["Calcul de la date de rappel"]
+        },
         "codeZones": ["supabase/functions/"],
         "exclusiveResources": [],
         "dependencies": ["T01"],
-        "milestone": "J1"
+        "milestone": "J1",
+        "scope": {
+          "paths": ["supabase/functions/**"]
+        }
       }
     ],
     "profiles": [
-      { "profile": "architect", "justification": "Bootstrap." },
-      { "profile": "data", "justification": "Schéma et RLS." },
-      { "profile": "frontend", "justification": "Interface." },
-      { "profile": "backend", "justification": "Fonctions planifiées." }
+      {
+        "profile": "architect",
+        "justification": "Bootstrap."
+      },
+      {
+        "profile": "data",
+        "justification": "Schéma et RLS."
+      },
+      {
+        "profile": "frontend",
+        "justification": "Interface."
+      },
+      {
+        "profile": "backend",
+        "justification": "Fonctions planifiées."
+      }
     ]
   },
   "expectedAgents": 3

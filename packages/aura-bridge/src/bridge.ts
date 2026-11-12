@@ -22,6 +22,7 @@ import {
   verifyBridgeToken,
   type BridgePayload,
 } from 'shared/bridge-token';
+import { toolAllowed } from 'shared';
 import { validateRequest, type AutomationRunner } from './automation/automation.js';
 import { EDITOR_CLOSED, type EditorState } from './editor-probe.js';
 import { EditorSyncError } from './editor-sync/git.js';
@@ -585,7 +586,13 @@ export class AuraBridge {
       { name: 'agentlake-aura-bridge', version: '1.0.0' },
       { capabilities: { tools: {} } },
     );
-    const allowed = () => new Set(this.options.allowedTools(payload.profile));
+    // Liste blanche de l'éditeur, restreinte aux outils du périmètre de la tâche (jeton signé).
+    const allowed = () =>
+      new Set(
+        this.options
+          .allowedTools(payload.profile)
+          .filter((t) => payload.tools === undefined || toolAllowed(t, payload.tools)),
+      );
     const upstream = () => {
       if (!this.upstream) throw new McpError(ErrorCode.InternalError, 'Pont arrêté.');
       return this.upstream;
@@ -603,7 +610,10 @@ export class AuraBridge {
         return this.callBridgeTool(sync, tool, request.params.arguments ?? {}, payload, started);
       }
       if (!allowed().has(tool)) {
-        const message = `Outil « ${tool} » non autorisé pour le profil ${payload.profile}.`;
+        const message =
+          payload.tools !== undefined && !toolAllowed(tool, payload.tools)
+            ? `Outil « ${tool} » hors du périmètre de la tâche.`
+            : `Outil « ${tool} » non autorisé pour le profil ${payload.profile}.`;
         this.audit({
           repo: payload.repo,
           runId: payload.runId,

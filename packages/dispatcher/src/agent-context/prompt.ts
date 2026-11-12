@@ -3,6 +3,7 @@ import {
   TEST_CATEGORY_LABELS,
   type AgentProfile,
   type Answer,
+  type EffectiveScope,
   type Question,
   type TaskIssue,
 } from 'shared';
@@ -40,6 +41,8 @@ export interface PromptInput {
   quality?: QualityGate;
   /** Tâche de jeu en code pur : l'éditeur et le pont ne sont pas disponibles. */
   withoutEditor?: boolean;
+  /** Périmètre effectif de la tâche (fichiers, outils) ; null : non contrôlé. */
+  scope?: EffectiveScope | null;
 }
 
 /** Budget de caractères pour les documents du contexte et les journaux. */
@@ -165,6 +168,25 @@ export function buildPrompt(input: PromptInput): string {
       '- Un choix mineur que tu tranches toi-même se signale par une question non bloquante (`blocking = false`) ; continue alors normalement.',
       '- Termine en remplissant la sortie structurée : `pr_title` (titre court) et `pr_summary` (ce qui a été fait, les choix, comment tester).',
     ].join('\n'),
+    input.scope
+      ? [
+          '## Périmètre',
+          '',
+          'Cette tâche t’est confiée pour une partie précise du projet. Tu ne modifies que ces fichiers :',
+          list(
+            input.scope.paths.map((p) => `\`${p}\``),
+            '',
+          ),
+          '',
+          'Sont aussi permis : les tests des fichiers de ce périmètre, les `.meta` Unity de ces fichiers, les lockfiles de leurs manifestes et `.agentlake/decisions.md`.',
+          input.scope.tools !== null
+            ? `Outils d’éditeur permis : ${input.scope.tools.map((t) => `\`${t}\``).join(', ') || 'aucun'} (le pont refuse les autres).`
+            : null,
+          'Tout autre fichier (documentation, autre partie du code, assets) relève d’un autre agent : ne le modifie pas. S’il est indispensable à ta tâche, pose une question bloquante qui explique pourquoi. Une PR qui sort du périmètre est bloquée jusqu’à l’accord de Kia.',
+        ]
+          .filter((l): l is string => l !== null)
+          .join('\n')
+      : null,
     resumeSection(input.resume),
     input.quality ? qualitySection(input.quality) : null,
     input.withoutEditor

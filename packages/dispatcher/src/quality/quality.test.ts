@@ -6,7 +6,7 @@ import {
   stateLabel,
   TASK_LABEL,
 } from 'shared';
-import { makeAgentProfile, makeTask } from 'shared/test-utils';
+import { makeAgentProfile, makeProjectConfig, makeTask } from 'shared/test-utils';
 import { describe, expect, it } from 'vitest';
 import { stringify } from 'yaml';
 import { runQualityCli } from './cli.js';
@@ -131,7 +131,11 @@ describe('extraits de journaux', () => {
 
 const ref = { owner: 'kiamiya', repo: 'site' };
 
-async function withPullRequest(changes: { path: string; content?: string; delete?: true }[]) {
+async function withPullRequest(
+  changes: { path: string; content?: string; delete?: true }[],
+  scope?: { paths: string[] },
+  scopeRules?: Record<string, { paths: string[] }>,
+) {
   const github = new FakeGitHub({ actor: 'kiamiya' });
   github.seedRepository(ref);
   await github.commitFiles(ref, {
@@ -144,11 +148,21 @@ async function withPullRequest(changes: { path: string; content?: string; delete
         path: '.agentlake/profiles/reviewer.yml',
         content: stringify(makeAgentProfile({ id: 'reviewer', model: 'opus' })),
       },
+      ...(scopeRules !== undefined
+        ? [
+            {
+              path: '.agentlake/project.yml',
+              content: stringify(makeProjectConfig({ scopeRules })),
+            },
+          ]
+        : []),
     ],
   });
   const issue = await github.createIssue(ref, {
     title: 'T04',
-    body: renderTaskIssueBody(makeTask({ id: 'T04', title: 'Somme' })),
+    body: renderTaskIssueBody(
+      makeTask({ id: 'T04', title: 'Somme', ...(scope !== undefined ? { scope } : {}) }),
+    ),
     labels: [TASK_LABEL, stateLabel('running')],
   });
   await github.commitFiles(ref, {
@@ -169,6 +183,89 @@ async function withPullRequest(changes: { path: string; content?: string; delete
   });
   return { github, issue, pr };
 }
+
+describe('périmètre de la tâche', () => {
+  it('fichiers de la zone, tests liés et décisions : réussi, sans question', async () => {
+    const { github, issue, pr } = await withPullRequest(
+      [
+        { path: 'src/somme.ts', content: 'export const somme = 2;\n' },
+        { path: 'src/somme.test.ts', content: 'test 1\ntest 2\ntest 3\n' },
+        { path: '.agentlake/decisions.md', content: '# Décisions\n' },
+      ],
+      { paths: ['src/somme.ts'] },
+    );
+    expect((await runTestsGuard(github, ref, pr.number)).ok).toBe(true);
+    expect(await github.listComments(ref, issue.number)).toEqual([]);
+  });
+
+  it('hors zone : question bloquante, puis refus (correction) ou accord (réussi)', async () => {
+    const { github, issue, pr } = await withPullRequest(
+      [
+        { path: 'src/somme.ts', content: 'export const somme = 2;\n' },
+        { path: 'src/somme.test.ts', content: 'test 1\ntest 2\ntest 3\n' },
+        { path: 'README.md', content: '# Doc modifiée par le développeur\n' },
+      ],
+      { paths: ['src/**'] },
+    );
+    const first = await runTestsGuard(github, ref, pr.number);
+    expect(first.reasons).toEqual([
+      `Fichiers hors du périmètre de la tâche : README.md. Accord de Kia demandé sur l’issue #${String(issue.number)}.`,
+    ]);
+    const question = parseQuestionComment(
+      (await github.listComments(ref, issue.number))[0]?.body ?? '',
+    );
+    expect(question.ok && question.value).toMatchObject({
+      id: `scope-pr${String(pr.number)}`,
+      options: ['Autoriser', 'Refuser'],
+    });
+    expect(isGuardQuestion(`scope-pr${String(pr.number)}`)).toBe(true);
+    expect((await github.getIssue(ref, issue.number)).labels).toContain(
+      stateLabel('awaiting-answer'),
+    );
+    await runTestsGuard(github, ref, pr.number);
+    expect(await github.listComments(ref, issue.number)).toHaveLength(1);
+
+    await github.createComment(
+      ref,
+      issue.number,
+      renderAnswerComment({ id: `scope-pr${String(pr.number)}`, decision: false, text: 'Refuser' }),
+    );
+    expect((await runTestsGuard(github, ref, pr.number)).reasons[0]).toContain(
+      'Kia a refusé les modifications hors du périmètre : README.md.',
+    );
+    expect((await github.getIssue(ref, issue.number)).labels).toContain(stateLabel('fixing'));
+
+    await github.createComment(
+      ref,
+      issue.number,
+      renderAnswerComment({
+        id: `scope-pr${String(pr.number)}`,
+        decision: false,
+        text: 'Autoriser',
+      }),
+    );
+    expect((await runTestsGuard(github, ref, pr.number)).ok).toBe(true);
+  });
+
+  it('règles du profil ajoutées ; tâche sans périmètre ni règle : non contrôlée', async () => {
+    const withRule = await withPullRequest(
+      [
+        { path: 'src/somme.ts', content: 'export const somme = 2;\n' },
+        { path: 'src/somme.test.ts', content: 'test 1\ntest 2\ntest 3\n' },
+        { path: 'docs/somme.md', content: '# Somme\n' },
+      ],
+      { paths: ['src/somme.ts'] },
+      { frontend: { paths: ['docs/**'] } },
+    );
+    expect((await runTestsGuard(withRule.github, ref, withRule.pr.number)).ok).toBe(true);
+    const free = await withPullRequest([
+      { path: 'src/somme.ts', content: 'export const somme = 2;\n' },
+      { path: 'src/somme.test.ts', content: 'test 1\ntest 2\ntest 3\n' },
+      { path: 'ailleurs.txt', content: 'x\n' },
+    ]);
+    expect((await runTestsGuard(free.github, ref, free.pr.number)).ok).toBe(true);
+  });
+});
 
 describe('garde des tests', () => {
   it('identifiants, décisions et issue liée', () => {

@@ -22,8 +22,18 @@
   "plan": {
     "summary": "Application web de prise de rendez-vous pour un cabinet de trois praticiens : créneaux, réservation, confirmation et rappel par e-mail.",
     "assumptions": ["Rappels par e-mail seulement", "Réservation sans compte patient"],
-    "epics": [{ "id": "E1", "title": "Réservation" }],
-    "milestones": [{ "id": "J1", "title": "Première version" }],
+    "epics": [
+      {
+        "id": "E1",
+        "title": "Réservation"
+      }
+    ],
+    "milestones": [
+      {
+        "id": "J1",
+        "title": "Première version"
+      }
+    ],
     "tasks": [
       {
         "id": "T00",
@@ -33,11 +43,16 @@
         "profile": "architect",
         "complexity": "L",
         "acceptanceCriteria": ["La CI tourne et passe sur main"],
-        "requiredTests": { "unit": ["Test trivial du socle"] },
+        "requiredTests": {
+          "unit": ["Test trivial du socle"]
+        },
         "codeZones": ["/"],
         "exclusiveResources": [],
         "dependencies": [],
-        "milestone": "J1"
+        "milestone": "J1",
+        "scope": {
+          "paths": ["**"]
+        }
       },
       {
         "id": "T01",
@@ -58,7 +73,10 @@
         "exclusiveResources": ["migrations"],
         "dependencies": ["T00"],
         "epic": "E1",
-        "milestone": "J1"
+        "milestone": "J1",
+        "scope": {
+          "paths": ["src/api/**"]
+        }
       },
       {
         "id": "T02",
@@ -76,7 +94,10 @@
         "exclusiveResources": [],
         "dependencies": ["T01"],
         "epic": "E1",
-        "milestone": "J1"
+        "milestone": "J1",
+        "scope": {
+          "paths": ["src/web/**"]
+        }
       },
       {
         "id": "T03",
@@ -86,12 +107,17 @@
         "profile": "backend",
         "complexity": "S",
         "acceptanceCriteria": ["Le rappel part la veille du rendez-vous"],
-        "requiredTests": { "unit": ["Date d'envoi du rappel"] },
+        "requiredTests": {
+          "unit": ["Date d'envoi du rappel"]
+        },
         "codeZones": ["src/notifications/"],
         "exclusiveResources": [],
         "dependencies": ["T00"],
         "epic": "E1",
-        "milestone": "J1"
+        "milestone": "J1",
+        "scope": {
+          "paths": ["src/notifications/**"]
+        }
       },
       {
         "id": "T04",
@@ -105,18 +131,35 @@
         "codeZones": ["docs/"],
         "exclusiveResources": [],
         "dependencies": ["T02", "T03"],
-        "milestone": "J1"
+        "milestone": "J1",
+        "scope": {
+          "paths": ["docs/**"]
+        }
       }
     ],
     "profiles": [
-      { "profile": "architect", "justification": "Bootstrap du dépôt et de la CI." },
-      { "profile": "backend", "justification": "API des créneaux et e-mails." },
-      { "profile": "frontend", "justification": "Écran de réservation." },
-      { "profile": "docs", "justification": "Guide du secrétariat." }
+      {
+        "profile": "architect",
+        "justification": "Bootstrap du dépôt et de la CI."
+      },
+      {
+        "profile": "backend",
+        "justification": "API des créneaux et e-mails."
+      },
+      {
+        "profile": "frontend",
+        "justification": "Écran de réservation."
+      },
+      {
+        "profile": "docs",
+        "justification": "Guide du secrétariat."
+      }
     ]
   },
   "agents": {
-    "T01": { "ciFailures": 1 },
+    "T01": {
+      "ciFailures": 1
+    },
     "T02": {
       "question": {
         "id": "format-telephone",
@@ -129,6 +172,12 @@
     "format-telephone": "Obligatoire, format français."
   },
   "expected": {
-    "launches": { "T00": 1, "T01": 2, "T02": 2, "T03": 1, "T04": 1 }
+    "launches": {
+      "T00": 1,
+      "T01": 2,
+      "T02": 2,
+      "T03": 1,
+      "T04": 1
+    }
   }
 }

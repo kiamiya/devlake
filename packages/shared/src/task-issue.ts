@@ -53,6 +53,16 @@ export function renderTaskIssueBody(task: TaskIssue): string {
     ].join('\n'),
     `## Dépend de\n\n${bulletList(task.dependencies, 'Aucune dépendance.')}`,
     `## Zones de code\n\n${bulletList(task.codeZones, 'Non précisées.')}`,
+    ...(task.scope !== undefined
+      ? [
+          [
+            '## Périmètre',
+            '',
+            `- Fichiers modifiables : ${task.scope.paths.map((p) => `\`${p}\``).join(', ')}`,
+            `- Outils d’éditeur : ${task.scope.tools === undefined ? 'ceux autorisés pour l’éditeur' : task.scope.tools.map((t) => `\`${t}\``).join(', ') || 'aucun'}`,
+          ].join('\n'),
+        ]
+      : []),
     `## Ressources exclusives\n\n${bulletList(task.exclusiveResources, 'Aucune.')}`,
   ];
   return `${sections.join('\n\n')}\n`;

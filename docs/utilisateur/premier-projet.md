@@ -31,6 +31,24 @@ Section **Plan** → **Revue du plan** : arborescence, graphe des dépendances, 
 
 **Valider le plan** → **Confirmer la validation** : le plan part sur `main`, une issue est créée par tâche avec ses dépendances, et le dispatcher démarre. La validation est idempotente.
 
+### Périmètre de chaque agent
+
+Chaque tâche est confiée à un seul agent, pour une partie précise du projet : son **périmètre**.
+
+- **Fichiers modifiables** : motifs de chemins (`src/api/**`, `Assets/Scripts/Joueur/*.cs`, un dossier ou un fichier). Le planificateur les propose pour chaque tâche, aussi étroits que possible ; seule `T00` (mise en place du dépôt) couvre tout le dépôt.
+- **Outils d'éditeur** (projets de jeu) : choisis parmi les outils autorisés dans les ponts. Le cockpit publie leur liste (`.agentlake/tools.json`) au lancement du planificateur. Le pont refuse à l'agent tout outil hors de son périmètre, même autorisé pour l'éditeur.
+- **Règles du projet** : `scopeRules` dans `.agentlake/project.yml` ajoute des chemins (ou des outils) à toutes les tâches d'un profil. Nouveaux projets : `docs` → `docs/**`, `**/*.md` ; projets de jeu, `blender` → `Art/**`, `Assets/Art/**`.
+
+Le périmètre se relit et se modifie dans la revue du plan (« Périmètre de l'agent ») et dans le formulaire d'une tâche ad hoc.
+
+À l'exécution, l'agent connaît son périmètre. La porte qualité (`agentlake / tests-guard`) vérifie chaque PR. Restent permis d'office :
+- les tests des fichiers du périmètre ;
+- les `.meta` Unity ;
+- les lockfiles de ses manifestes ;
+- `.agentlake/decisions.md`.
+
+Tout autre fichier modifié déclenche une question bloquante sur l'issue : **Autoriser** relance le check, **Refuser** renvoie la tâche en correction pour retirer ces modifications. Une tâche sans périmètre (plan antérieur) n'est pas contrôlée.
+
 ## 5. Suivre l'exécution
 
 - **Exécution** : avancement pondéré (S = 1, M = 2, L = 3), kanban par état, PR de chaque tâche, **Mettre en pause** le projet, relance d'une tâche escaladée avec une consigne.

@@ -1,4 +1,11 @@
-import type { GitHubPort } from 'github';
+import type { GitHubPort, RepoRef } from 'github';
+import {
+  AVAILABLE_TOOLS_PATH,
+  AvailableToolsSchema,
+  ProjectConfigSchema,
+  type AvailableTools,
+} from 'shared';
+import { parse } from 'yaml';
 import type { Repositories } from '../../db/repositories.js';
 import { UnknownProjectError } from '../../projects-service.js';
 
@@ -27,9 +34,9 @@ export class PlannerLaunchService {
     if (!project) throw new UnknownProjectError(input.projectId);
     const settings = this.repos.settings.get();
     if (settings.plannerModel === null) throw new PlannerModelMissingError();
-    await (
-      await this.github()
-    ).dispatchWorkflow(
+    const github = await this.github();
+    await this.publishTools(github, { owner: project.owner, repo: project.repo });
+    await github.dispatchWorkflow(
       { owner: project.owner, repo: project.repo },
       {
         workflow: PLANNER_CALLER,
@@ -43,5 +50,28 @@ export class PlannerLaunchService {
       },
     );
     return { dispatched: true };
+  }
+
+  /**
+   * Projet de jeu : outils d'éditeur autorisés sur le poste, publiés pour que le planificateur
+   * choisisse le périmètre d'outils de chaque tâche. Rien n'est commité s'ils n'ont pas changé.
+   */
+  private async publishTools(github: GitHubPort, ref: RepoRef): Promise<void> {
+    const file = await github.getFile(ref, '.agentlake/project.yml', 'main');
+    const type =
+      file === null ? undefined : ProjectConfigSchema.safeParse(parse(file.content)).data?.type;
+    if (type !== 'unity' && type !== 'unreal') return;
+    const bridge = this.repos.settings.get().auraBridge;
+    const tools: AvailableTools = {
+      version: 1,
+      editors: { [type]: bridge[type].allowedTools, blender: bridge.blender.allowedTools },
+    };
+    const content = `${JSON.stringify(AvailableToolsSchema.parse(tools), null, 2)}\n`;
+    if ((await github.getFile(ref, AVAILABLE_TOOLS_PATH, 'main'))?.content === content) return;
+    await github.commitFiles(ref, {
+      branch: 'main',
+      message: 'chore(agentlake): outils d’éditeur autorisés',
+      changes: [{ path: AVAILABLE_TOOLS_PATH, content }],
+    });
   }
 }

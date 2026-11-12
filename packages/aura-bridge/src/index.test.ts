@@ -93,7 +93,7 @@ describe('liste blanche (session MCP en mémoire)', () => {
     for (const b of bridges.splice(0)) await b.stop();
   });
 
-  async function session(allowed: string[]) {
+  async function session(allowed: string[], tools?: string[]) {
     const audit: AuditEntry[] = [];
     const upstream = fakeUpstream();
     const bridge = new AuraBridge({
@@ -115,6 +115,7 @@ describe('liste blanche (session MCP en mémoire)', () => {
         profile: 'unity',
         exp: 9_999_999_999,
         scope: 'mcp',
+        ...(tools !== undefined ? { tools } : {}),
       })
       .connect(serverSide);
     const client = new Client({ name: 'agent', version: '1' });
@@ -171,6 +172,15 @@ describe('liste blanche (session MCP en mémoire)', () => {
     expect(audit).toEqual([
       expect.objectContaining({ tool: 'run_script', outcome: 'refused', durationMs: 0 }),
     ]);
+  });
+
+  it('périmètre de la tâche (jeton) : seuls ses outils, parmi ceux autorisés à l’éditeur', async () => {
+    const { client, upstream } = await session(['scene_list', 'run_script', 'broken'], ['scene_*']);
+    expect((await client.listTools()).tools.map((t) => t.name)).toEqual(['scene_list']);
+    await expect(client.callTool({ name: 'run_script', arguments: {} })).rejects.toThrow(
+      'Outil « run_script » hors du périmètre de la tâche.',
+    );
+    expect(upstream.calls).toEqual([]);
   });
 
   it('arrêt : Aura fermé, statut arrêté ; démarrage refusé sans secret', async () => {

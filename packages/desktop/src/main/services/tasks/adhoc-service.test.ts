@@ -26,6 +26,8 @@ const base: AdhocTaskInput = {
   tests: 'Rappel en hiver\nRappel en été',
   testCategory: 'unit',
   codeZones: 'src/notifications/',
+  scopePaths: 'src/notifications/**',
+  scopeTools: '',
   dependencies: [],
   priority: false,
 };

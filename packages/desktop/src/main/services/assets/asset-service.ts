@@ -479,6 +479,12 @@ export function integrationTask(projectId: string, type: 'unity' | 'unreal', ent
     tests: '',
     testCategory: 'integration' as const,
     codeZones: entry.path ?? '',
+    scopePaths: [
+      `${entry.path ?? `ThirdParty/${entry.id}`}/**`,
+      ...(type === 'unreal' ? [`Content/ThirdParty/${entry.id}/**`] : []),
+      ...(entry.license === 'cc-by' ? ['CREDITS.md'] : []),
+    ].join('\n'),
+    scopeTools: '',
     dependencies: [],
     priority: false,
   };

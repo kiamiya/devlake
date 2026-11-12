@@ -131,6 +131,39 @@ export function TaskEditor({
           </div>
         ))}
       </fieldset>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-sm font-medium">Périmètre de l’agent</legend>
+        <Label htmlFor="task-scope-paths" className="text-xs">
+          Fichiers modifiables (un motif par ligne)
+        </Label>
+        <LinesField
+          id="task-scope-paths"
+          className="min-h-12 font-mono text-xs"
+          value={task.scope?.paths ?? []}
+          onCommit={(paths) => {
+            const tools = task.scope?.tools;
+            set(
+              'scope',
+              paths.length > 0 ? { paths, ...(tools !== undefined ? { tools } : {}) } : undefined,
+            );
+          }}
+        />
+        <Label htmlFor="task-scope-tools" className="text-xs">
+          Outils d’éditeur (un par ligne ; vide : ceux autorisés pour l’éditeur)
+        </Label>
+        <LinesField
+          id="task-scope-tools"
+          className="min-h-12 font-mono text-xs"
+          value={task.scope?.tools ?? []}
+          onCommit={(tools) => {
+            if (task.scope === undefined) return;
+            set('scope', {
+              paths: task.scope.paths,
+              ...(tools.length > 0 ? { tools } : {}),
+            });
+          }}
+        />
+      </fieldset>
       <fieldset className="flex flex-col gap-1">
         <legend className="mb-1 text-sm font-medium">Dépend de</legend>
         {allTasks

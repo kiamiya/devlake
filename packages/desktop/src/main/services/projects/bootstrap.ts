@@ -3,6 +3,7 @@ import type { FileChange, GitHubPort, RepoRef } from 'github';
 import { isGitHubError } from 'github';
 import {
   ALL_LABELS,
+  DEFAULT_SCOPE_RULES,
   isGameProject,
   PROFILES_DIR,
   requiredChecksFor,
@@ -103,6 +104,10 @@ export function projectConfigFor(input: BootstrapInput, maxAttempts: number): Pr
     profiles: ['architect', 'reviewer'],
     exclusiveResources: [],
     bridgeRequired: isGameProject(input.type),
+    // Règles de périmètre par profil (documentation, assets 3D), modifiables par projet.
+    scopeRules: isGameProject(input.type)
+      ? DEFAULT_SCOPE_RULES
+      : { docs: DEFAULT_SCOPE_RULES.docs ?? { paths: ['docs/**'] } },
     ...(input.adopted === true ? { adopted: true } : {}),
   };
 }

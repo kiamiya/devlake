@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { cleanLine, safeParseWith, type ParseResult } from './common.js';
 import { ProfileIdSchema, ProjectTypeSchema, QualityProfileSchema } from './ids.js';
+import { ScopeRulesSchema } from './scope.js';
 
 /** Contenu de `.agentlake/project.yml`. */
 export const ProjectConfigSchema = z.object({
@@ -37,6 +38,8 @@ export const ProjectConfigSchema = z.object({
    * première tâche d'audit et de remise au vert au lieu de la mise en place du dépôt.
    */
   adopted: z.boolean({ error: 'adopted doit valoir true ou false.' }).optional(),
+  /** Règles de périmètre par profil, ajoutées à celui de chaque tâche du profil. */
+  scopeRules: ScopeRulesSchema.optional(),
 });
 export type ProjectConfig = z.infer<typeof ProjectConfigSchema>;
 

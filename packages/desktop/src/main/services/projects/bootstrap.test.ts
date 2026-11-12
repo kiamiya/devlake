@@ -92,6 +92,7 @@ describe('bootstrap d’un projet', () => {
       profiles: ['architect', 'reviewer'],
       exclusiveResources: [],
       bridgeRequired: false,
+      scopeRules: { docs: { paths: ['docs/**', '**/*.md'] } },
     });
 
     expect(await github.getBranchProtection(ref, 'main')).toEqual({
