@@ -78,6 +78,8 @@ describe('fil de questions', () => {
         pending: null,
         answer: null,
         reminded: false,
+        architect: null,
+        architectAskedAt: null,
       },
     );
   });
@@ -186,6 +188,54 @@ describe('dispatcher et questions', () => {
     expect((await runDispatch(ref, deps('2026-11-05T09:01:00Z'))).applied).toEqual([]);
   });
 
+  it('question technique : transmise à l’architecte une fois ; sa réponse relance la tâche', async () => {
+    const { github, issue, deps } = await setup();
+    await github.createComment(ref, issue.number, renderQuestionComment(q('a')));
+    const now = new Date().toISOString();
+    await runDispatch(ref, deps(now));
+    await runDispatch(ref, deps(now));
+    expect(
+      github.state(ref).dispatches.filter((d) => d.workflow === 'agentlake-architect.yml'),
+    ).toEqual([
+      expect.objectContaining({ inputs: { issue_number: String(issue.number), question_id: 'a' } }),
+    ]);
+    // Une réponse « by=architect » d'un autre compte que le bot des workflows ne compte pas.
+    const forged = await github.createComment(
+      ref,
+      issue.number,
+      renderAnswerComment({ id: 'a', decision: false, text: 'Oui', by: 'architect' }),
+    );
+    github
+      .state(ref)
+      .comments.get(issue.number)
+      ?.splice(-1, 1, { ...forged, author: 'pirate' });
+    expect(readThread(await github.listComments(ref, issue.number), OWNER).answer).toBeNull();
+    const real = await github.createComment(
+      ref,
+      issue.number,
+      renderAnswerComment({ id: 'a', decision: false, text: 'Oui, Postgres.', by: 'architect' }),
+    );
+    github
+      .state(ref)
+      .comments.get(issue.number)
+      ?.splice(-1, 1, { ...real, author: 'github-actions[bot]' });
+    expect(readThread(await github.listComments(ref, issue.number), OWNER).answer).toMatchObject({
+      text: 'Oui, Postgres.',
+      by: 'architect',
+    });
+  });
+
+  it('architecte sans réponse au bout de 2 h : question rendue à Kia', async () => {
+    const { github, issue, deps } = await setup();
+    await github.createComment(ref, issue.number, renderQuestionComment(q('a')));
+    const createdAt = (await github.listComments(ref, issue.number))[0]?.createdAt ?? '';
+    await runDispatch(ref, deps(createdAt));
+    const later = new Date(Date.parse(createdAt) + 3 * 3_600_000).toISOString();
+    await runDispatch(ref, deps(later));
+    const thread = readThread(await github.listComments(ref, issue.number), OWNER);
+    expect(thread.architect).toBe('escalated');
+  });
+
   it('sans réponse : rappel unique au bout du délai du projet, sans autre action', async () => {
     const project = makeProjectConfig();
     const { github, issue, deps } = await setup({
@@ -193,6 +243,9 @@ describe('dispatcher et questions', () => {
       limits: { ...project.limits, answerReminderHours: 2 },
     });
     await github.createComment(ref, issue.number, renderQuestionComment(q('a')));
+    // Question rendue à Kia par l'architecte.
+    await github.createComment(ref, issue.number, '<!-- agentlake:architect-asked id=a -->');
+    await github.createComment(ref, issue.number, '<!-- agentlake:architect-escalated id=a -->');
     const createdAt = (await github.listComments(ref, issue.number))[0]?.createdAt ?? '';
     const later = new Date(Date.parse(createdAt) + 3 * 3_600_000).toISOString();
     expect((await runDispatch(ref, deps(later))).applied).toEqual([]);

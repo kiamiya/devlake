@@ -1,5 +1,12 @@
 import type { Comment } from 'github';
-import { parseAnswerComment, parseQuestionComment, type Answer, type Question } from 'shared';
+import {
+  ARCHITECT_ASKED_MARKER,
+  ARCHITECT_ESCALATED_MARKER,
+  parseAnswerComment,
+  parseQuestionComment,
+  type Answer,
+  type Question,
+} from 'shared';
 
 /** Une question publiée sur l'issue, avec son commentaire. */
 export interface PostedQuestion {
@@ -15,6 +22,10 @@ export interface ThreadState {
   answer: (Answer & { commentId: number }) | null;
   /** Un rappel a déjà été posté pour `pending`. */
   reminded: boolean;
+  /** Architecte : `asked` (transmise, en cours), `escalated` (revenue à Kia), ou null. */
+  architect: 'asked' | 'escalated' | null;
+  /** Date de transmission à l'architecte. */
+  architectAskedAt: string | null;
 }
 
 const REMINDER_MARKER = (id: string) => `<!-- agentlake:reminder id=${id} -->`;
@@ -22,6 +33,11 @@ const IGNORED_MARKER = (commentId: number) =>
   `<!-- agentlake:answer-ignored comment=${String(commentId)} -->`;
 
 const sameLogin = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+/** Auteur des commentaires des workflows du dépôt (agents, architecte). */
+const WORKFLOW_BOT = 'github-actions[bot]';
+
+export { ARCHITECT_ASKED_MARKER, ARCHITECT_ESCALATED_MARKER };
 
 /** Lit le fil d'une issue de tâche (commentaires dans l'ordre chronologique). */
 export function readThread(comments: readonly Comment[], owner: string): ThreadState {
@@ -34,19 +50,38 @@ export function readThread(comments: readonly Comment[], owner: string): ThreadS
       pendingIndex = index;
     }
   }
-  if (waiting === undefined) return { pending: null, answer: null, reminded: false };
+  if (waiting === undefined)
+    return {
+      pending: null,
+      answer: null,
+      reminded: false,
+      architect: null,
+      architectAskedAt: null,
+    };
   const question = waiting.question;
   const after = comments.slice(pendingIndex + 1);
+  // Réponse de Kia, ou de l'architecte (commentaire du bot des workflows, marqué by=architect).
   const answer =
     after
-      .filter((c) => sameLogin(c.author, owner))
-      .map((c) => ({ parsed: parseAnswerComment(c.body), commentId: c.id }))
+      .map((c) => ({ parsed: parseAnswerComment(c.body), commentId: c.id, author: c.author }))
+      .filter(
+        ({ parsed, author }) =>
+          sameLogin(author, owner) ||
+          (sameLogin(author, WORKFLOW_BOT) && parsed.ok && parsed.value.by === 'architect'),
+      )
       .flatMap(({ parsed, commentId }) =>
         parsed.ok && parsed.value.id === question.id ? [{ ...parsed.value, commentId }] : [],
       )
       .at(-1) ?? null;
   const reminded = after.some((c) => c.body.includes(REMINDER_MARKER(question.id)));
-  return { pending: waiting, answer, reminded };
+  const architect = after.some((c) => c.body.includes(ARCHITECT_ESCALATED_MARKER(question.id)))
+    ? 'escalated'
+    : after.some((c) => c.body.includes(ARCHITECT_ASKED_MARKER(question.id)))
+      ? 'asked'
+      : null;
+  const architectAskedAt =
+    after.find((c) => c.body.includes(ARCHITECT_ASKED_MARKER(question.id)))?.createdAt ?? null;
+  return { pending: waiting, answer, reminded, architect, architectAskedAt };
 }
 
 /** Rappel unique d'une question restée sans réponse ; mentionne le propriétaire (notification GitHub). */

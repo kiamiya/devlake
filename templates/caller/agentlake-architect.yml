@@ -1,0 +1,31 @@
+# Généré par AgentLake : relancer le bootstrap plutôt que modifier ce fichier.
+name: AgentLake — architecte
+
+on:
+  # Lancé par le dispatcher quand un agent pose une question technique.
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Issue de la tâche
+        type: string
+        required: true
+      question_id:
+        description: Identifiant de la question bloquante
+        type: string
+        required: true
+
+permissions: {}
+
+# Pas de groupe de concurrence ici : le job appelé a déjà le sien, par issue.
+
+jobs:
+  answer:
+    permissions:
+      contents: read
+      issues: write
+    uses: __DEVLAKE_REPOSITORY__/.github/workflows/architect.yml@__DEVLAKE_REF__
+    with:
+      issue_number: ${{ inputs.issue_number }}
+      question_id: ${{ inputs.question_id }}
+      devlake_ref: __DEVLAKE_REF__
+    secrets: inherit

@@ -11,6 +11,10 @@ import { PROJECT_CONFIG } from '../dispatch/dispatcher.js';
 import { seedGreenMain } from '../testing/checks.js';
 
 const OWNER = 'kiamiya';
+/** Lancements d'agents (l'architecte, transmis à part, n'en est pas un). */
+const agentRuns = (github: FakeGitHub) =>
+  github.state(ref).dispatches.filter((d) => d.workflow !== 'agentlake-architect.yml');
+
 const ref = { owner: OWNER, repo: 'site' };
 const BRANCH = 'task/T01-ecran-de-connexion';
 
@@ -100,7 +104,7 @@ describe('protocole de questions, de bout en bout', () => {
 
     // 1. Passe planifiée : l'agent part.
     await dispatch(github, 'schedule', {}, log);
-    expect(github.state(ref).dispatches).toHaveLength(1);
+    expect(agentRuns(github)).toHaveLength(1);
 
     // 2. L'agent pose une question bloquante : travail poussé, attente, aucune PR.
     const first = new RunnerGit(remote);
@@ -141,9 +145,12 @@ describe('protocole de questions, de bout en bout', () => {
     );
     expect(await github.listPullRequests(ref)).toEqual([]);
 
-    // Une passe sans réponse ne relance rien.
+    // Une passe sans réponse ne relance pas l'agent : la question part chez l'architecte.
     await dispatch(github, 'schedule', {}, log);
-    expect(github.state(ref).dispatches).toHaveLength(1);
+    expect(agentRuns(github)).toHaveLength(1);
+    expect(
+      github.state(ref).dispatches.filter((d) => d.workflow === 'agentlake-architect.yml'),
+    ).toHaveLength(1);
 
     // 3. Kia répond : reprise avec resume_reason=answer.
     const reply = await github.createComment(
@@ -152,14 +159,14 @@ describe('protocole de questions, de bout en bout', () => {
       renderAnswerComment({ id: 'sso', decision: true, text: 'Non, e-mail seulement.' }),
     );
     await dispatch(github, 'issue_comment', commentEvent(issue.number, reply), log);
-    expect(github.state(ref).dispatches).toHaveLength(2);
-    expect(github.state(ref).dispatches[1]?.inputs).toMatchObject({
+    expect(agentRuns(github)).toHaveLength(2);
+    expect(agentRuns(github)[1]?.inputs).toMatchObject({
       resume_reason: 'answer',
       attempt: '2',
     });
     // L'événement rejoué (ou la passe planifiée) ne relance pas une seconde fois.
     await dispatch(github, 'issue_comment', commentEvent(issue.number, reply), log);
-    expect(github.state(ref).dispatches).toHaveLength(2);
+    expect(agentRuns(github)).toHaveLength(2);
 
     // 4. Le job repris repart de la même branche, avec la réponse et la décision.
     const second = new RunnerGit(remote);
@@ -199,12 +206,18 @@ describe('protocole de questions, de bout en bout', () => {
       renderAnswerComment({ id: 'sso', decision: false, text: 'Finalement oui.' }),
     );
     await dispatch(github, 'issue_comment', commentEvent(issue.number, stale), log);
-    expect(github.state(ref).dispatches).toHaveLength(2);
+    expect(agentRuns(github)).toHaveLength(2);
     expect((await github.getIssue(ref, issue.number)).labels).toContain(
       stateLabel('awaiting-answer'),
     );
-    const last = (await github.listComments(ref, issue.number)).at(-1)?.body ?? '';
-    expect(last).toContain('_Réponse à `sso` ignorée : la tâche attend la question `mdp`._');
+    // La même passe transmet aussi la nouvelle question à l'architecte.
+    const bodies = (await github.listComments(ref, issue.number)).map((c) => c.body);
+    expect(
+      bodies.some((b) =>
+        b.includes('_Réponse à `sso` ignorée : la tâche attend la question `mdp`._'),
+      ),
+    ).toBe(true);
+    expect(bodies.some((b) => b.includes('<!-- agentlake:architect-asked id=mdp -->'))).toBe(true);
 
     // Un autre compte ne peut pas débloquer la tâche.
     const intruder = await github.createComment(
@@ -215,7 +228,7 @@ describe('protocole de questions, de bout en bout', () => {
     const forged = { ...intruder, author: 'pirate' };
     github.state(ref).comments.get(issue.number)?.splice(-1, 1, forged);
     await dispatch(github, 'issue_comment', commentEvent(issue.number, forged), log);
-    expect(github.state(ref).dispatches).toHaveLength(2);
+    expect(agentRuns(github)).toHaveLength(2);
     expect(log).toContain(
       `Réponse ignorée sur #${String(issue.number)} : seul kiamiya peut répondre aux questions des agents.`,
     );

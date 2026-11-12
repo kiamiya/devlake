@@ -14,7 +14,7 @@ on:
   check_suite:
     types: [completed]
   workflow_run:
-    workflows: ['AgentLake — agent']
+    workflows: ['AgentLake — agent', 'AgentLake — architecte']
     types: [completed]
   workflow_dispatch:
 

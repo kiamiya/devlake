@@ -1,0 +1,74 @@
+name: AgentLake — architecte
+
+# Réponse de l'architecte à la question bloquante d'un agent : il répond s'il peut trancher
+# (la tâche reprend), sinon la question revient à Kia. Lecture seule du dépôt.
+# Appelé par le workflow d'appel `agentlake-architect.yml`, déclenché par le dispatcher.
+
+on:
+  workflow_call:
+    inputs:
+      issue_number:
+        description: Issue de la tâche
+        type: string
+        required: true
+      question_id:
+        description: Identifiant de la question bloquante
+        type: string
+        required: true
+      devlake_ref:
+        description: Version de devlake qui fournit les scripts
+        type: string
+        default: v1
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+
+permissions: {}
+
+jobs:
+  answer:
+    name: Architecte — issue ${{ inputs.issue_number }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: agentlake-architect-${{ inputs.issue_number }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: write
+    env:
+      RUNTIME: .agentlake-runtime
+    steps:
+      - name: Dépôt du projet
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Scripts AgentLake (devlake ${{ inputs.devlake_ref }})
+        uses: actions/checkout@v4
+        with:
+          repository: kiamiya/devlake
+          ref: ${{ inputs.devlake_ref }}
+          path: ${{ env.RUNTIME }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Installer et compiler les scripts, installer le CLI Claude Code
+        working-directory: ${{ env.RUNTIME }}
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc -b tsconfig.build.json
+          npm install --global @anthropic-ai/claude-code
+
+      - name: Répondre ou transmettre à Kia
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          QUESTION_ID: ${{ inputs.question_id }}
+        run: node "$RUNTIME/packages/planner/dist/architect-cli.js"

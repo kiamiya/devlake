@@ -32,6 +32,8 @@ Vérifié par dependency-cruiser (`npm run depcruise`) : seul `desktop` importe 
 
 ## Données sur GitHub
 
+- Questions des agents : transmises d'abord à l'architecte (`architect.yml`, `planner/src/architect.ts`), marqueurs `architect-asked` / `architect-escalated` ; sa réponse porte `by=architect` et n'est acceptée que du bot des workflows (`github-actions[bot]`). Délégation : `delegations` dans la sortie de l'agent, sous-tâches T500+ (`dispatcher/src/agent-context/delegate.ts`).
+
 - Périmètre d'une tâche (`shared/scope.ts`) : `scope.paths` (motifs) et `scope.tools` (outils d'éditeur), plus `scopeRules` par profil dans `project.yml`. Contrôlé par `tests-guard` (fichiers hors zone → question `scope-prN`) et par le pont : les outils du périmètre sont signés dans le jeton de l'agent (`tools`), et le pont filtre la liste blanche de l'éditeur avec eux.
 
 - `.agentlake/assets.json` (projets de jeu) : bibliothèque d'assets (`shared/assets.ts`), écrite par le cockpit (`AssetService`), résumée dans les prompts du planificateur et des agents. Versement en un commit : binaires en Git LFS, `.unitypackage` décompressé dans le cockpit, contenu Unreal sous `Content/`, sources sous `Assets/ThirdParty/` (Unity) ou `SourceArt/ThirdParty/` (Unreal), puis tâche ad hoc d'intégration.

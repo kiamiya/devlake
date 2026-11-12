@@ -58,6 +58,17 @@ Une tâche = un métier. Quand un agent a besoin d'un travail hors de son périm
 - Garde-fous : 3 sous-tâches au plus par tâche, 2 niveaux au plus (une sous-tâche peut déléguer une fois, pas au-delà). Une demande au-delà, ou invalide (tâche de code sans test…), n'est pas créée : une question non bloquante sur l'issue te la présente, à créer à la main si elle est utile.
 - Une tentative relancée ne recrée pas une sous-tâche déjà créée (même titre).
 
+### L'architecte répond d'abord aux questions des agents
+
+Quand un agent s'arrête sur une question bloquante, le dispatcher la transmet d'abord à l'**agent architecte** (workflow `agentlake-architect.yml`, lecture seule du dépôt, modèle du profil architecte) :
+
+- **question technique** que le dépôt, le contexte ou les décisions permettent de trancher (architecture, bibliothèque cohérente avec l'existant, convention, organisation du code) : il répond, la réponse est publiée sur l'issue (« Réponse de l'architecte ») et la tâche reprend. Tu peux la remplacer en répondant toi-même à la même question.
+- **choix de produit ou de périmètre**, contradiction avec le brief, compte ou secret en jeu, ou doute : il te la transmet, avec sa raison.
+
+Tant que l'architecte a la question, le cockpit ne te notifie pas ; il le fait dès qu'elle te revient. Sans réponse de l'architecte au bout de 2 heures, la question te revient d'office. Ne passent jamais par l'architecte : les questions de la garde (tests existants modifiés, fichiers hors périmètre) et celles de ses propres tâches.
+
+Les projets créés avant cette version doivent **relancer le bootstrap** pour recevoir le workflow de l'architecte ; sans lui, les questions viennent directement à toi.
+
 ## 5. Suivre l'exécution
 
 - **Exécution** : avancement pondéré (S = 1, M = 2, L = 3), kanban par état, PR de chaque tâche, **Mettre en pause** le projet, relance d'une tâche escaladée avec une consigne.

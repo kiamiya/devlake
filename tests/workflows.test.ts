@@ -58,6 +58,9 @@ const WRITE_ALLOWED: Record<string, string[]> = {
   // Dispatcher : états et commentaires des issues, workflow_dispatch des agents, relance de checks.
   '.github/workflows/dispatcher.yml#dispatch': ['issues', 'actions'],
   'templates/caller/agentlake-dispatcher.yml#dispatch': ['issues', 'actions'],
+  // Architecte : réponse ou transmission à Kia, en commentaire de l'issue (dépôt en lecture).
+  '.github/workflows/architect.yml#answer': ['issues'],
+  'templates/caller/agentlake-architect.yml#answer': ['issues'],
   // Planificateur : plan commité, issues de tâches.
   '.github/workflows/planner.yml#plan': ['contents', 'issues'],
   'templates/caller/agentlake-planner.yml#plan': ['contents', 'issues'],

@@ -7,9 +7,10 @@ import { DEVLAKE_REPOSITORY, renderCallers } from './files.js';
 describe('gabarits réels templates/caller', () => {
   const files = renderCallers(CALLER_TEMPLATES, { repository: DEVLAKE_REPOSITORY, ref: 'v1' });
 
-  it('contient les quatre workflows d’appel', () => {
+  it('contient les cinq workflows d’appel', () => {
     expect([...files.keys()]).toEqual([
       '.github/workflows/agentlake-agent-task.yml',
+      '.github/workflows/agentlake-architect.yml',
       '.github/workflows/agentlake-dispatcher.yml',
       '.github/workflows/agentlake-planner.yml',
       '.github/workflows/agentlake-review.yml',
@@ -53,7 +54,7 @@ describe('gabarits réels templates/caller', () => {
     ]);
     expect(workflow.on.schedule).toEqual([{ cron: '*/10 * * * *' }]);
     expect(workflow.on.workflow_run).toEqual({
-      workflows: ['AgentLake — agent'],
+      workflows: ['AgentLake — agent', 'AgentLake — architecte'],
       types: ['completed'],
     });
     // Filtre d'auteur dans le script, avec une trace : pas de `if` qui sauterait le job en silence.
