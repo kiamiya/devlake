@@ -24,6 +24,8 @@ import { AdoptionService } from './services/projects/adoption.js';
 import { InventoryService } from './services/projects/inventory.js';
 import { AssetService } from './services/assets/asset-service.js';
 import { McpImportService } from './services/bridge/mcp-import.js';
+import { CHECK_INTERVAL_MS, UpdateService } from './services/update/update-service.js';
+import { autoUpdater } from 'electron-updater';
 import { ContextService } from './services/ingestion/context-service.js';
 import { PlannerLaunchService } from './services/planner/planner-launch.js';
 import { PlanService } from './services/plan/plan-service.js';
@@ -195,6 +197,27 @@ async function start(): Promise<void> {
     fileSize: async (path) => (await stat(path)).size,
   });
   const adhoc = new AdhocTaskService(repos, () => service.githubPort());
+  // Mises à jour du cockpit : au démarrage (après 15 s), puis toutes les 6 heures.
+  const updates = new UpdateService({
+    repos,
+    currentVersion: app.getVersion(),
+    packaged: app.isPackaged,
+    platform: process.platform,
+    arch: process.arch,
+    autoUpdater: () => autoUpdater,
+    downloadsDir: app.getPath('downloads'),
+    openPath: (path) => shell.openPath(path),
+  });
+  const firstCheck = setTimeout(() => {
+    void updates.check();
+  }, 15_000);
+  const updateCheck = setInterval(() => {
+    void updates.check();
+  }, CHECK_INTERVAL_MS);
+  app.on('before-quit', () => {
+    clearTimeout(firstCheck);
+    clearInterval(updateCheck);
+  });
   registerIpc(
     ipcMain,
     serviceHandlers({
@@ -212,6 +235,7 @@ async function start(): Promise<void> {
       inventory: new InventoryService(repos, () => service.githubPort()),
       assets: new AssetService({ repos, github: () => service.githubPort(), adhoc }),
       mcpImport: new McpImportService({ repos, vault, bridges: bridge }),
+      updates,
       plan: new PlanService(repos, () => service.githubPort()),
       questions: new QuestionsService({
         repos,

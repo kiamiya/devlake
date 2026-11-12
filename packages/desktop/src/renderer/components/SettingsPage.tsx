@@ -13,6 +13,7 @@ import {
 import { BridgePanel } from '../features/bridge/BridgePanel.js';
 import { McpGuide } from '../features/bridge/McpGuide.js';
 import { McpDetect } from '../features/bridge/McpDetect.js';
+import { UpdateSettings } from '../features/update/UpdateBanner.js';
 import { EDITOR_LABELS } from '../hooks/bridge.js';
 import { ClaudeTokenSection } from './ClaudeTokenSection.js';
 import { Button } from './ui/button.js';
@@ -315,6 +316,11 @@ function SettingsForm({ initial }: { initial: Settings }) {
             </div>
           ))}
         </div>
+      </Card>
+
+      <Card>
+        <CardTitle>Mises à jour du cockpit</CardTitle>
+        <UpdateSettings />
       </Card>
 
       <Card>

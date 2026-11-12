@@ -229,6 +229,32 @@ export const McpImportResultSchema = z.object({
 });
 export type McpImportResult = z.infer<typeof McpImportResultSchema>;
 
+/** Mise à jour du cockpit. */
+export const UpdateStateSchema = z.object({
+  status: z.enum([
+    'unsupported',
+    'idle',
+    'checking',
+    'up-to-date',
+    'available',
+    'downloading',
+    'downloaded',
+    'error',
+  ]),
+  currentVersion: z.string(),
+  /** Nouvelle version disponible. */
+  version: z.string().nullable(),
+  notes: z.string().nullable(),
+  progress: z.number().nullable(),
+  error: z.string().nullable(),
+  checkedAt: z.string().nullable(),
+  /** macOS : le .dmg est ouvert, l'application se remplace à la main. */
+  manualInstall: z.boolean(),
+  /** Version dont le bandeau a été refermé. */
+  dismissedVersion: z.string().nullable(),
+});
+export type UpdateState = z.infer<typeof UpdateStateSchema>;
+
 /** État des lieux d'un projet repris. */
 export const InventoryStateSchema = z.object({
   adopted: z.boolean(),
@@ -486,6 +512,11 @@ export const IPC_CONTRACT = {
     }),
   },
   'inventory:get': { input: z.object({ projectId: z.string() }), output: InventoryStateSchema },
+  'update:status': { input: NoInput, output: UpdateStateSchema },
+  'update:check': { input: NoInput, output: UpdateStateSchema },
+  'update:download': { input: NoInput, output: UpdateStateSchema },
+  'update:install': { input: NoInput, output: UpdateStateSchema },
+  'update:dismiss': { input: z.object({ version: z.string() }), output: UpdateStateSchema },
   'mcp:detect': { input: NoInput, output: z.array(DiscoveredMcpSchema) },
   'mcp:import': {
     input: z.object({
