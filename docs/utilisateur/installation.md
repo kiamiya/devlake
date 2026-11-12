@@ -17,6 +17,15 @@ Les installeurs ne sont pas signés tant qu'aucun certificat n'est configuré (v
 
 La mise à jour se fait en installant la nouvelle version par-dessus : les réglages et le cache local sont conservés (dossier de données de l'application).
 
+## Mettre à jour le cockpit
+
+Le cockpit cherche une nouvelle version au démarrage puis toutes les 6 heures (et sur **Réglages → Mises à jour du cockpit → Vérifier maintenant**). Une version disponible s'annonce dans un **bandeau** au-dessus des onglets, avec ses nouveautés ; le refermer le masque jusqu'à la version suivante.
+
+- **Windows** : **Télécharger** (progression affichée), puis **Redémarrer pour mettre à jour**. Sans redémarrage, la mise à jour s'installe à la fermeture du cockpit.
+- **macOS** : l'installeur n'étant pas signé, la mise à jour automatique n'est pas possible : **Télécharger** enregistre le `.dmg` de ton processeur dans Téléchargements, **Ouvrir l'installeur** l'ouvre ; glisse AgentLake dans Applications en remplaçant l'ancienne version, puis relance le cockpit.
+
+Réglages, cache et secrets sont conservés. Les agents tournent sur GitHub : mettre à jour le cockpit n'interrompt aucune tâche.
+
 ## Jeton GitHub
 
 Le cockpit agit sur GitHub avec un jeton personnel, gardé chiffré par le système (`safeStorage` : Trousseau macOS, DPAPI Windows). Il n'est jamais affiché en clair, ni écrit dans un dépôt.

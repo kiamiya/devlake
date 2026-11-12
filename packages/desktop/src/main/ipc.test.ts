@@ -34,6 +34,7 @@ import { AdoptionService } from './services/projects/adoption.js';
 import { InventoryService } from './services/projects/inventory.js';
 import { AssetService } from './services/assets/asset-service.js';
 import { McpImportService } from './services/bridge/mcp-import.js';
+import { UpdateService } from './services/update/update-service.js';
 
 /** Faux jeton de test, sans valeur réelle. */
 const FAKE_TOKEN = 'ghp_abcdefghijklmnop1234'; // gitleaks:allow
@@ -114,6 +115,13 @@ function setup(options: { vaultAvailable?: boolean; github?: FakeGitHub } = {}) 
         adhoc: new AdhocTaskService(repos, () => service.githubPort()),
       }),
       mcpImport: new McpImportService({ repos, vault, bridges }),
+      updates: new UpdateService({
+        repos,
+        currentVersion: '0.0.0',
+        packaged: false,
+        platform: 'win32',
+        arch: 'x64',
+      }),
     }),
     vault,
     repos,

@@ -81,7 +81,7 @@ export class SettingsRepository {
     const merged: Record<string, unknown> = { ...DEFAULT_SETTINGS, ...stored };
     // Réglages par éditeur : un éditeur ajouté depuis (Blender) prend ses valeurs par défaut,
     // sans invalider ce qui est déjà enregistré pour les autres.
-    for (const key of ['auraMcp', 'extraMcp', 'auraBridge', 'assets'] as const) {
+    for (const key of ['auraMcp', 'extraMcp', 'auraBridge', 'assets', 'updates'] as const) {
       const value = stored[key];
       if (typeof value === 'object' && value !== null && !Array.isArray(value))
         merged[key] = { ...DEFAULT_SETTINGS[key], ...value };

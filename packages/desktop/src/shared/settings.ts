@@ -119,6 +119,8 @@ export const SettingsSchema = z.object({
     epicVaultCache: z.string().trim().min(1, 'Chemin vide.').nullable(),
     folders: z.array(z.string().trim().min(1, 'Chemin vide.')).max(50, 'Au plus 50 dossiers.'),
   }),
+  /** Mises à jour du cockpit : version dont le bandeau a été refermé. */
+  updates: z.object({ dismissedVersion: z.string().nullable() }),
   /** Tunnel HTTPS vers la passerelle des ponts. */
   tunnel: z.object({
     provider: z.enum(['tailscale', 'cloudflare']),
@@ -154,6 +156,7 @@ export const DEFAULT_SETTINGS: Settings = {
     blender: { port: 8767, allowedTools: [] },
   },
   assets: { unityStoreCache: null, epicVaultCache: null, folders: [] },
+  updates: { dismissedVersion: null },
   tunnel: { provider: 'tailscale', gatewayPort: 8764, autoExpose: true },
 };
 

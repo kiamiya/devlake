@@ -22,6 +22,10 @@ Une PR qui touche le packaging (`electron-builder.yml`, `package-app.ts`, test d
 
 En local : `node packages/desktop/scripts/package-app.ts --win` (ou `--mac`, `--dir` pour un dossier décompressé, `--version X.Y.Z`), puis `AGENTLAKE_APP_PATH=<exécutable> npx playwright test -c playwright.packaged.config.ts` dans `packages/desktop`.
 
+## Mise à jour intégrée du cockpit
+
+`electron-builder.yml` déclare la source `github` (kiamiya/devlake) sans jamais publier (`--publish never`) : il écrit `latest.yml`, le `.blockmap` de l'installeur et `app-update.yml` (dans l'application). Le workflow joint `latest.yml` et le `.blockmap` à la release ; `electron-updater` les lit (Windows). macOS (dmg non signé) : le cockpit lit la dernière release par l'API GitHub et télécharge le `.dmg`. Une version `0.0.0` (construction de test) ou le mode développement ne cherchent jamais de mise à jour.
+
 ## Versions des workflows et mise à jour des projets
 
 Les workflows d'appel des projets (`.github/workflows/agentlake-*.yml`) appellent `kiamiya/devlake/.github/workflows/*.yml@<version>`, la version étant le réglage **Version des workflows devlake** du cockpit au moment du bootstrap (`v1` par défaut).

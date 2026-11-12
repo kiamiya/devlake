@@ -7,6 +7,7 @@ import { tabsStore, useTabs } from '../features/tabs/store.js';
 import { TabBar } from '../features/tabs/TabBar.js';
 import { useProjects, useTabsSync } from '../hooks/projects.js';
 import { useQuestionsSync } from '../hooks/questions.js';
+import { UpdateBanner } from '../features/update/UpdateBanner.js';
 import { HomeView } from './HomeView.js';
 import { ProjectView } from './ProjectView.js';
 
@@ -23,6 +24,7 @@ export function App() {
 
   return (
     <div className="flex h-full flex-col">
+      <UpdateBanner />
       <TabBar projects={projects} />
       <main className="flex-1 overflow-auto">
         {settingsOpen ? (

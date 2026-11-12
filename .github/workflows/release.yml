@@ -125,8 +125,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: installeur-${{ matrix.os }}
+          # latest.yml et .blockmap : description lue par la mise à jour intégrée (Windows).
           path: |
             packages/desktop/release/*.exe
+            packages/desktop/release/*.exe.blockmap
+            packages/desktop/release/latest.yml
             packages/desktop/release/*.dmg
           if-no-files-found: error
           retention-days: 14

@@ -27,6 +27,7 @@ import {
 import { UnityPackageError } from './services/assets/unitypackage.js';
 import { FreeLibraryError } from './services/assets/free.js';
 import { McpImportError, type McpImportService } from './services/bridge/mcp-import.js';
+import type { UpdateService } from './services/update/update-service.js';
 import type { ProjectCreationService } from './services/projects/creation-service.js';
 import {
   PlannerModelMissingError,
@@ -73,6 +74,7 @@ export function serviceHandlers(services: {
   inventory: InventoryService;
   assets: AssetService;
   mcpImport: McpImportService;
+  updates: UpdateService;
 }): Record<IpcChannel, Handler> {
   const {
     cockpit: service,
@@ -90,6 +92,7 @@ export function serviceHandlers(services: {
     inventory,
     assets,
     mcpImport,
+    updates,
   } = services;
   const input = <C extends IpcChannel>(_channel: C, value: unknown) =>
     value as z.output<(typeof IPC_CONTRACT)[C]['input']>;
@@ -120,6 +123,12 @@ export function serviceHandlers(services: {
     },
     'projects:adopt': (value) => adoption.adopt(input('projects:adopt', value)),
     'inventory:get': (value) => inventory.get(input('inventory:get', value).projectId),
+    'update:status': () => Promise.resolve(updates.status()),
+    'update:check': () => updates.check(),
+    'update:download': () => updates.download(),
+    'update:install': () => updates.install(),
+    'update:dismiss': (value) =>
+      Promise.resolve(updates.dismiss(input('update:dismiss', value).version)),
     'mcp:detect': () => mcpImport.detect(),
     'mcp:import': (value) => mcpImport.apply(input('mcp:import', value).selections),
     'assets:library': (value) => assets.library(input('assets:library', value).projectId),

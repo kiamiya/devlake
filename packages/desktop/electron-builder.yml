@@ -41,5 +41,11 @@ mac:
   category: public.app-category.developer-tools
   artifactName: AgentLake-${version}-${arch}.${ext}
 
-# La publication est faite par le workflow (gh release), jamais par electron-builder.
-publish: null
+# Source des mises à jour (electron-updater) : les releases de kiamiya/devlake. electron-builder
+# en écrit la description (latest.yml, app-update.yml) mais ne publie jamais lui-même
+# (`--publish never`) : le workflow release.yml joint ces fichiers à la release.
+publish:
+  provider: github
+  owner: kiamiya
+  repo: devlake
+  releaseType: release
