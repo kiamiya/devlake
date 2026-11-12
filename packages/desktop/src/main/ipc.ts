@@ -26,6 +26,7 @@ import {
 } from './services/assets/asset-service.js';
 import { UnityPackageError } from './services/assets/unitypackage.js';
 import { FreeLibraryError } from './services/assets/free.js';
+import { McpImportError, type McpImportService } from './services/bridge/mcp-import.js';
 import type { ProjectCreationService } from './services/projects/creation-service.js';
 import {
   PlannerModelMissingError,
@@ -71,6 +72,7 @@ export function serviceHandlers(services: {
   adoption: AdoptionService;
   inventory: InventoryService;
   assets: AssetService;
+  mcpImport: McpImportService;
 }): Record<IpcChannel, Handler> {
   const {
     cockpit: service,
@@ -87,6 +89,7 @@ export function serviceHandlers(services: {
     adoption,
     inventory,
     assets,
+    mcpImport,
   } = services;
   const input = <C extends IpcChannel>(_channel: C, value: unknown) =>
     value as z.output<(typeof IPC_CONTRACT)[C]['input']>;
@@ -117,6 +120,8 @@ export function serviceHandlers(services: {
     },
     'projects:adopt': (value) => adoption.adopt(input('projects:adopt', value)),
     'inventory:get': (value) => inventory.get(input('inventory:get', value).projectId),
+    'mcp:detect': () => mcpImport.detect(),
+    'mcp:import': (value) => mcpImport.apply(input('mcp:import', value).selections),
     'assets:library': (value) => assets.library(input('assets:library', value).projectId),
     'assets:owned': () => assets.owned(),
     'assets:measure': (value) => assets.measure(input('assets:measure', value).key),
@@ -255,6 +260,7 @@ export function toIpcError(error: unknown): IpcErrorPayload {
     [AssetError, 'ASSET_ERROR'],
     [UnityPackageError, 'ASSET_ERROR'],
     [FreeLibraryError, 'FREE_LIBRARY_ERROR'],
+    [McpImportError, 'MCP_IMPORT_ERROR'],
   ];
   for (const [type, code] of known)
     if (error instanceof type) return { code, message: error.message };

@@ -1,8 +1,20 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+/** Secret d'un serveur MCP importé (variable d'environnement ou en-tête sensible). */
+export type McpSecretName = `mcp-secret-${string}`;
+
 /** Secrets gardés par le cockpit. */
-export type SecretName = 'github-token' | 'claude-oauth-token' | 'aura-bridge-secret';
+export type SecretName =
+  'github-token' | 'claude-oauth-token' | 'aura-bridge-secret' | McpSecretName;
+
+/** Nom de fichier sûr : les secrets MCP ont un identifiant hexadécimal. */
+export function isSecretName(name: string): name is SecretName {
+  return (
+    ['github-token', 'claude-oauth-token', 'aura-bridge-secret'].includes(name) ||
+    /^mcp-secret-[0-9a-f]{16}$/.test(name)
+  );
+}
 
 /** Coffre des secrets. Un secret n'est jamais en base ni dans les journaux. */
 export interface SecretVault {
@@ -39,6 +51,7 @@ export class SafeStorageVault implements SecretVault {
   ) {}
 
   private file(name: SecretName): string {
+    if (!isSecretName(name)) throw new Error('Nom de secret invalide.');
     return join(this.dir, `${name}.bin`);
   }
 

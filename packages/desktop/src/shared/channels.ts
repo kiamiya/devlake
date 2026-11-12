@@ -26,6 +26,8 @@ export const IPC_CHANNELS = [
   'projects:detect',
   'projects:adopt',
   'inventory:get',
+  'mcp:detect',
+  'mcp:import',
   'assets:library',
   'assets:owned',
   'assets:measure',

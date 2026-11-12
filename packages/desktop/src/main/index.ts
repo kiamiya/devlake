@@ -23,6 +23,7 @@ import { ProjectCreationService } from './services/projects/creation-service.js'
 import { AdoptionService } from './services/projects/adoption.js';
 import { InventoryService } from './services/projects/inventory.js';
 import { AssetService } from './services/assets/asset-service.js';
+import { McpImportService } from './services/bridge/mcp-import.js';
 import { ContextService } from './services/ingestion/context-service.js';
 import { PlannerLaunchService } from './services/planner/planner-launch.js';
 import { PlanService } from './services/plan/plan-service.js';
@@ -210,6 +211,7 @@ async function start(): Promise<void> {
       }),
       inventory: new InventoryService(repos, () => service.githubPort()),
       assets: new AssetService({ repos, github: () => service.githubPort(), adhoc }),
+      mcpImport: new McpImportService({ repos, vault, bridges: bridge }),
       plan: new PlanService(repos, () => service.githubPort()),
       questions: new QuestionsService({
         repos,
