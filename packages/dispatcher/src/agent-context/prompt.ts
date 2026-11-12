@@ -166,6 +166,7 @@ export function buildPrompt(input: PromptInput): string {
       '- Reste dans le périmètre de la tâche ; respecte le `CLAUDE.md` et les décisions du projet.',
       '- S’il manque une information indispensable, pose une question bloquante : termine avec `outcome = blocked` et une question `blocking = true` dans `questions`. Ton travail en cours est poussé sur la branche ; tu reprendras avec la réponse de Kia.',
       '- Un choix mineur que tu tranches toi-même se signale par une question non bloquante (`blocking = false`) ; continue alors normalement.',
+      '- Une tâche = un métier : un travail d’un autre métier (documentation, assets 3D, autre partie du code…) se délègue à l’agent du bon profil dans `delegations` (3 au plus), au lieu d’être fait ici.',
       '- Termine en remplissant la sortie structurée : `pr_title` (titre court) et `pr_summary` (ce qui a été fait, les choix, comment tester).',
     ].join('\n'),
     input.scope
@@ -182,7 +183,7 @@ export function buildPrompt(input: PromptInput): string {
           input.scope.tools !== null
             ? `Outils d’éditeur permis : ${input.scope.tools.map((t) => `\`${t}\``).join(', ') || 'aucun'} (le pont refuse les autres).`
             : null,
-          'Tout autre fichier (documentation, autre partie du code, assets) relève d’un autre agent : ne le modifie pas. S’il est indispensable à ta tâche, pose une question bloquante qui explique pourquoi. Une PR qui sort du périmètre est bloquée jusqu’à l’accord de Kia.',
+          'Tout autre fichier (documentation, autre partie du code, assets) relève d’un autre agent : ne le modifie pas. Confie ce travail à l’agent du bon profil avec `delegations` (profil, objectif, critères, fichiers) : ta tâche continue, la sous-tâche part après la fusion de ta PR. S’il est indispensable à ta tâche elle-même, pose une question bloquante qui explique pourquoi. Une PR qui sort du périmètre est bloquée jusqu’à l’accord de Kia.',
         ]
           .filter((l): l is string => l !== null)
           .join('\n')

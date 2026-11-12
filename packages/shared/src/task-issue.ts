@@ -48,7 +48,13 @@ export function renderTaskIssueBody(task: TaskIssue): string {
       ...(task.epic !== undefined ? [`- Épopée : ${task.epic}`] : []),
       ...(task.milestone !== undefined ? [`- Jalon : ${task.milestone}`] : []),
       ...(task.needsEditor === false ? ['- Éditeur : non requis (code pur, sans pont Aura)'] : []),
-      ...(task.adhoc === true ? ['- Origine : tâche ajoutée hors plan depuis le cockpit'] : []),
+      ...(task.delegation !== undefined
+        ? [
+            `- Origine : déléguée par ${task.delegation.parent} (niveau ${String(task.delegation.depth)})`,
+          ]
+        : task.adhoc === true
+          ? ['- Origine : tâche ajoutée hors plan depuis le cockpit']
+          : []),
       ...(task.priority === true ? ['- Prioritaire : lancée avant les tâches du plan'] : []),
     ].join('\n'),
     `## Dépend de\n\n${bulletList(task.dependencies, 'Aucune dépendance.')}`,

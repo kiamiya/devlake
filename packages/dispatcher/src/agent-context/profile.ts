@@ -1,3 +1,4 @@
+import { DELEGATIONS_JSON_SCHEMA } from './delegate.js';
 import {
   loadAgentProfile,
   PROFILE_ENV_VARIABLES,
@@ -117,6 +118,7 @@ export const OUTCOME_SCHEMA = {
         additionalProperties: false,
       },
     },
+    delegations: DELEGATIONS_JSON_SCHEMA,
   },
   required: ['outcome', 'pr_title', 'pr_summary'],
   additionalProperties: false,

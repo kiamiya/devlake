@@ -31,6 +31,7 @@ Créer l’écran de connexion avec e-mail et mot de passe.
 - Reste dans le périmètre de la tâche ; respecte le \`CLAUDE.md\` et les décisions du projet.
 - S’il manque une information indispensable, pose une question bloquante : termine avec \`outcome = blocked\` et une question \`blocking = true\` dans \`questions\`. Ton travail en cours est poussé sur la branche ; tu reprendras avec la réponse de Kia.
 - Un choix mineur que tu tranches toi-même se signale par une question non bloquante (\`blocking = false\`) ; continue alors normalement.
+- Une tâche = un métier : un travail d’un autre métier (documentation, assets 3D, autre partie du code…) se délègue à l’agent du bon profil dans \`delegations\` (3 au plus), au lieu d’être fait ici.
 - Termine en remplissant la sortie structurée : \`pr_title\` (titre court) et \`pr_summary\` (ce qui a été fait, les choix, comment tester).
 
 ## Instructions du projet (CLAUDE.md)

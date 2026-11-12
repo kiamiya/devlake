@@ -592,7 +592,13 @@ describe('préparation et finalisation', () => {
     });
     expect(createPr).toHaveBeenCalledOnce();
 
-    expect(result).toEqual({ status: 'delivered', prNumber: 2, created: true, autoMerge: true });
+    expect(result).toEqual({
+      status: 'delivered',
+      prNumber: 2,
+      created: true,
+      autoMerge: true,
+      delegated: [],
+    });
     expect(git.commands()).toContain('add --all');
     expect(git.commands()).toContain('commit -m chore(T04): travail de l’agent');
     expect(git.commands()).toContain('push origin HEAD:refs/heads/task/T04-ajouter-une-fonction');
@@ -607,6 +613,35 @@ describe('préparation et finalisation', () => {
     expect(pr.body).toContain('Ajout de somme() et de son test.');
     expect(pr.body).toContain(`Closes #${String(issueNumber)}`);
     expect(pr.body).toContain('<!-- agentlake:pr task=T04 attempt=1 -->');
+  });
+
+  it('finalise avec délégation : PR livrée puis sous-tâche créée ; demande illisible signalée', async () => {
+    await withBranch();
+    const result = await finalizeAgent(
+      finalizeInput({
+        structuredOutput: JSON.stringify({
+          outcome: 'completed',
+          pr_title: 'Fonction somme',
+          pr_summary: 'Ajout.',
+          delegations: [
+            {
+              profile: 'docs',
+              title: 'Documenter somme()',
+              description: 'Ajouter somme() au guide.',
+              kind: 'docs',
+              acceptance_criteria: ['Le guide décrit somme().'],
+              paths: ['docs/guide.md'],
+            },
+            { profile: 'inconnu' },
+          ],
+        }),
+      }),
+      { github, appGithub: github, git: workingGit(), appToken: 'a' },
+    );
+    expect(result).toMatchObject({ status: 'delivered', delegated: ['T500'] });
+    const comments = (await github.listComments(ref, issueNumber)).map((c) => c.body);
+    expect(comments.some((b) => b.includes('**Délégation** : T500'))).toBe(true);
+    expect(comments.some((b) => b.includes('1 demande(s) illisible(s) ignorée(s)'))).toBe(true);
   });
 
   it('finalise une reprise : met à jour la PR ouverte', async () => {

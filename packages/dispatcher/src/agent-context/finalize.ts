@@ -1,5 +1,12 @@
 import type { GitHubPort, RepoRef } from 'github';
-import { parseQuestionComment, QuestionSchema, renderQuestionComment, type Question } from 'shared';
+import {
+  parseQuestionComment,
+  parseTaskIssueBody,
+  QuestionSchema,
+  renderQuestionComment,
+  type Question,
+} from 'shared';
+import { delegate, DelegationRequestSchema } from './delegate.js';
 import { z } from 'zod';
 import { authHeader, type Git } from './git.js';
 import { setTaskState } from './resume.js';
@@ -11,6 +18,8 @@ export const OutcomeSchema = z.object({
   blocked_reason: z.string().optional(),
   /** Questions de l'agent : une bloquante suspend la tâche, les autres sont signalées. */
   questions: z.array(z.unknown()).optional(),
+  /** Sous-tâches confiées à d'autres profils, créées une fois la PR livrée. */
+  delegations: z.array(z.unknown()).optional(),
 });
 export type Outcome = z.infer<typeof OutcomeSchema>;
 
@@ -38,7 +47,14 @@ export interface FinalizeDeps {
 }
 
 export type FinalizeResult =
-  | { status: 'delivered'; prNumber: number; created: boolean; autoMerge: boolean }
+  | {
+      status: 'delivered';
+      prNumber: number;
+      created: boolean;
+      autoMerge: boolean;
+      /** Sous-tâches créées par délégation. */
+      delegated: string[];
+    }
   | { status: 'awaiting-answer'; questionId: string; pushed: boolean }
   | { status: 'failed'; reason: string };
 
@@ -130,7 +146,39 @@ export async function finalizeAgent(
       `Auto-merge non activé sur #${String(pr.number)} : ${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  return { status: 'delivered', prNumber: pr.number, created: !existing, autoMerge };
+  const delegated = await delegateFrom(input, deps, outcome);
+  return { status: 'delivered', prNumber: pr.number, created: !existing, autoMerge, delegated };
+}
+
+/** Sous-tâches demandées par l'agent ; une demande illisible est signalée, jamais bloquante. */
+async function delegateFrom(
+  input: FinalizeInput,
+  deps: FinalizeDeps,
+  outcome: Outcome | null,
+): Promise<string[]> {
+  const raw = outcome?.delegations ?? [];
+  if (raw.length === 0) return [];
+  const parent = parseTaskIssueBody(
+    (await deps.github.getIssue(input.ref, input.issueNumber)).body,
+  );
+  if (!parent.ok) return [];
+  const requests = raw.flatMap((r) => {
+    const parsed = DelegationRequestSchema.safeParse(r);
+    return parsed.success ? [parsed.data] : [];
+  });
+  const result = await delegate(
+    deps.github,
+    input.ref,
+    { issueNumber: input.issueNumber, task: parent.value },
+    requests,
+  );
+  if (requests.length < raw.length)
+    await deps.github.createComment(
+      input.ref,
+      input.issueNumber,
+      `**Délégation** : ${String(raw.length - requests.length)} demande(s) illisible(s) ignorée(s).`,
+    );
+  return result.created.map((c) => c.taskId);
 }
 
 /** Commite ce que Claude n'aurait pas commité ; renvoie le nombre de commits d'avance sur main. */
