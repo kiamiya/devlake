@@ -69,6 +69,14 @@ export const PlanTaskSchema = z.object({
   adhoc: z.boolean({ error: 'adhoc doit valoir true ou false.' }).optional(),
   /** Fichiers modifiables et outils d'éditeur de l'agent ; contrôlés par la porte qualité et le pont. */
   scope: TaskScopeSchema.optional(),
+  /** Sous-tâche confiée par l'agent d'une autre tâche (délégation). */
+  delegation: z
+    .object({
+      parent: TaskIdSchema,
+      /** 1 : déléguée par une tâche du plan ; 2 : par une sous-tâche. */
+      depth: z.number().int().min(1),
+    })
+    .optional(),
 });
 export type PlanTask = z.infer<typeof PlanTaskSchema>;
 

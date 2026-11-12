@@ -49,6 +49,15 @@ Le périmètre se relit et se modifie dans la revue du plan (« Périmètre de l
 
 Tout autre fichier modifié déclenche une question bloquante sur l'issue : **Autoriser** relance le check, **Refuser** renvoie la tâche en correction pour retirer ces modifications. Une tâche sans périmètre (plan antérieur) n'est pas contrôlée.
 
+### Délégation entre agents
+
+Une tâche = un métier. Quand un agent a besoin d'un travail hors de son périmètre ou de son métier (la documentation de ce qu'il vient de coder, un asset 3D, une autre partie du code), il ne le fait pas : il le **délègue** à l'agent du bon profil.
+
+- Il décrit la sous-tâche à la fin de son travail : profil, objectif, critères d'acceptation, tests exigés (au moins un pour du code), fichiers qu'elle pourra modifier.
+- Le système la crée comme une tâche hors plan (identifiant à partir de `T500`, « Origine : déléguée par Txx » dans l'issue). Elle dépend de la tâche mère : elle part dès que la PR de celle-ci est fusionnée, dans les plafonds habituels. La tâche mère n'attend pas.
+- Garde-fous : 3 sous-tâches au plus par tâche, 2 niveaux au plus (une sous-tâche peut déléguer une fois, pas au-delà). Une demande au-delà, ou invalide (tâche de code sans test…), n'est pas créée : une question non bloquante sur l'issue te la présente, à créer à la main si elle est utile.
+- Une tentative relancée ne recrée pas une sous-tâche déjà créée (même titre).
+
 ## 5. Suivre l'exécution
 
 - **Exécution** : avancement pondéré (S = 1, M = 2, L = 3), kanban par état, PR de chaque tâche, **Mettre en pause** le projet, relance d'une tâche escaladée avec une consigne.
